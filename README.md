@@ -6,7 +6,7 @@ Windows 桌面端 PSD 多语言文案替换与批量处理测试版。此公开�
 
 [下载最新单 EXE 安装／更新程序](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/latest)
 
-当前版本：**0.3.1 本地测试版**。普通用户只需下载 Release 中的 `PSD-Lingo-0.3.1-Setup.exe` 并运行，无需手动解压 ZIP。更新前保存正在编辑的项目；安装器可检测本机正在运行的旧版，按原路径替换，启动失败时回滚。
+当前版本：**0.3.2 自动更新测试版**。普通用户只需下载 Release 中的 `PSD-Lingo-0.3.2-Setup.exe` 并运行，无需手动解压 ZIP。更新前保存正在编辑的项目；安装器可检测本机正在运行的旧版，按原路径替换，启动失败时回滚。
 
 ## 主要功能
 
@@ -24,15 +24,14 @@ PSD 导出和精确预览需要本机 Photoshop；字体需在本机安装。当
 
 ## 更新渠道状态
 
-此仓库已建立；0.3.1 仍为本地测试配置，**不会自动检查这个新仓库**。目前可通过 Releases 下载单 EXE 完成手动更新。
+0.3.2 已接入本仓库的签名自动更新。客户端启动、回到窗口及每 5 分钟检查；离线设备联网后收到。0.3.1 及更早版本须先手动安装一次 0.3.2。
 
-后续联网版清单地址固定为：
+- 可选更新：立即更新、30 分钟后提醒或跳过此版本。
+- 强制更新：不可跳过；允许先保存项目，安装后恢复导出与 AI 任务。断网、重启后保留已收到的强制策略。
+- 管理发布：独立可视化工具生成签名清单，支持将同一版本从可选改为强制；可通过网页上传，或使用仅本次发布内存保存的 GitHub Token 一键发布。
+- 安装保护：P-256 签名、仓库白名单、SHA-256、断点续传、原路径替换、启动握手与失败回滚。
 
-```text
-https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/latest/download/update.json
-```
-
-自动更新必须同时发布签名清单与对应应用载荷，并在新版客户端内固定本仓库与独立更新公钥；不能以未签名 JSON 启用更新。可选／强制更新参数在签名清单中设置。Cloudflare 授权服务尚未部署，用户禁用／启用暂未上线。详见 [更新发布说明](UPDATE-CHANNEL.md)。
+授权服务与更新通道独立；Cloudflare 授权服务尚未部署。详见 [更新发布说明](UPDATE-CHANNEL.md)。
 
 ## 从源码构建
 
@@ -43,7 +42,7 @@ pnpm install
 node services/build-helper.cjs
 node build.cjs
 node --test tests/*.test.cjs
-node package-portable.cjs ../PSD-Lingo-0.3.1
+node package-portable.cjs ../PSD-Lingo-0.3.2
 node installer/build.cjs
 ```
 

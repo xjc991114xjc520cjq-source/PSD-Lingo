@@ -1,0 +1,11 @@
+node_modules/
+runtime/
+.wrangler/
+.env*
+.dev.vars*
+*.pem
+*.pfx
+*.p12
+*.dpapi
+*.log
+NVIDIA Corporation/

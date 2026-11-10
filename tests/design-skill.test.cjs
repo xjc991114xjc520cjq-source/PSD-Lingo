@@ -4,6 +4,7 @@ const {validateAudit,checks}=require('../services/design-page-audit.cjs');
 const composition=require('../services/design-composition.cjs');
 test('bundled skill has verified identity and cannot silently accept tampered content',()=>{
  const skill=loadDesignSkill();assert.equal(skill.id,'composition-review');assert.match(skillPrompt({designSkill:skill}),/groupShape/);
+ assert.equal(loadDesignSkill({readFile:()=>Buffer.from(skill.instructions.replace(/\r?\n/g,'\r\n'))}).sha256,skill.sha256);
  assert.throws(()=>loadDesignSkill({readFile:()=>Buffer.from('changed skill')}),/版本校验失败/);
 });
 test('technical success cannot override uncertain or rejected design dimensions',()=>{

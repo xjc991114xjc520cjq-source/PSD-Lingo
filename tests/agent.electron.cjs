@@ -1,9 +1,9 @@
 // Real renderer + preload + IPC + task controller, deterministic provider. No Adobe documents opened.
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-v59-ui';let win,integration;
+const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-project-ui';let win,integration;
 app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let exit=0;try{
- await fs.mkdir(out,{recursive:true});const evidence=[],errors=[],requests=[];let round=0,updateChecks=0;
+ await fs.mkdir(out,{recursive:true});await fs.rm(out+'/agent-project.json',{force:true});await fs.rm(out+'/verified.json',{force:true});const evidence=[],errors=[],requests=[];let round=0,updateChecks=0;
  const result=(kind,message,tool='',args={},questions=[])=>({kind,message,tool,arguments:JSON.stringify(args),questions});
  const settings={get:async()=>({mode:'api',executable:'C:/codex.exe',apiModel:'api-unused',localModel:'test-main',hasApiKey:true}),credentials:async()=>({mode:'api',apiModel:'test-main',apiKey:'test-private',apiProtocol:'responses',apiBaseUrl:'https://fixture.invalid/v1'}),read:async()=>({apiKey:'test-private',apiBaseUrl:'https://fixture.invalid/v1'})};
  const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)}}catch(e){return {ok:false,error:e.message}}};
@@ -31,6 +31,10 @@ app.whenReady().then(async()=>{let exit=0;try{
  await js('Promise.all(document.getAnimations().filter(a=>a.effect?.target?.id==="agentDialog").map(a=>a.finished.catch(()=>{})))');await fs.writeFile(out+'/01-dialog.png',(await win.webContents.capturePage()).toPNG());
  await js(`document.getElementById('agentRequest').value='先分析文件';document.getElementById('agentStart').click()`);await wait(`document.getElementById('agentError').textContent.includes('先选择输出位置')`);assert.equal(requests.length,0);assert.equal(await js(`document.activeElement.id`),'agentChooseOutput');
  await js(`document.getElementById('agentChooseOutput').click()`);await wait(`document.querySelector('.agent-output').textContent.includes('folder')`);
+ await js(`document.querySelector('.agent-project-settings').open=true;document.getElementById('agentProjectName').value='项目归属测试';document.getElementById('agentRequest').value='Analyze';document.getElementById('agentStart').click()`);await wait(`document.getElementById('agentError').textContent.includes('保存项目设置')`);assert.equal(requests.length,0);
+ await js(`document.getElementById('agentProjectPick').click()`);await wait(`document.getElementById('agentProjectFolder').value.includes('folder')`);await js(`document.getElementById('agentProjectSave').click()`);await wait(`document.getElementById('agentProjectStatus').textContent.includes('项目归属测试')`);
+ const savedProject=(await js('window.desktop.agentProject()')).value;assert.equal(savedProject.name,'项目归属测试');assert.equal(savedProject.directory,path.join(out,'folder','项目归属测试'));evidence.push('project folder picker, saved settings and unsaved-change guard');
+ await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');await fs.writeFile(out+'/project-settings.png',(await win.webContents.capturePage()).toPNG());
  await js(`document.getElementById('agentAddFolder').click()`);await wait(`document.getElementById('agentFiles').textContent.includes('按需读取')`);assert.equal(await js(`document.querySelector('#agentFiles .agent-file').title`),out+'/folder');await js(`document.querySelector('#agentFiles button').click()`);
  await js(`document.getElementById('agentAddFiles').click()`);await wait(`document.getElementById('agentFiles').textContent.includes('需求.txt')`);
  await js(`document.getElementById('agentModel').value='test-selected';document.getElementById('agentRequest').value='请分析当前示例。需要问我目标语言和范围；保留原始要求。';document.getElementById('agentStart').click()`);
@@ -52,7 +56,7 @@ app.whenReady().then(async()=>{let exit=0;try{
  await wait(`document.getElementById('agentStatus').textContent==='本轮任务已结束'`);
  assert.equal(await js(`document.getElementById('agentShowConversation').hidden`),false);await js(`document.getElementById('agentShowConversation').click()`);assert.equal(await js(`document.activeElement.id`),'agentTranscript');
  assert.ok(requests.every(r=>r.model==='test-selected'));assert.ok(requests.at(-1).input.includes('中途补充：保持价格块视觉比例'));assert.ok(requests.at(-1).input.includes('保留原始要求'));assert.ok(requests.at(-1).input.includes('user_answer'));
- const last=await win.webContents.executeJavaScript(`window.desktop.agentState()`);assert.equal(last.value.status,'completed');assert.ok(last.value.history.some(h=>h.type==='tool_result'&&h.tool==='bind_copy'&&h.result.bound===1));
+ const last=await win.webContents.executeJavaScript(`window.desktop.agentState()`);assert.equal(last.value.codexProject.name,'项目归属测试');assert.equal(last.value.status,'completed');assert.ok(last.value.history.some(h=>h.type==='tool_result'&&h.tool==='bind_copy'&&h.result.bound===1));
  await js(`document.getElementById('agentRequest').value='继续检查，保持前面的需求';document.getElementById('agentStart').click()`);await wait(`document.getElementById('agentTranscript').textContent.includes('后续需求：')&&document.getElementById('agentStatus').textContent==='本轮任务已结束'`);assert.ok(requests.at(-1).input.includes('user_followup'));
  const snapshot=(await js('window.desktop.agentState()')).value;
  await js('window.perfTranscriptNode=document.querySelector("#agentTranscript .agent-message")');

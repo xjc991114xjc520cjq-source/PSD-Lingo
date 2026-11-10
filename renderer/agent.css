@@ -30,3 +30,6 @@
 .is-takeover.is-conversation-open .agent-conversation{display:block;position:absolute;left:16px;top:16px;bottom:16px;width:min(285px,28vw);height:auto;padding:18px;border:1px solid #ffffff20;border-radius:12px;background:#232528fa;box-shadow:0 12px 40px #0004;z-index:2}
 .is-takeover .agent-conversation h2{font-size:17px;line-height:1.6}
 @media(max-height:820px){.is-takeover .agent-body{padding-top:10px;padding-bottom:10px}}
+
+.agent-project{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;margin:12px 0;padding:14px;border:1px solid #ffffff20;border-radius:10px;min-width:0}.agent-project legend{padding:0 6px}.agent-project label,.agent-project-status{grid-column:1/-1}.agent-project input{min-width:0;width:100%;box-sizing:border-box}.agent-project #agentProjectName{grid-column:1/-1}.agent-project-status{margin:0;font-size:12px;color:#aeb3bc;overflow-wrap:anywhere}.agent-project:disabled{opacity:.65}
+.agent-project-settings{margin:10px 0}.agent-project-settings summary{cursor:pointer;color:#c9c3b9;font-size:13px;padding:6px 0;overflow-wrap:anywhere}.agent-project #agentProjectSave{grid-column:1/-1;justify-self:start}

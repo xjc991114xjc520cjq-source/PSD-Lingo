@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  agentProject:()=>ipcRenderer.invoke('agent-project'),
+  agentProjectSave:v=>ipcRenderer.invoke('agent-project-save',v),
+  agentProjectFolder:()=>ipcRenderer.invoke('agent-project-folder'),
   agentState:()=>ipcRenderer.invoke('agent-state'),
   agentCacheContext:()=>ipcRenderer.invoke('agent-cache-context'),
   agentFiles:v=>ipcRenderer.invoke('agent-files',v),

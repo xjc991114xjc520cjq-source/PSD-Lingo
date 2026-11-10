@@ -37,3 +37,12 @@ test('assistant receives folder path then lists, reads and imports discovered fi
  await f.invoke('agent-start',{request:'先查看目录，再按需读取文案和导入原稿',fileIds:[picked.value[0].id]});await finished(f);
  assert.equal(f.last.status,'completed',f.last.error);assert.equal(f.last.files.length,1);assert.equal(f.last.history.find(h=>h.type==='tool_result'&&h.tool==='read_document').result.text,'Read only when requested');assert.equal(f.commands.find(x=>x.tool==='import_source').args.path,path.join(dir,'source.ai'));
 });
+
+
+test('project choices persist for new tasks while follow-up keeps the original project snapshot',async t=>{
+ const f=await fixture(t),chosen=await f.invoke('agent-project-save',{name:'助手项目',parentDirectory:f.directory});assert.equal(chosen.ok,true);assert.equal(chosen.value.directory,path.join(f.directory,'助手项目'));
+ await f.invoke('agent-start',{request:'Analyze',fileIds:[]});await finished(f);assert.equal(f.last.codexProject.name,'助手项目');const firstKey=f.last.codexProject.key;
+ await f.invoke('agent-project-save',{name:'新项目',parentDirectory:f.directory});await f.invoke('agent-followup',{text:'Continue',fileIds:[]});await finished(f);assert.equal(f.last.codexProject.key,firstKey);
+ await f.invoke('agent-start',{request:'New task',fileIds:[]});await finished(f);assert.equal(f.last.codexProject.name,'新项目');assert.notEqual(f.last.codexProject.key,firstKey);
+ const get=await f.invoke('agent-project');assert.equal(get.value.name,'新项目');assert.equal((await fs.stat(path.join(f.directory,'agent-project.json'))).isFile(),true);
+});

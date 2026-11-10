@@ -1,2 +1,3 @@
 services/design-skills/** text eol=lf
 services/design-skill-manifest.json text eol=lf
+services/design-plugins/** text eol=lf

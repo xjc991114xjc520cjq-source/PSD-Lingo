@@ -1,3 +1,4 @@
+const pluginReviews=()=>require('../services/design-plugins/manifest.json').skills.map(s=>({id:s.id,verdict:['design-critique','graphic-judgment'].includes(s.id)?'accept':'not-applicable',evidence:'Fixture inspected composition; noninteractive checks inapplicable'}));
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {buildDesignLayoutRequest}=require('../design-layout-context.cjs');
 const {suggestLayout,designPrompt,validateDesignOutput}=require('../services/ai-layout.cjs');
@@ -45,7 +46,7 @@ test('local Codex design remains read-only and API credential independent',async
 });
 test('local audit sends full page and six current details to Codex while retaining strict provenance checks',async()=>{
  const {request}=fixture();request.phase='audit';request.visuals=Array.from({length:8},(_,i)=>({...visual(),crop:i<2?[0,0,1080,1440]:[50+i*10,100,180,60]}));let count=0;
- const value={checks:require('../services/design-page-audit.cjs').checks.map(id=>({id,verdict:'pass',evidence:'Compared actual source and current details',layerKeys:[]}))};
+ const value={repairPlan:[],skillReviews:pluginReviews(),checks:require('../services/design-page-audit.cjs').checks.map(id=>({id,verdict:'pass',evidence:'Compared actual source and current details',layerKeys:[]}))};
  class Codex{startThread(){return {run:async input=>{count=input.filter(v=>v.type==='local_image').length;return {finalResponse:JSON.stringify(value)};}};}}
  const imageIo={mkdtemp:async()=> 'D:/test-audit',writeFile:async()=>{},rm:async()=>{}};
  const deps={workingDirectory:'D:/test-audit',imageIo,validateExecutable:async()=>{},loadSdk:async()=>({Codex}),fetch:()=>assert.fail('Local audit cannot call API')};

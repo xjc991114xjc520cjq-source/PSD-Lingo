@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const {validateCreation,validateTextActions,photoshopTextObjects}=require('./native-text-objects.cjs');
 const {validateArtworkHides}=require('./artwork-visibility.cjs');
 const {canonicalText,insertBreaks,manualStyleIssues}=require('./layout.cjs');
 const photoshopFit = require('./photoshop-fit.cjs');
@@ -83,10 +84,12 @@ function validatePlan(plan) {
   }
   let count = 0;
   for (const file of plan.files) {
-    validateArtworkHides(file.artworkHides,{format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.artworkHides||[]).length;
-    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
+    validateTextActions(file.textActions,{jobs:file.jobs});count+=(file.textActions||[]).length;
+    validateArtworkHides(file.artworkHides,{textActions:file.textActions,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.artworkHides||[]).length;
+    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length&&!file.textActions?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
     const seen = new Set();
     for (const job of file.jobs) {
+      validateCreation(job,{width:file.width,height:file.height});if(job.layerId<0&&!job.nativeCreation)throw Error("新增文字缺少创建合同");
       if (!Number.isInteger(job.layerId) || seen.has(job.layerId)) throw new Error('文字层缺少唯一 ID 或重复绑定');
       seen.add(job.layerId);
       const r = records.get(job.recordId);
@@ -147,6 +150,7 @@ function findLayer(container, id) {
 function bounds(layer) { var b = layer.bounds; return [b[0].as("px"), b[1].as("px"), b[2].as("px"), b[3].as("px")]; }
 function within(layer, box) { var b = bounds(layer); return b[0] >= box[0] - 1 && b[1] >= box[1] - 1 && b[2] <= box[0] + box[2] + 1 && b[3] <= box[1] + box[3] + 1; }
 ${photoshopFit}
+${photoshopTextObjects}
 ${containerScript}
 ${extractionScript}
 try {
@@ -161,7 +165,7 @@ try {
       app.activeDocument = original;
       // 原文校验在复制前执行，防止绑定到已变化的 PSD。
       for (var j = 0; j < item.jobs.length; j++) {
-        var job = item.jobs[j], l = findLayer(original, job.layerId);
+        var job = item.jobs[j];if(job.nativeCreation)continue;var l = findLayer(original, job.layerId);
         if (!l || l.typename !== "ArtLayer" || l.kind !== LayerKind.TEXT) throw new Error("找不到可编辑文字层 ID " + job.layerId);
         if (l.textItem.kind !== TextType.POINTTEXT) throw new Error("段落文字暂不支持自动导出：" + l.name);
         if (canonical(l.textItem.contents) !== canonical(job.original)) throw new Error("原文变化：" + l.name);
@@ -173,7 +177,7 @@ try {
       app.activeDocument = current;
       var nativeEdits=materializeExtracted(current,item.extractedContainers||[],edits);applyContainers(current,nativeEdits);
       for (var j = 0; j < item.jobs.length; j++) {
-        var job = item.jobs[j], layer = findLayer(current, job.layerId);
+        var job = item.jobs[j], layer = job.nativeCreation?nativeNewText(current,job):findLayer(current, job.layerId);
         if (!layer) throw new Error("复制文档中的图层 ID 不匹配");
         // 混合字体、旋转文字及复杂样式在客户端被拦截；此处再次检查字体可用性。
         var available = false;
@@ -190,6 +194,7 @@ try {
         var finalBold=null,finalHorizontalScale=null,finalVerticalScale=null;try{finalBold=ti.fauxBold;}catch(_){}try{finalHorizontalScale=ti.horizontalScale;finalVerticalScale=ti.verticalScale;}catch(_){}
         layouts.push({layerId:job.layerId,name:layer.name,sourceText:typeof job.documentText==="string"?job.documentText:job.target,editedText:job.override?job.target:null,recordId:job.recordId,override:job.override||null,renderedText:fitted.text,insertedBreaks:fitted.breaks,font:ti.font,sizePt:ti.size.as("pt"),tracking:fitted.tracking,leadingPt:typeof fitted.leading==="number"?fitted.leading:null,autoLeading:ti.useAutoLeading,fauxBold:finalBold,previewLayout:job.previewLayout||null,renderingMode:job.previewLayout?"preview":"legacy-fit",manual:job.manual||null,horizontalScale:finalHorizontalScale,verticalScale:finalVerticalScale,position:job.position||null,finalBounds:bounds(layer),unchanged:fitted.unchanged});
       }
+      nativeTextActions(current,item.textActions||[]);
       // 大型文档始终保留 PSB 格式；扩展名和 Photoshop 保存选项必须一致。
       var isLargeDocument = item.format === "PSB" || (!item.format && (/\\.psb$/i.test(item.path) || /\\.psb$/i.test(item.name))), extension = isLargeDocument ? ".psb" : ".psd";
       var stem = item.name.replace(/\\.ps[db]$/i, "") + "_localized", out = new File(folder.fsName + "/" + stem + extension), n = 1;

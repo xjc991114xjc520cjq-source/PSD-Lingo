@@ -1,12 +1,13 @@
 // Visibility edits reference a bounded, native-read catalogue. No arbitrary
-// paths, pixel erasure, deletion or embedded scripting is accepted.
+// paths, pixel erasure, arbitrary deletion or embedded scripting is accepted.
 const validBox=b=>Array.isArray(b)&&b.length===4&&b.every(Number.isFinite)&&b[2]>0&&b[3]>0;
-function validateArtworkHides(edits=[],{objects,jobs=[],format='AI'}={}){
+function validateArtworkHides(edits=[],{objects,jobs=[],textActions=[],format='AI'}={}){
  if(!Array.isArray(edits)||edits.length>100||edits.length&&format!=='AI')throw Error('仅 AI 支持受限对象隐藏');
  const seen=new Set();for(const e of edits){
-  if(!e||Object.keys(e).some(k=>!['objectId','sourceIdentity','reason'].includes(k))||!/^([tg]):\d+$/.test(e.objectId)||seen.has(e.objectId)||typeof e.sourceIdentity!=='string'||!e.sourceIdentity||e.sourceIdentity.length>300||typeof e.reason!=='string'||!e.reason.trim()||e.reason.length>2000)throw Error('对象隐藏参数无效或重复');seen.add(e.objectId);
+  if(!e||Object.keys(e).some(k=>!['objectId','sourceIdentity','reason','mode'].includes(k))||e.mode!==undefined&&!['hidden','clear'].includes(e.mode)||!/^([tg]):\d+$/.test(e.objectId)||seen.has(e.objectId)||typeof e.sourceIdentity!=='string'||!e.sourceIdentity||e.sourceIdentity.length>300||typeof e.reason!=='string'||!e.reason.trim()||e.reason.length>2000)throw Error('对象隐藏参数无效或重复');seen.add(e.objectId);
   const o=objects?.find(o=>o.objectId===e.objectId);if(objects&&(!o||o.sourceIdentity!==e.sourceIdentity||!['editable-text','outline-candidate'].includes(o.kind)||!validBox(o.box)||!validBox(o.boardBox)||o.boardNames?.length!==1))throw Error('隐藏对象来源已变化或不受支持，请重新检查对象');
   if(o?.layerId&&jobs.some(j=>j.layerId===o.layerId))throw Error('同一文字不能同时隐藏并替换');
+  if(textActions.some(a=>e.objectId==='t:'+a.layerId||o?.layerId===a.layerId))throw Error('同一文字不能同时由文字与图案流程处理');
   if(o&&(edits.some(other=>other!==e&&o.ancestorIds?.includes(other.objectId))))throw Error('不能同时隐藏父子对象');
  }
  return edits;

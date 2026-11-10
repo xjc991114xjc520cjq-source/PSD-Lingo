@@ -17,13 +17,13 @@ function collisionGroups(base,groups,buildRequest,records,fitText){
  return {groups:[],file:structuredClone(base),errors};
 }
 async function refineVisualLayout({working,targets,records,fitText,call,getVisual,buildRequest,visualCrop,focusIds,isCancelled,progress,maxRounds=3}){
- let current=working,learning,warning;const accepted=new Map(),failures=new Map(),reviews=[];let feedback=[];
+ let current=working,learning,warning;const accepted=new Map(),failures=new Map(),reviews=[],seenCandidates=new Set();let feedback=[],repairPlan=[];
  const cancelled=()=>({working,accepted:[],failures:[],cancelled:true});
  progress('context',{indeterminate:true,message:'读取完整文案、画板与视觉关系，候选先渲染后复审。'});
  for(let round=1;round<=maxRounds;round++){
   if(isCancelled())return cancelled();
   const live=targets.map(t=>current.layers.find(l=>l.id===t.id)),request=focusRequest(buildRequest({file:current,layer:live[0],records,fitText}));
-  request.focusLayerKeys=live.filter(l=>focusIds?.includes(l.id)).map(l=>String(l.id));request.scope='full';request.visualPlanningVersion=2;request.designReviewVersion=1;request.phase='propose';request.selectedLayerKeys=live.map(l=>String(l.id));request.repairFeedback=feedback;request.reviewedLayerKeys=live.filter(l=>accepted.has(l.id)).map(l=>String(l.id));
+  request.focusLayerKeys=live.filter(l=>focusIds?.includes(l.id)).map(l=>String(l.id));request.scope='full';request.visualPlanningVersion=2;request.designReviewVersion=1;request.phase='propose';request.selectedLayerKeys=live.map(l=>String(l.id));request.repairFeedback=feedback;request.consolidatedRepairPlan=repairPlan;request.reviewedLayerKeys=live.filter(l=>accepted.has(l.id)).map(l=>String(l.id));
   for(const row of request.layers)row.immutable=!request.selectedLayerKeys.includes(row.layerKey);
   progress('visuals',{round,indeterminate:true,message:`第 ${round}/${maxRounds} 轮：准备画板原稿与当前真实画面。`});
   const visuals=await getVisual({file:current,layer:live[0],scope:'full',crop:visualCrop});
@@ -33,6 +33,8 @@ async function refineVisualLayout({working,targets,records,fitText,call,getVisua
   progress('request',{round,indeterminate:true,message:`第 ${round}/${maxRounds} 轮：按画板、完整段落和视觉关系组规划。服务未提供中间进度。`});
   let result;try{result=await call('suggestLayout',request);}catch(e){if(isCancelled())return cancelled();throw e;}learning=result.learning;warning=result.warning;
   if(isCancelled())return cancelled();
+  const signature=JSON.stringify((result.proposals||[]).map(({reason,...p})=>p).sort((a,b)=>String(a.layerKey).localeCompare(String(b.layerKey))));
+  if(result.proposals?.length&&seenCandidates.has(signature)){warning='提案与本轮已否决方案相同，已停止重复渲染和审验；保留待修问题及原状态。';break;}seenCandidates.add(signature);
   feedback=(result.rejected||[]).map(r=>({...r,stage:'parameter-validation'}));const groups=new Map(),defer=(result.proposals||[]).map(p=>String(p.layerKey));
   for(const p of result.proposals||[]){
    progress('measure',{round,current:groups.size,total:targets.length,unit:'项文字',indeterminate:false,message:'逐项测量候选字体与断行；随后检查所有对象同时调整后的组合。'});
@@ -50,7 +52,7 @@ async function refineVisualLayout({working,targets,records,fitText,call,getVisua
    if(!after?.some(v=>v.stage==='current'))throw Error('候选排版缺少改后真实图像，未应用');
    const reviewRequest={...focusRequest(buildRequest({file:staged.file,layer:staged.file.layers.find(l=>l.id===live[0].id),records,fitText})),scope:'full',visualPlanningVersion:2,designReviewVersion:1,compositionPlan:result.compositionPlan,phase:'review',selectedLayerKeys:request.selectedLayerKeys,pendingGroups:staged.groups.map(g=>({id:g.id,layerKeys:g.keys})),repairFeedback:feedback,visuals:[...request.visuals.filter(v=>v.stage==='source'),...request.visuals.filter(v=>v.stage==='current').map(v=>({...v,stage:'substituted'})),...after.filter(v=>v.stage==='current')].slice(0,3)};
    let reviewed;try{reviewed=await call('suggestLayout',reviewRequest);}catch(e){if(isCancelled())return cancelled();throw e;}if(isCancelled())return cancelled();
-   const review=validateReview(reviewed.review,reviewRequest);reviews.push({round,groups:review.groups});
+   const review=validateReview(reviewed.review,{...reviewRequest,repairGuidanceVersion:reviewed.repairGuidanceVersion,designReviewSources:reviewed.designReviewSources||reviewRequest.designReviewSources});repairPlan=review.repairPlan||[];reviews.push({round,groups:review.groups,skillReviews:review.skillReviews,repairPlan,reviewSources:reviewed.designReviewSources,reviewTransport:reviewed.reviewTransport});
    for(const g of staged.groups){const decision=review.groups.find(v=>v.id===g.id);if(decision.verdict!=='accept')for(const key of g.keys)feedback.push({layerKey:key,stage:'visual-review',reason:decision.reason});}
    const approved=collisionGroups(current,staged.groups.filter(g=>review.groups.find(v=>v.id===g.id).verdict==='accept'),buildRequest,records,fitText);feedback.push(...approved.errors);current=approved.file;
    for(const g of approved.groups)for(const item of g.items){accepted.set(item.id,item);failures.delete(String(item.id));}
@@ -62,6 +64,7 @@ async function refineVisualLayout({working,targets,records,fitText,call,getVisua
   if(required.length&&required.every(l=>accepted.has(l.id)))break;
   // Feed actual rendered/measurement failures to a fresh successful planning turn.
   feedback=[...failures].map(([layerKey,reason])=>({layerKey,reason}));
+  if(repairPlan.length)feedback.push({stage:'consolidated-design-repair',repairPlan});
  }
  // Expanded artboard context is allowed to move when needed; it is not a
  // second user request to improve every already-correct object on that board.

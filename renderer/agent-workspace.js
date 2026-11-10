@@ -2,10 +2,12 @@ import {captureBindingRequest,applyBindingResult} from './ai-binding.js';
 import {planAiFile} from '../design-layout-planner.cjs';
 import {auditDesignFile} from '../design-document-audit.cjs';
 import {validateArtworkHides} from '../artwork-visibility.cjs';
+import {createTextLayer,textActionsFor} from '../native-text-objects.cjs';
 export function createAgentWorkspace({state,call,importOriginal,render,history,fitText,buildRequest,getVisual,makePlan,selectFile,selectedLayer}){
  const pageReferences=new Map();
  const inspectedArtwork=new Map();
  const auditsCache=new Map(),layoutsCache=new Map();
+ const diagnoses=new Map();
  const snapshot=()=>JSON.stringify({files:state.files,records:state.records,docFingerprint:state.docFingerprint},(key,value)=>['preview','learningSource'].includes(key)?undefined:value);
  const cacheContext=async()=>{const value=await call('agentCacheContext');return value?.taskId&&!value.warnings?.length?JSON.stringify(value):null;};
  const pathKey=p=>String(p).replace(/\\/g,'/').toLowerCase();
@@ -15,6 +17,19 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   if(!isCurrent())throw Error('当前操作已过期，未开始软件修改');
   const agentCall=(name,value)=>call(name,['suggest','suggestLayout'].includes(name)?{...value,assistantModel:model}:value);
   if(tool==='workspace')return summary(args);
+  if(tool==='create_text'){
+   const f=current(args.fileIndex),l=createTextLayer(f,args,state.records);if(!isCurrent())throw Error('任务已变化');
+   history.transaction(()=>{f.layers.push(l);state.checked=false;},'ai-text-create');render();
+   return {changed:true,fileIndex:args.fileIndex,layerKey:args.fileIndex+':'+(f.layers.length-1),boardBox:l.boardBox,boardNames:l.boardNames,visualAcceptance:'新增可编辑文字已进入预览及撤回流程；必须排版、preview审阅并export_files另存原生副本'};
+  }
+  if(tool==='set_text_presence'){
+   if(typeof args.layerKey!=='string'||!/^\d+:\d+$/.test(args.layerKey)||!['hidden','clear','restore'].includes(args.mode)||typeof args.reason!=='string'||!args.reason.trim()||args.reason.length>2000)throw Error('文字对象处理参数无效');
+   const [fi,li]=args.layerKey.split(':').map(Number),f=current(fi),l=f.layers[li];if(!l||l.issues?.length||l.artworkHidden)throw Error('文字不可处理，请检查对象或先恢复artwork隐藏');
+   if(!l.presencePrior&&args.mode==='restore')return {changed:false};
+   if(!l.nativeCreation&&args.mode!=='restore'&&f.artworkHides?.some(e=>e.objectId==='t:'+l.id))throw Error('文字已由对象隐藏处理');
+   history.transaction(()=>{if(args.mode==='restore'){Object.assign(l,l.presencePrior);delete l.presencePrior;delete l.nativeDisposition;delete l.presenceReason;}else{l.presencePrior||={visible:l.visible!==false,skipExport:!!l.skipExport};l.nativeDisposition=args.mode;l.presenceReason=args.reason;l.visible=false;l.skipExport=true;}state.checked=false;},'ai-text-presence');render();
+   return {changed:true,fileIndex:fi,layerKey:args.layerKey,boardBox:l.boardBox||[0,0,f.width,f.height],mode:args.mode,visualAcceptance:'仅修改工作区，可Ctrl+Z；clear在导出副本中移除原生文字，原稿不变，需preview和整页审阅'};
+  }
   if(['artwork_objects','inspect_artwork','set_artwork_visibility'].includes(tool)){
    const f=current(args.fileIndex);if(f.format!=='AI')throw Error('对象隐藏目前仅支持 AI 文件');
    if(tool==='artwork_objects'){
@@ -29,11 +44,12 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    }
    if(typeof args.hidden!=='boolean'||typeof args.reason!=='string'||!args.reason.trim())throw Error('请明确隐藏或恢复及其依据');
    if(args.hidden&&inspectedArtwork.get(key)!==object.sourceIdentity)throw Error('隐藏前必须 inspect_artwork 查看真实局部对照');
-   const existing=(f.artworkHides||[]).find(e=>e.objectId===object.objectId);if(!!existing===args.hidden)return {changed:false,hidden:args.hidden,objectId:object.objectId};
-   const edit={objectId:object.objectId,sourceIdentity:object.sourceIdentity,reason:args.reason};
-   const next=(f.artworkHides||[]).filter(e=>e.objectId!==object.objectId);if(args.hidden)next.push(edit);validateArtworkHides(next,{objects:f.artworkObjects,format:f.format});
+   const existing=(f.artworkHides||[]).find(e=>e.objectId===object.objectId);if(!!existing===args.hidden&&(!existing||(existing.mode||'hidden')===(args.mode||'hidden')))return {changed:false,hidden:args.hidden,objectId:object.objectId};
+   if(args.mode!==undefined&&!['hidden','clear'].includes(args.mode))throw Error('对象处理模式无效');
+   const edit={objectId:object.objectId,sourceIdentity:object.sourceIdentity,reason:args.reason,...(args.mode==='clear'?{mode:'clear'}:{})};
+   const next=(f.artworkHides||[]).filter(e=>e.objectId!==object.objectId);if(args.hidden)next.push(edit);validateArtworkHides(next,{objects:f.artworkObjects,format:f.format,textActions:textActionsFor(f)});
    if(!isCurrent())throw Error('任务已变化，未修改对象可见性');
-   history.transaction(()=>{f.artworkHides=next;const l=f.layers.find(l=>l.id===object.layerId);if(l){if(args.hidden){l.artworkHiddenPrior={skipExport:!!l.skipExport,visible:l.visible!==false};l.skipExport=true;l.visible=false;l.artworkHidden=true;}else{l.skipExport=l.artworkHiddenPrior?.skipExport??false;l.visible=l.artworkHiddenPrior?.visible??true;delete l.artworkHidden;delete l.artworkHiddenPrior;}}state.checked=false;},'ai-artwork-visibility');render();
+   history.transaction(()=>{f.artworkHides=next;const l=f.layers.find(l=>l.id===object.layerId);if(l){if(args.hidden){l.artworkHiddenPrior||={skipExport:!!l.skipExport,visible:l.visible!==false};l.skipExport=true;l.visible=false;l.artworkHidden=true;}else{l.skipExport=l.artworkHiddenPrior?.skipExport??false;l.visible=l.artworkHiddenPrior?.visible??true;delete l.artworkHidden;delete l.artworkHiddenPrior;}}state.checked=false;},'ai-artwork-visibility');render();
    return {fileIndex:args.fileIndex,changed:true,hidden:args.hidden,objectId:object.objectId,boardNames:object.boardNames,boardBox:object.boardBox,box:object.box,visualAcceptance:'可见性已更新，可Ctrl+Z撤回；必须重新preview所在画板并审阅，export_files后才生成原生副本'};
   }
   if(tool==='edit_text'){
@@ -72,7 +88,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    let result;history.transaction(()=>{result=applyBindingResult(state,capture,matches);state.checked=false;},'ai-binding');render();return result;
   }
   if(tool==='preview'){
-   const f=current(args.fileIndex),requireCurrent=!!f.artworkHides?.length||f.layers.some(l=>l.recordId&&!l.skipExport&&!l.issues?.length);let crop=args.crop;
+   const f=current(args.fileIndex),requireCurrent=!!textActionsFor(f).length||!!f.artworkHides?.length||f.layers.some(l=>l.recordId&&!l.skipExport&&!l.issues?.length);let crop=args.crop;
    if(args.boardName!==undefined){if(crop!==undefined||typeof args.boardName!=='string')throw Error('请选择一个画板或一个局部预览范围');const boxes=f.layers.filter(l=>l.boardNames?.length===1&&l.boardNames[0]===args.boardName).map(l=>l.boardBox).filter(Boolean);if(!boxes.length||boxes.some(b=>JSON.stringify(b)!==JSON.stringify(boxes[0])))throw Error('画板范围不明确，请重新核对 workspace');crop=[...boxes[0]];}
    if(crop!==undefined&&(!Array.isArray(crop)||crop.length!==4||!crop.every(Number.isFinite)||crop[0]<0||crop[1]<0||crop[2]<=0||crop[3]<=0||crop[0]+crop[2]>f.width+.01||crop[1]+crop[3]>f.height+.01))throw Error('局部预览范围无效');
    const visuals=await getVisual({scope:'full',...(crop?{crop}:{}),requireCurrent,retryBackground:args.retry===true});if(!isCurrent())throw Error('预览期间任务已变化，本次预览已丢弃');if(requireCurrent&&!visuals?.some(v=>v.stage==='current'))throw Error('当前译文替换预览缺失，不能用原稿图代替');const list=Array.isArray(visuals)?visuals:[];if(!list.length)throw Error('当前尚无真实预览，请等待原生背景生成后重试');return {fileIndex:args.fileIndex,evidence:list.map(v=>({stage:v.stage,crop:v.crop,quality:v.quality})),images:list.map(v=>v.dataURL)};
@@ -90,24 +106,26 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    }
    const context=await cacheContext(),layoutKey=()=>context&&JSON.stringify([context,args.fileIndex,args.layerKeys,args.referenceFileIds,[...pageReferences],snapshot()]);
    if(!isCurrent())throw Error('任务已变化，未开始或复用排版');
-   const cached=context&&!args.replan&&layoutsCache.get(layoutKey());if(cached)return {...structuredClone(cached),reused:true};
+   const cached=context&&layoutsCache.get(layoutKey());if(cached&&(!args.replan||!cached.accepted||cached.changed===false))return {...structuredClone(cached),reused:true,...(args.replan&&(!cached.accepted||cached.changed===false)?{stoppedNoProgress:true,message:'相同要求、画面和参考下已有未解决方案；请先根据修改清单作实际调整或补充依据，不重复尝试相同排版。'}:{})};
    const before=JSON.stringify({layers:f.layers,edits:f.containerEdits,records:state.records});
+   const diagnosis=diagnoses.get(f.fingerprint),guidance=diagnosis?.identity===JSON.stringify([context,f,state.records])?diagnosis.boards:[];
    const currentVisual=async options=>{const visuals=await getVisual({...options,requireCurrent:true});if(!isCurrent())throw Error('任务已变化，未提交排版');if(!visuals?.some(v=>v.stage==='current'))throw Error('当前译文预览缺失，未向排版服务提交原稿图');return visuals;};
-   const layoutCall=(name,value)=>{const board=value.activeBoard?.name||value.activeBoard?.names?.[0]||value.layers.find(l=>l.layerKey===value.selectedLayerKey)?.boardNames?.[0],key=f.fingerprint+'|'+board,ids=args.referenceFileIds??pageReferences.get(key)??[];if(args.referenceFileIds!==undefined)pageReferences.set(key,[...ids]);return agentCall(name,{...value,assistantReferenceIds:ids});};
+   const layoutCall=(name,value)=>{const board=value.activeBoard?.name||value.activeBoard?.names?.[0]||value.layers.find(l=>l.layerKey===value.selectedLayerKey)?.boardNames?.[0],key=f.fingerprint+'|'+board,ids=args.referenceFileIds??pageReferences.get(key)??[];if(args.referenceFileIds!==undefined)pageReferences.set(key,[...ids]);return agentCall(name,{...value,priorWholePageRepairPlan:guidance.filter(b=>b.board===board).flatMap(b=>b.repairPlan||[]),assistantReferenceIds:ids});};
    const result=await planAiFile({file:f,records:state.records,fitText,call:layoutCall,getVisual:currentVisual,buildRequest,scope:'full',targetIds,focusIds,layerId:f.layers[index].id,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',{label:p.message||p.stageLabel||'AI 设计排版',current:p.current,total:p.total}).catch(()=>{});}});
    if(result.cancelled||!isCurrent())throw Error('接管已暂停、终止或收到新补充，过期排版建议未应用');
    if(before!==JSON.stringify({layers:f.layers,edits:f.containerEdits,records:state.records}))throw Error('排版期间项目已变化，本次提案未应用');
-   history.transaction(()=>{for(const item of result.accepted)Object.assign(f.layers.find(l=>l.id===item.id),item.candidate);f.containerEdits=result.working.containerEdits;state.checked=false;},'ai-design-layout');render();const response={accepted:result.accepted.length,failures:result.failures,retainedContext:result.retainedContext||[],visualReviews:result.visualReviews,boards:result.boards,learning:result.learning,warning:result.warning,visualAcceptance:'待查看最终预览及原生导出'};if(context){layoutsCache.set(layoutKey(),structuredClone(response));if(layoutsCache.size>8)layoutsCache.delete(layoutsCache.keys().next().value);}return response;
+   history.transaction(()=>{for(const item of result.accepted)Object.assign(f.layers.find(l=>l.id===item.id),item.candidate);f.containerEdits=result.working.containerEdits;state.checked=false;},'ai-design-layout');render();const response={changed:before!==JSON.stringify({layers:f.layers,edits:f.containerEdits,records:state.records}),accepted:result.accepted.length,failures:result.failures,retainedContext:result.retainedContext||[],visualReviews:result.visualReviews,boards:result.boards,learning:result.learning,warning:result.warning,visualAcceptance:'待查看最终预览及原生导出'};if(context){layoutsCache.set(layoutKey(),structuredClone(response));if(layoutsCache.size>8)layoutsCache.delete(layoutsCache.keys().next().value);}return response;
   }
   if(tool==='export_files'){
    const blocked=state.files.flatMap(f=>f.layers.filter(l=>l.recordId&&l.issues?.length&&!l.skipExport).map(l=>({file:f.name,layer:l.name,issues:l.issues})));
    if(blocked.length)return {blocked,exported:false,message:'受限文字未导出；请让用户确认处理方式，不能自行跳过'};
    const before=JSON.stringify({files:state.files,records:state.records}),audits=[],context=await cacheContext();
    for(let index=0;index<state.files.length;index++){
-    const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length)continue;
+    const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length&&!textActionsFor(f).length)continue;
     const auditCall=(name,value)=>agentCall(name,{...value,assistantReferenceIds:pageReferences.get(f.fingerprint+'|'+value.activeBoard?.name)||[]});
     try{audits.push({file:f.name,...await auditDesignFile({file:f,records:state.records,fitText,buildRequest,getVisual,call:auditCall,cache:context?auditsCache:null,cacheIdentity:context+'|'+JSON.stringify([...pageReferences]),forceReview:args.reviewAgain===true,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',p).catch(()=>{});}})});}
     catch(e){if(!isCurrent())throw e;audits.push({file:f.name,passed:false,failures:['审阅未完成：'+e.message]});}
+    diagnoses.set(f.fingerprint,{identity:JSON.stringify([context,f,state.records]),boards:audits.at(-1).boards||[]});if(diagnoses.size>16)diagnoses.delete(diagnoses.keys().next().value);
    }
    if(!isCurrent()||before!==JSON.stringify({files:state.files,records:state.records}))throw Error('审阅期间项目已变化，未开始导出');
    const plan=await makePlan();if(!isCurrent())throw Error('接管已暂停、终止或收到新补充，未开始导出');

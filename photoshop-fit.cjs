@@ -3,6 +3,9 @@ module.exports = String.raw`
 function applyPreviewLayer(layer,job){
  var ti=layer.textItem,p=job.previewLayout,pointsPerPixel=72/app.activeDocument.resolution;
  ti.contents=p.text.replace(/\n/g,"\r");ti.font=p.font;
+ // Assign native enum values inside branches: ExtendScript host setters can
+ // mis-handle a conditional enum expression (verified against saved PSDs).
+ if(job.nativeCreation){if(job.alignment==='center'){ti.justification=Justification.CENTER;}else if(job.alignment==='right'){ti.justification=Justification.RIGHT;}else{ti.justification=Justification.LEFT;}}
  ti.size=UnitValue(p.size*pointsPerPixel,"pt");ti.tracking=p.tracking;
  ti.useAutoLeading=false;ti.leading=UnitValue(p.leading*pointsPerPixel,"pt");
  ti.horizontalScale=ti.horizontalScale*p.stretchX/100;ti.verticalScale=ti.verticalScale*p.stretchY/100;

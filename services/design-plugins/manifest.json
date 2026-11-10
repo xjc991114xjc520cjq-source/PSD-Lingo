@@ -1,0 +1,48 @@
+{
+  "revision": 1,
+  "transport": "codex-visual-fallback",
+  "plugins": [
+    {
+      "id": "anthropic-design",
+      "version": "1.2.0",
+      "source": "https://github.com/anthropics/knowledge-work-plugins/tree/e605d8ddbfb688da57dfaaceebd93f12a64ef1d3/design",
+      "commit": "e605d8ddbfb688da57dfaaceebd93f12a64ef1d3",
+      "license": "Apache-2.0",
+      "runtime": "Claude plugin; Codex uses reviewed skill instructions with images"
+    },
+    {
+      "id": "amir-design-judgment",
+      "version": "0.1",
+      "source": "https://github.com/amirmushichge/amir-design-judgment/tree/bb0852f5f28742886fcaf4638a302258a438d5d0",
+      "commit": "bb0852f5f28742886fcaf4638a302258a438d5d0",
+      "license": "CC-BY-4.0",
+      "author": "Amir Mušić"
+    }
+  ],
+  "skills": [
+    {
+      "id": "design-critique",
+      "plugin": "anthropic-design",
+      "file": "anthropic-design/skills/design-critique/SKILL.md",
+      "sha256": "3a4f260eb9f60b431782bf6d90f22afb480c0c67860267a032df58a3e1bd19cd"
+    },
+    {
+      "id": "design-system",
+      "plugin": "anthropic-design",
+      "file": "anthropic-design/skills/design-system/SKILL.md",
+      "sha256": "fb31bd0144c43955106f01927126ae9fd2d4148be44c8d5887b3391f40c31445"
+    },
+    {
+      "id": "accessibility-review",
+      "plugin": "anthropic-design",
+      "file": "anthropic-design/skills/accessibility-review/SKILL.md",
+      "sha256": "ef42982af0d51238dda2ab16d08626712891bdd41864876c32d1e7b13fb3124f"
+    },
+    {
+      "id": "graphic-judgment",
+      "plugin": "amir-design-judgment",
+      "file": "amir-design-judgment/skills/graphic-judgment/SKILL.md",
+      "sha256": "38e6718eba94a8de8554dba83fd341e0b34cdaab3c507cb7213cc8204fcbe5ca"
+    }
+  ]
+}

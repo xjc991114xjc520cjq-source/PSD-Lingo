@@ -13,7 +13,7 @@ function fixture(){
 }
 function workspace(f,learning={}){
  const state={files:[f.file],records:f.records,fileIndex:0,layerIndex:0};let renders=0;
- const context={state,manualStyleFor,activeContainerEdits,layoutLearning:learning,startLearningTask:action=>Promise.resolve().then(action).catch(()=>{}),fitText:f.fitText,record:id=>f.records.find(r=>r.id===id),policyFor:()=>({allowWrap:true,allowLeading:false,trackingLimit:0}),file:()=>state.files[state.fileIndex],layer:()=>state.files[state.fileIndex].layers[state.layerIndex],contextProperties:null,containerEditor:null,layoutEditor:null,render:()=>renders++,focusBoundLayer(){}};
+ const context={textActionsFor:require('../native-text-objects.cjs').textActionsFor,structuredClone,state,manualStyleFor,activeContainerEdits,layoutLearning:learning,startLearningTask:action=>Promise.resolve().then(action).catch(()=>{}),fitText:f.fitText,record:id=>f.records.find(r=>r.id===id),policyFor:()=>({allowWrap:true,allowLeading:false,trackingLimit:0}),file:()=>state.files[state.fileIndex],layer:()=>state.files[state.fileIndex].layers[state.layerIndex],contextProperties:null,containerEditor:null,layoutEditor:null,render:()=>renders++,focusBoundLayer(){}};
  const select=app.slice(app.indexOf('function selectedLayer('),app.indexOf('\nfunction selectFile('));
  const plans=app.slice(app.indexOf('function previewLayoutFor('),app.indexOf('\nfunction task('));
  vm.runInNewContext(select+'\n'+plans+'\nglobalThis.api={makePlan,selectedLayer};',context);return {...context.api,state,renders:()=>renders};

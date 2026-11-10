@@ -1,4 +1,5 @@
 import {restoreExtractedContainers} from './extracted-container-state.js';
+import {createTextLayer,validateCreation} from '../native-text-objects.cjs';
 // A language preview uses a separate working state; the main project is restored
 // by reference so neither language edits nor cancellation can mutate it.
 export async function hydrateBatchFiles({items,plan,savedLayers},parseImported){
@@ -6,6 +7,12 @@ export async function hydrateBatchFiles({items,plan,savedLayers},parseImported){
   for(const item of items){
    const f=await parseImported(item),source=plan.files.find(p=>p.path===f.path);
    if(!source)throw new Error('语言预览原稿与模板不一致。');
+   const savedNew=savedLayers?.find(s=>s.path===f.path);for(const l of savedNew?.layers||[])if(l.nativeCreation&&!f.layers.some(x=>x.id===l.id))f.layers.push(JSON.parse(JSON.stringify(l)));
+   for(const j of source.jobs.filter(j=>j.nativeCreation))if(!f.layers.some(l=>l.id===j.layerId)){
+    validateCreation(j,{width:f.width,height:f.height,layers:f.format==='AI'?f.layers:undefined,artworkObjects:f.artworkObjects});
+    const p=j.previewLayout,l=createTextLayer(f,{boardName:j.nativeCreation.boardName,recordIds:[j.recordId],box:j.box,style:{font:p.font,size:p.size,color:j.nativeCreation.color,alignment:j.alignment||'left'},reason:'恢复语言模板中的已批准新增文字'},plan.records);
+    l.id=j.layerId;l.name=j.name;f.layers.push(l);
+   }
    for(const l of f.layers){
     l.recordId=null;l.suggestedId=null;delete l.customText;delete l.manual;delete l.position;
     const j=source.jobs.find(j=>j.layerId===l.id);l.skipExport=!j;
@@ -19,6 +26,7 @@ export async function hydrateBatchFiles({items,plan,savedLayers},parseImported){
    }
    const saved=savedLayers?.find(s=>s.path===f.path);if(saved)for(const l of f.layers){const previous=saved.layers.find(p=>p.id===l.id),sourceBox=l.sourceBox&&[...l.sourceBox];if(previous)Object.assign(l,JSON.parse(JSON.stringify(previous)));if(sourceBox)l.sourceBox=sourceBox;}
    const savedFile=savedLayers?.find(s=>s.path===f.path);
+   for(const a of source.textActions||[]){const l=f.layers.find(l=>l.id===a.layerId);if(l){l.nativeDisposition=a.mode;l.presenceReason=a.reason;l.visible=false;l.skipExport=true;}}
    restoreExtractedContainers(f,savedFile?.extractedContainers??source.extractedContainers??[]);
    f.artworkHides=JSON.parse(JSON.stringify(savedFile?.artworkHides??source.artworkHides??[]));for(const e of f.artworkHides){const o=f.artworkObjects?.find(o=>o.objectId===e.objectId),l=f.layers.find(l=>l.id===o?.layerId);if(l){l.skipExport=true;l.visible=false;l.artworkHidden=true;}}
    f.containerEdits=JSON.parse(JSON.stringify(savedFile?.containerEdits??source.containerEdits??[]));

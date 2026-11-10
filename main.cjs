@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, net, session } = require('electron');
 const fs = require('node:fs/promises');
+const {validateCreation,validateTextActions}=require('./native-text-objects.cjs');
 const {inspectFile,hashFile}=require('./photoshop-file-io.cjs');
 const {readPhotoshopMetadata}=require('./photoshop-metadata.cjs');
 const illustrator=require('./illustrator.cjs');
@@ -92,11 +93,13 @@ async function checkPlan(plan) {
     if(await hashFile(file.path)!==file.fingerprint)throw new Error('原 PSD / PSB 已发生变化，请重新导入并确认绑定。');
     const metadata=await actualMetadata(file),actual=metadata.layers,{width,height}=metadata;
     if(illustrator.isIllustrator(file)&&file.format!=='AI'||!illustrator.isIllustrator(file)&&file.format==='AI')throw Error('文件格式与原稿不一致');
-    validateArtworkHides(file.artworkHides,{objects:metadata.artworkObjects||[],jobs:file.jobs,format:file.format});
+    validateTextActions(file.textActions,{layers:actual,jobs:file.jobs});
+    validateArtworkHides(file.artworkHides,{objects:metadata.artworkObjects||[],textActions:file.textActions,jobs:file.jobs,format:file.format});
     if(illustrator.isIllustrator(file))require('./illustrator-containers.cjs').assertContainerKinds(file);
     validateExtractedContainers(file.extractedContainers,{width,height,fingerprint:file.fingerprint,layers:metadata.layers});
     validateContainerEdits(file.containerEdits,{width,height,textIds:file.jobs.map(j=>j.layerId),containers:[...(metadata.containers||[]),...extractedMetadata(file.extractedContainers)]});
     for (const job of file.jobs) {
+      if(job.nativeCreation){validateCreation(job,{width,height,layers:illustrator.isIllustrator(file)?actual:undefined,artworkObjects:metadata.artworkObjects,artboards:metadata.artboards});continue;}
       const l = actual.find(l => l.id === job.layerId);
       if (!l || !l.supported || l.original !== job.original || l.font !== job.font || l.size !== job.size || JSON.stringify(l.box) !== JSON.stringify(job.box)) throw new Error('文字层元数据校验失败，请重新导入并确认：' + job.layerId);
       if(job.position&&(job.position.x>=width||job.position.y>=height||job.position.x+job.box[2]<=0||job.position.y+job.box[3]<=0))throw new Error('文字目标区域超出画布：'+l.name);
@@ -169,7 +172,7 @@ ipcMain.handle('service-ready',safe(async()=>{const ack=process.argv.find(a=>a.s
 ipcMain.handle('preview-background',safe(async request=>{
   if(psBusy||batchBusy)throw new Error('原生文件任务正在运行，请等待当前任务完成后重试预览。');
   if(!request||imported.get(request.path)!==request.fingerprint||!Array.isArray(request.ids)||request.ids.length>500||request.ids.some(id=>!Number.isInteger(id)))throw new Error('预览请求无效，请重新导入 PSD');
-  psBusy=true;try{if(await hashFile(request.path)!==request.fingerprint)throw new Error('源 PSD 已变化，请重新导入');const sourceMetadata=await actualMetadata(request);validateArtworkHides(request.artworkHides,{objects:sourceMetadata.artworkObjects||[],jobs:request.ids.map(layerId=>({layerId})),format:illustrator.isIllustrator(request.path)?'AI':'PSD'});if(request.containerEdits?.length||request.extractedContainers?.length){const m=await actualMetadata(request);validateExtractedContainers(request.extractedContainers,{width:m.width,height:m.height,fingerprint:request.fingerprint,layers:m.layers});validateContainerEdits(request.containerEdits,{width:m.width,height:m.height,textIds:request.ids,containers:[...(m.containers||[]),...extractedMetadata(request.extractedContainers)]});}else{validateExtractedContainers(request.extractedContainers);validateContainerEdits(request.containerEdits,{textIds:request.ids});}return await (illustrator.isIllustrator(request.path)?illustrator.createBackground:createBackground)(path.join(app.getPath('userData'),'previews',Date.now().toString()),request.path,request.ids,{helperPath,fingerprint:request.fingerprint,artworkHides:request.artworkHides,containerEdits:request.containerEdits,extractedContainers:request.extractedContainers});}finally{psBusy=false;if(win&&!win.isDestroyed())win.focus();}
+  psBusy=true;try{if(await hashFile(request.path)!==request.fingerprint)throw new Error('源 PSD 已变化，请重新导入');const sourceMetadata=await actualMetadata(request);validateTextActions(request.textActions,{layers:sourceMetadata.layers,jobs:request.ids.map(layerId=>({layerId}))});validateArtworkHides(request.artworkHides,{objects:sourceMetadata.artworkObjects||[],textActions:request.textActions,jobs:request.ids.map(layerId=>({layerId})),format:illustrator.isIllustrator(request.path)?'AI':'PSD'});if(request.containerEdits?.length||request.extractedContainers?.length){const m=await actualMetadata(request);validateExtractedContainers(request.extractedContainers,{width:m.width,height:m.height,fingerprint:request.fingerprint,layers:m.layers});validateContainerEdits(request.containerEdits,{width:m.width,height:m.height,textIds:request.ids,containers:[...(m.containers||[]),...extractedMetadata(request.extractedContainers)]});}else{validateExtractedContainers(request.extractedContainers);validateContainerEdits(request.containerEdits,{textIds:request.ids});}return await (illustrator.isIllustrator(request.path)?illustrator.createBackground:createBackground)(path.join(app.getPath('userData'),'previews',Date.now().toString()),request.path,request.ids,{helperPath,fingerprint:request.fingerprint,textActions:request.textActions,artworkHides:request.artworkHides,containerEdits:request.containerEdits,extractedContainers:request.extractedContainers});}finally{psBusy=false;if(win&&!win.isDestroyed())win.focus();}
 }));
 ipcMain.handle('inspect-artwork',safe(async request=>{
  if(psBusy||batchBusy)throw Error('原生程序正忙，请等待');

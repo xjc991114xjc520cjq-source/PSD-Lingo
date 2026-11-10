@@ -1,14 +1,15 @@
+const pluginReviews=()=>require('../services/design-plugins/manifest.json').skills.map(s=>({id:s.id,verdict:['design-critique','graphic-judgment'].includes(s.id)?'accept':'not-applicable',evidence:'Fixture inspected composition; noninteractive checks inapplicable'}));
 const fixtureChecks=()=>require('../services/design-composition.cjs').dimensions.map(id=>({id,verdict:'accept',evidence:'Fixture actual composition was inspected'}));
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {checks,validateAudit,auditPrompt}=require('../services/design-page-audit.cjs');
 const {auditDesignFile}=require('../design-document-audit.cjs');
 const {measuredSpaceOptions}=require('../design-space-options.cjs');
 const {buildDesignLayoutRequest}=require('../design-layout-context.cjs');
-const passed=()=>({designChecks:fixtureChecks(),checks:checks.map(id=>({id,verdict:'pass',evidence:'Rendered reading relationship inspected',layerKeys:[]}))});
+const passed=()=>({skillReviews:pluginReviews(),designChecks:fixtureChecks(),checks:checks.map(id=>({id,verdict:'pass',evidence:'Rendered reading relationship inspected',layerKeys:[]}))});
 
 test('page cache preserves failures and invalidates on new copy, visuals, model/rules/references or explicit review',async()=>{
  const file={fingerprint:'original',width:500,height:800,layers:[{id:7,box:[30,30,80,20],size:20,font:'Arial',recordId:'r',boardNames:['p'],boardBox:[0,0,500,800]}]},records=[{id:'r',target:'Complete copy'}],cache=new Map();let calls=0,image='first',context='task/model/rules/reference/1';
- const options={file,records,cache,buildRequest:buildDesignLayoutRequest,getVisual:async({crop})=>[{stage:'current',crop,dataURL:image}],call:async()=>{calls++;const v=passed();v.checks[0].verdict='fail';return {audit:v};}};
+ const options={file,records,cache,buildRequest:buildDesignLayoutRequest,getVisual:async({crop})=>[{stage:'current',crop,dataURL:image}],call:async()=>{calls++;const v=passed();v.checks[0].verdict='uncertain';return {audit:v};}};
  const run=extra=>auditDesignFile({...options,cacheIdentity:context,...extra});
  assert.equal((await run()).passed,false);assert.equal(calls,2);const cached=await run();assert.equal(cached.passed,false);assert.equal(cached.reusedBoards,1);assert.equal(calls,2);
  context='task/model/rules/reference/2';await run();assert.equal(calls,4);records[0].target='Revised complete copy';await run();assert.equal(calls,6);image='changed image';await run();assert.equal(calls,8);await run({forceReview:true});assert.equal(calls,10);
@@ -69,3 +70,14 @@ test('space alternatives use approved text and peer sizes without treating old n
   assert.deepEqual(o.candidates.map(c=>c.size),[25,40,30]);assert.equal(o.availableRegion,'unknown-until-visual-obstacle-review');assert.equal(JSON.stringify(f),before);
  }
 });
+
+test('plugin-only design failures block final export review and remain failed exactly once in cache',async()=>{
+ const file={fingerprint:'source',width:500,height:800,layers:[{id:7,box:[30,30,80,20],size:20,font:'Arial',recordId:'r',boardNames:['p'],boardBox:[0,0,500,800]}]},cache=new Map();let calls=0;
+ const options={file,records:[{id:'r',target:'Approved'}],cache,buildRequest:buildDesignLayoutRequest,getVisual:async({crop})=>[{stage:'current',crop}],call:async(_n,r)=>{calls++;const audit=passed();audit.skillReviews.find(s=>s.id==='graphic-judgment').verdict=calls===1?'uncertain':'revise';if(calls===2)assert.equal(r.detailReview.previousSkillReviews.find(s=>s.id==='graphic-judgment').verdict,'uncertain');return {audit};}};
+ const first=await auditDesignFile(options);assert.equal(first.passed,false);assert.equal(first.failures.length,1);assert.match(first.failures[0],/skill:graphic-judgment/);assert.equal(calls,2);
+ const cached=await auditDesignFile(options);assert.equal(cached.passed,false);assert.equal(cached.failures.length,1);assert.equal(cached.reusedBoards,1);assert.equal(calls,2);
+});
+
+test('confirmed full-page defects are diagnosed once without an unnecessary detail re-review',async()=>{const file={width:500,height:800,layers:[{id:7,box:[30,30,80,20],size:20,font:'Arial',recordId:'r',boardNames:['p'],boardBox:[0,0,500,800]}]};let calls=0,renders=0;const result=await auditDesignFile({file,records:[{id:'r',target:'Approved'}],buildRequest:buildDesignLayoutRequest,getVisual:async({crop})=>{renders++;return [{stage:'current',crop}];},call:async()=>{calls++;const v=passed();v.checks[0].verdict='fail';return {audit:v};}});assert.equal(result.passed,false);assert.equal(calls,1);assert.equal(renders,1);assert.equal(result.boards[0].detailCrops,undefined);});
+
+test('server-validated audit round-trips through renderer validation without trusting its passed flag',()=>{const request={layers:[],designReviewVersion:1,designReviewSources:require('../services/design-plugins/manifest.json').skills.map(s=>({...s,required:['design-critique','graphic-judgment'].includes(s.id)}))};const once=validateAudit(passed(),request);assert.equal(validateAudit(once,request).passed,true);once.checks[0].verdict='fail';once.passed=true;assert.equal(validateAudit(once,request).passed,false);});

@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const {photoshopTextObjects}=require('./native-text-objects.cjs');
 const path = require('node:path');
 const {helper}=require('./services/authorization.cjs');
 const {containerScript}=require('./container-edit.cjs');
@@ -26,6 +27,8 @@ function backgroundScript(input, ids, output, options={}) {
 (function(){
 var source=null,copy=null,opened=false,stage="读取源 PSD",failure=null,dialogs=app.displayDialogs;app.displayDialogs=DialogModes.NO;
 function find(c,id){for(var i=0;i<c.layers.length;i++){var l=c.layers[i];if(l.id===id)return l;if(l.typename==="LayerSet"){var v=find(l,id);if(v)return v;}}return null;}
+function findLayer(doc,id){return find(doc,id);}
+${photoshopTextObjects}
 ${containerScript}
 ${extractionScript}
 try{
@@ -35,8 +38,9 @@ if(source&&!source.saved)throw new Error("源 PSD 有未保存改动，请先保
 if(!source){source=app.open(file);opened=true;}
 stage="创建预览副本";copy=source.duplicate("PSD Lingo preview",false);app.activeDocument=copy;
 stage="拆分底部容器";var nativeEdits=materializeExtracted(copy,${JSON.stringify(options.extractedContainers||[])},${JSON.stringify(options.containerEdits||[])});stage="调整底部容器";applyContainers(copy,nativeEdits);
+nativeTextActions(copy,${JSON.stringify(options.textActions||[])});
 stage="隐藏绑定原文";
-for(var i=0;i<ids.length;i++){var l=find(copy,ids[i]);if(!l||l.kind!==LayerKind.TEXT)throw new Error("预览文字层 ID 不匹配");l.visible=false;}
+for(var i=0;i<ids.length;i++){if(ids[i]<0)continue;var l=find(copy,ids[i]);if(!l||l.kind!==LayerKind.TEXT)throw new Error("预览文字层 ID 不匹配");l.visible=false;}
 ${options.scalePreview?'stage="缩小显示预览";var w=copy.width.as("px"),h=copy.height.as("px"),scale=Math.min(1,16384/w,16384/h,Math.sqrt(6000000/(w*h)));if(scale<1)copy.resizeImage(UnitValue(Math.max(1,Math.floor(w*scale)),"px"),UnitValue(Math.max(1,Math.floor(h*scale)),"px"),null,ResampleMethod.BICUBIC);':''}
 stage="保存预览背景";copy.saveAs(new File(${JSON.stringify(output)}),new PNGSaveOptions(),true,Extension.LOWERCASE);
 }catch(e){failure=new Error(stage+"失败："+e.message);}finally{try{if(copy)copy.close(SaveOptions.DONOTSAVECHANGES);}catch(closeError){}try{if(opened&&source)source.close(SaveOptions.DONOTSAVECHANGES);}catch(closeSourceError){}app.displayDialogs=dialogs;}
@@ -47,7 +51,7 @@ async function createBackground(directory,input,ids,options={}){
   const helperPath=options.helperPath||path.join(__dirname,'services/bin/psd-lingo-service.exe');
   await preparePhotoshop(helperPath);
   const png=path.join(directory,'background.png');
-  await executeScript(directory,backgroundScript(input,ids,png.replace(/\\/g,'/'),{scalePreview:options.scalePreview!==false,containerEdits:options.containerEdits,extractedContainers:options.extractedContainers}));
+  await executeScript(directory,backgroundScript(input,ids,png.replace(/\\/g,'/'),{textActions:options.textActions,scalePreview:options.scalePreview!==false,containerEdits:options.containerEdits,extractedContainers:options.extractedContainers}));
   return 'data:image/png;base64,'+(await fs.readFile(png)).toString('base64');
 }
 async function installedFonts(directory){

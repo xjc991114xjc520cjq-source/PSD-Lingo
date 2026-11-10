@@ -37,7 +37,7 @@ export function installWorkflow({$,state,file,layer,selectFile,selectedLayer}){
  function update(){
   const layers=state.files.flatMap(f=>f.layers),active=layers.filter(l=>l.recordId&&!l.skipExport),pending=layers.filter(l=>!l.recordId&&!l.skipExport),real=state.files.some(f=>!f.demo),l=layer(),bound=!!l?.recordId,id=state.fileIndex+':'+state.layerIndex+':'+(file()?.path||file()?.name||'');
   if(id!==identity){identity=id;content.scrollTop=0;tab(bound?'layout':'binding');}else if(bound&&!wasBound)tab('layout');if(!bound&&panel.dataset.mode==='layout')tab('binding');wasBound=bound;
-  const hasArtwork=state.files.some(f=>f.artworkHides?.length);
+  const hasArtwork=state.files.some(f=>f.artworkHides?.length||f.layers.some(l=>!l.nativeCreation&&l.nativeDisposition));
   name.textContent=l?.name||'尚未选择文字层';context.dataset.empty=String(!l);$('originalText').title=l?.original||'';const r=state.records.find(r=>r.id===l?.recordId);target.textContent=typeof l?.customText==='string'?l.customText:r?.target||'尚未应用替换文案';
   $('skipLayer').disabled=!l||!!l.artworkHidden;next.disabled=!pending.length;progress.textContent=layers.length?(layers.length-pending.length)+' / '+layers.length+' 处已设置':'先导入原稿';
   $('codexSuggest').disabled=aiBusy||!!state.batchPreviewId||!pending.length||!state.records.length;$('codexSuggest').textContent=aiBusy?'正在查找并绑定…':'AI 自动绑定文案';$('exactMatch').disabled=!!state.batchPreviewId||!l||!state.records.length;$('adaptCurrent').disabled=!bound||!r||!!l?.skipExport;

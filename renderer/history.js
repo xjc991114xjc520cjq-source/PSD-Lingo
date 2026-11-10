@@ -1,5 +1,5 @@
 // Completed gestures form one entry; selecting an old entry never destroys redo.
-const reasonLabels={'ai-artwork-visibility':'AI 隐藏／恢复重复对象','ai-copy-edit':'AI 文案合并与改字','ai-design-layout':'AI 设计排版','ai-binding':'AI 绑定文案','visual-layout':'自动适配排版','container-extraction':'拆分容器','container-resize':'调整容器大小','container-move':'移动容器','container-radius':'调整容器圆角'};
+const reasonLabels={'ai-text-create':'AI 新增可编辑文字','ai-text-presence':'AI 隐藏／清除／恢复文字','ai-artwork-visibility':'AI 隐藏／恢复重复对象','ai-copy-edit':'AI 文案合并与改字','ai-design-layout':'AI 设计排版','ai-binding':'AI 绑定文案','visual-layout':'自动适配排版','container-extraction':'拆分容器','container-resize':'调整容器大小','container-move':'移动容器','container-radius':'调整容器圆角'};
 const controlLabels={editSize:'修改字号',editFont:'修改字体',editWeight:'修改字重',editTracking:'调整字间距',editLeading:'调整行间距',editX:'移动文字横坐标',editY:'移动文字纵坐标',allowWrap:'调整自动换行',replacementZoom:'缩放替换预览',zoomIn:'放大画布',zoomOut:'缩小画布',fit:'显示全图',centerOriginal:'原稿画布居中',centerReplacement:'替换画布居中',replacementSelection:'变换文字',resizeText:'缩放文字',replacementViewport:'移动文字／画布',viewport:'选择文字／移动画布',saveInlineText:'修改文案',inlineTextValue:'修改文案'};
 export function installHistory({read,write,context,notify=()=>{},onBegin=()=>{},onCommit=()=>{}}){
  let entries=[],cursor=0,pending=null,pendingLabel='',dragging=false,timer,restoring=false,key=context(),nextId=0;

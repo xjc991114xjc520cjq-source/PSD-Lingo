@@ -38,3 +38,9 @@ test('extracted background shapes survive per-language capture and reopen withou
  await f.preview.enter({...f.result,savedLayers:saved},'german');assert.equal(f.state.files[0].containers.find(c=>c.id===-1).radii[0],20);f.preview.exit();
  await f.preview.enter(f.result,'french');assert.equal(f.state.files[0].containers.find(c=>c.id===-1).radii[0],12);f.preview.exit();
 });
+
+test('language template reconstructs native additions without saved renderer layers and retains source removals',async()=>{
+ const f=fixture();Object.assign(f.result.items[0],{format:'PSD',width:500,height:800});const source=f.result.plan.files[0];source.textActions=[{layerId:2,mode:'clear',reason:'Approved duplicate removal'}];
+ source.jobs.push({layerId:-7,name:'New price',recordId:'batch:0',original:'',font:'Arial',size:24,minSize:18,box:[40,150,200,70],target:'Deutsch',alignment:'center',nativeCreation:{color:'#123456',boardBox:[0,0,500,800],boardName:'画布'},previewLayout:{text:'Deutsch',box:[40,150,150,30],font:'Arial',size:24,weight:'regular',tracking:0,leading:28,stretchX:100,stretchY:100}});
+ await f.preview.enter(f.result,'german');const l=f.state.files[0].layers.find(l=>l.id===-7);assert.ok(l);assert.equal(l.nativeCreation.color,'#123456');assert.equal(l.recordId,'batch:0');assert.equal(l.manual.size,24);assert.equal(f.state.files[0].layers.find(l=>l.id===2).nativeDisposition,'clear');f.preview.exit();assert.equal(f.files[0].layers.length,1);
+});

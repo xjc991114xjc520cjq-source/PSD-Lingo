@@ -1,0 +1,39 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const {installAgent}=require('../services/agent-integration.cjs');
+async function fixture(t,{output=true}={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'agent-integration-')),handlers={},events={};const file=path.join(directory,'copy.txt');await fs.writeFile(file,'Approved');let selected=[file],steps=[],last,exported=[],commands=[];
+ const settings={credentials:async()=>({mode:'api',apiModel:'test',apiKey:'fixture-secret',apiProtocol:'responses',apiBaseUrl:'https://example.invalid/v1'}),get:async()=>({mode:'api',apiModel:'test',executable:'C:/codex.exe',localModel:'local-test'})};
+ const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)}}catch(e){return {ok:false,error:e.message}}};
+ const invoke=(name,value)=>handlers[name]({},value);
+ const webContents={send:(channel,data)=>{if(channel==='agent-state')last=data;if(channel==='agent-command'){commands.push(data);queueMicrotask(async()=>{let value;if(data.tool==='export_files')value=await invoke('agent-export',{files:[]});else value={ok:true,value:{files:[]}};events['agent-command-result']({sender:webContents},{id:data.id,ok:value.ok,value:value.value,error:value.error});});}}};
+ const service=installAgent({ipcMain:{handle:(n,f)=>handlers[n]=f,on:(n,f)=>events[n]=f},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:selected})},window:()=>({webContents}),dataDirectory:()=>directory,settings:()=>settings,guard:()=>{},isBusy:()=>false,localEnv:()=>process.env,safe,runPhotoshop:async(plan,dir)=>{exported.push(dir);return {saved:1,failed:0};},fetch:()=>assert.fail('Assistant cannot use API'),think:async task=>{assert.equal(task.mode,'local');return steps.shift()||{kind:'complete',message:'done',tool:'',arguments:'{}',questions:[]};}});t.after(async()=>{await service.close();await fs.rm(directory,{recursive:true,force:true,maxRetries:3,retryDelay:20});});
+ if(output){selected=[directory];await invoke('agent-output');selected=[file];}
+ return {directory,file,invoke,exported,steps,commands,get last(){return last},select:paths=>selected=paths};}
+test('missing or vanished output directory is rejected before task creation or model execution',async t=>{
+ const f=await fixture(t,{output:false});let r=await f.invoke('agent-start',{request:'Translate',fileIds:[]});assert.equal(r.ok,false);assert.match(r.error,/先选择输出/);assert.equal(f.last,undefined);assert.equal(f.commands.length,0);
+ const temporary=path.join(f.directory,'destination');await fs.mkdir(temporary);f.select([temporary]);assert.equal((await f.invoke('agent-output')).ok,true);await fs.rmdir(temporary);
+ r=await f.invoke('agent-start',{request:'Translate',fileIds:[]});assert.equal(r.ok,false);assert.match(r.error,/不存在或不可写/);assert.equal(f.commands.length,0);
+});
+test('follow-up checks output again before appending attachments or user history',async t=>{
+ const f=await fixture(t),destination=path.join(f.directory,'followup-output');await fs.mkdir(destination);f.select([destination]);await f.invoke('agent-output');assert.equal((await f.invoke('agent-start',{request:'Analyze',fileIds:[]})).ok,true);await finished(f);const before=JSON.stringify(f.last.history);await fs.rmdir(destination);
+ const result=await f.invoke('agent-followup',{text:'Continue',fileIds:[]});assert.equal(result.ok,false);assert.match(result.error,/不存在或不可写/);assert.equal(JSON.stringify(f.last.history),before);
+});
+async function finished(f){for(let n=0;n<600;n++){if(f.last&&['completed','failed','stopped'].includes(f.last.status))return;await new Promise(r=>setTimeout(r,5));}throw Error('task did not finish');}
+
+test('readonly batch reads allowlisted documents and returns independent results without write RPC',async t=>{
+ const f=await fixture(t),picked=await f.invoke('agent-files'),id=picked.value[0].id;
+ f.steps.push({kind:'tool',message:'Read independent data',tool:'read_batch',arguments:JSON.stringify({queries:[{tool:'attachments',arguments:{}},{tool:'read_document',arguments:{fileId:id}}]}),questions:[]});await f.invoke('agent-start',{request:'Read only',fileIds:[id]});await finished(f);assert.equal(f.last.status,'completed');const r=f.last.history.find(h=>h.type==='tool_result').result;assert.equal(r.items[1].result.text,'Approved');assert.equal(f.commands.length,0);
+});
+test('batch cannot smuggle a write or read paths outside task attachments',async t=>{
+ for(const query of [{tool:'export_files',arguments:{}},{tool:'read_document',arguments:{fileId:'unattached'}}]){const f=await fixture(t);f.steps.push({kind:'tool',message:'Invalid batch',tool:'read_batch',arguments:JSON.stringify({queries:[query]}),questions:[]});await f.invoke('agent-start',{request:'Read only',fileIds:[]});await finished(f);assert.equal(f.last.status,'failed');assert.equal(f.commands.length,0);assert.equal(f.exported.length,0);}
+});
+test('attachments are allowlisted and changed files must be explicitly reattached',async t=>{const f=await fixture(t);let picked=await f.invoke('agent-files');assert.equal(picked.ok,true);await fs.writeFile(f.file,'Modified document');let started=await f.invoke('agent-start',{request:'read',fileIds:[picked.value[0].id]});assert.equal(started.ok,false);assert.match(started.error,/已变化/);const unsupported=path.join(f.directory,'unsafe.exe');await fs.writeFile(unsupported,'fixture');picked=await f.invoke('agent-files',{paths:[unsupported]});assert.equal(picked.ok,false);assert.match(picked.error,/格式/);});
+test('native export is authorized only inside export tool and writes into task subdirectory',async t=>{const f=await fixture(t);const denied=await f.invoke('agent-export',{files:[]});assert.equal(denied.ok,false);f.select([f.directory]);await f.invoke('agent-output');f.steps.push({kind:'tool',message:'export',tool:'export_files',arguments:'{}',questions:[]});const started=await f.invoke('agent-start',{request:'export a copy',fileIds:[]});assert.equal(started.ok,true);await finished(f);assert.equal(f.exported.length,1);assert.equal(path.dirname(f.exported[0]),f.directory);assert.ok(path.basename(f.exported[0]).startsWith('Sparkit-'));assert.equal(f.last.status,'completed');assert.equal((await f.invoke('agent-export',{files:[]})).ok,false);});
+
+test('assistant receives folder path then lists, reads and imports discovered files through software',async t=>{
+ const f=await fixture(t),dir=path.join(f.directory,'selected-folder');await fs.mkdir(dir);await fs.writeFile(path.join(dir,'copy.txt'),'Read only when requested');await fs.writeFile(path.join(dir,'source.ai'),'Artwork stays at source path');
+ const picked=await f.invoke('agent-files',{paths:[dir]});assert.equal(picked.ok,true);assert.equal(picked.value[0].type,'folder');assert.equal(JSON.stringify(picked.value).includes('Read only'),false);
+ let round=0;const tool=(name,args)=>({kind:'tool',message:name,tool:name,arguments:JSON.stringify(args),questions:[]});
+ f.steps.shift=()=>{round++;if(round===1)return tool('list_folder',{fileId:picked.value[0].id});const items=f.last.history.find(h=>h.type==='tool_result'&&h.tool==='list_folder').result.items;if(round===2)return tool('read_document',{fileId:items.find(x=>x.name==='copy.txt').id});if(round===3)return tool('import_source',{fileId:items.find(x=>x.name==='source.ai').id});};
+ await f.invoke('agent-start',{request:'先查看目录，再按需读取文案和导入原稿',fileIds:[picked.value[0].id]});await finished(f);
+ assert.equal(f.last.status,'completed',f.last.error);assert.equal(f.last.files.length,1);assert.equal(f.last.history.find(h=>h.type==='tool_result'&&h.tool==='read_document').result.text,'Read only when requested');assert.equal(f.commands.find(x=>x.tool==='import_source').args.path,path.join(dir,'source.ai'));
+});

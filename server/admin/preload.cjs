@@ -1,0 +1,2 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('admin',{publish:token=>ipcRenderer.invoke('release-publish',token),onPublishProgress:fn=>ipcRenderer.on('release-progress',(_,message)=>fn(message)),pick:kind=>ipcRenderer.invoke('release-pick',kind),prepare:options=>ipcRenderer.invoke('release-prepare',options),openReleases:()=>ipcRenderer.invoke('release-open'),login:data=>ipcRenderer.invoke('login',data),logout:()=>ipcRenderer.invoke('logout'),request:data=>ipcRenderer.invoke('admin-api',data)});

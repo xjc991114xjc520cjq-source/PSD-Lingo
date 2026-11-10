@@ -1,0 +1,23 @@
+node_modules/
+runtime/
+work/
+NVIDIA Corporation/
+.wrangler/
+private/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*-private.pem
+*secret*.txt
+admin-password-hash.json
+*.dpapi
+*.log
+*.exe
+*.dll
+*.zip
+*.ai
+*.psd
+*.psb
+*.xlsx
+*.pdf

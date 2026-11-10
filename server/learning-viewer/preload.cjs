@@ -1,0 +1,1 @@
+const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('viewer',{login:d=>ipcRenderer.invoke('login',d),logout:()=>ipcRenderer.invoke('logout'),cases:c=>ipcRenderer.invoke('cases',c),case:d=>ipcRenderer.invoke('case',d),exportCase:d=>ipcRenderer.invoke('export-case',d),records:c=>ipcRenderer.invoke('records',c)});

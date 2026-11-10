@@ -1,0 +1,30 @@
+name = "psd-lingo-api"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+preview_urls = false
+
+[observability]
+enabled = true
+
+[vars]
+APP_ID = "PSDLingo"
+KEY_ID = "lease-1"
+MIN_SUPPORTED_VERSION = "0.2.0"
+LEARNING_ENABLED = "true"
+CASES_REPOSITORY = "xjc991114xjc520cjq-source/PSD-Lingo-Learning-Cases"
+AUTO_FREE_ENABLED = "true"
+FREE_DAYS = "3650"
+FREE_YEARS = "10"
+ADMIN_EMAIL = "1498224542@qq.com"
+# Daily limits are stored in D1 and managed through the admin console.
+# Replace with your independently created D1 ID before deploying.
+[[d1_databases]]
+binding = "DB"
+database_name = "psd-lingo-data"
+database_id = "e82af083-b368-416c-bb45-0b2f7ad90b18"
+migrations_dir = "migrations"
+# Secrets: LEASE_PRIVATE_KEY (PKCS8 PEM), LEASE_PUBLIC_KEY (SPKI PEM),
+# ADMIN_PASSWORD_HASH (PBKDF2 JSON), ADMIN_TOKEN_SECRET, BOOTSTRAP_SECRET.
+
+[triggers]
+crons = ["* * * * *"]

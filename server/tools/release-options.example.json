@@ -1,0 +1,9 @@
+{
+  "payloadPath": "D:/发布/PSD-Lingo-app-0.3.3.zip",
+  "privateKeyPath": "请填写仓库外的 update-private.pem 路径",
+  "outputDirectory": "D:/发布/0.3.3",
+  "version": "0.3.3",
+  "minimumSupportedVersion": "0.3.2",
+  "isMandatory": false,
+  "notes": "填写本次改动与更新说明"
+}

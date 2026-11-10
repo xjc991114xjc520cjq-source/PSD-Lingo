@@ -1,0 +1,13 @@
+{
+  "appId": "PSDLingo",
+  "version": "0.2.0",
+  "releaseTag": "v0.2.0",
+  "downloadUrl": "https://github.com/REPLACE_OWNER/REPLACE_REPO/releases/download/v0.2.0/PSD-Lingo-app-0.2.0.zip",
+  "pageUrl": "https://github.com/REPLACE_OWNER/REPLACE_REPO/releases/tag/v0.2.0",
+  "isMajorUpdate": true,
+  "isMandatory": false,
+  "minimumSupportedVersion": "0.2.0",
+  "notes": "新增许可证、设备管理和签名更新通道。",
+  "runtimeMajor": 35,
+  "updaterProtocol": 1
+}

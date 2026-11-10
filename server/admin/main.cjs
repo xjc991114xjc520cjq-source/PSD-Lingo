@@ -1,0 +1,22 @@
+const {app,BrowserWindow,ipcMain,net,dialog,shell}=require('electron');
+const path=require('node:path');
+let server='',token='',expires=0;
+const {prepareRelease}=require('../../services/release-publisher.cjs');
+const releaseConfig=require('../../services/product-config.cjs');
+const releasePaths={};
+const {publishRelease}=require('../../services/github-release.cjs');
+let preparedRelease=null,publishing=false;
+
+
+function safe(fn){return async(_,...args)=>{try{return {ok:true,value:await fn(...args)};}catch(e){return {ok:false,error:e.message};}};}
+async function request(route,body){const r=await net.fetch(server+route,{method:body===undefined?'GET':'POST',redirect:'error',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const text=await r.text();if(text.length>8*1024*1024)throw new Error('管理响应过大');const data=JSON.parse(text);if(!r.ok){if(r.status===401)token='';throw new Error(data.code||'管理请求失败');}return data;}
+ipcMain.handle('login',safe(async data=>{const u=new URL(data.server);if(u.protocol!=='https:'||u.username||u.password||u.pathname!=='/'||u.search||u.hash)throw new Error('请输入 HTTPS 服务根地址');server=u.origin;token='';const params=await request('/admin/login-parameters');const body=await require('../../services/admin-login.cjs').adminLoginBody(data.password,params);const r=await request('/admin/login',{...body,email:data.email});token=r.token;expires=Date.parse(r.expiresAtUtc);return {expiresAtUtc:r.expiresAtUtc};}));
+ipcMain.handle('logout',safe(async()=>{token='';expires=0;return true;}));
+ipcMain.handle('admin-api',safe(async data=>{if(!token||Date.now()>=expires)throw new Error('请重新登录管理员');if(!/^\/admin\/(state|learning|request-quota|licenses|licenses\/revoke-free|system\/(emergency-disable|enable|minimum-version)|(licenses|devices)\/[a-zA-Z0-9-]+\/(revoke|activate|quarantine|expiry|note|delete|rebind))$/.test(data.route))throw new Error('管理操作不受支持');return request(data.route,data.body);}));
+ipcMain.handle('release-pick',safe(async kind=>{const definitions={payload:['选择 PSD-Lingo-app-版本.zip',['zip']],key:['选择本机更新签名私钥',['pem']],installer:['选择完整安装更新 EXE（可选）',['exe']]};if(kind==='output'){const r=await dialog.showOpenDialog({title:'选择发布文件保存目录',properties:['openDirectory','createDirectory']});if(r.canceled)return null;releasePaths.outputDirectory=r.filePaths[0];return {path:r.filePaths[0]};}if(!definitions[kind])throw new Error('文件类型无效');const [title,extensions]=definitions[kind],r=await dialog.showOpenDialog({title,properties:['openFile'],filters:[{name:title,extensions}]});if(r.canceled)return null;const key={payload:'payloadPath',key:'privateKeyPath',installer:'installerPath'}[kind];releasePaths[key]=r.filePaths[0];let version;if(kind==='payload'){const zip=await require('jszip').loadAsync(await require('node:fs/promises').readFile(r.filePaths[0]));version=JSON.parse(await zip.file('package.json')?.async('string')).version;}return {path:r.filePaths[0],version};}));
+ipcMain.handle('release-prepare',safe(async options=>{if(publishing)throw new Error('正在发布，请等待完成');preparedRelease=await prepareRelease({...options,...releasePaths});return preparedRelease;}));
+ipcMain.handle('release-publish',safe(async token=>{if(publishing)throw new Error('正在发布，请等待完成');if(!preparedRelease)throw new Error('请先生成并检查签名发布文件');publishing=true;try{return await publishRelease({directory:preparedRelease.outputDirectory,token,fetch:(...args)=>net.fetch(...args),onProgress:message=>{for(const w of BrowserWindow.getAllWindows())w.webContents.send('release-progress',message);}});}finally{publishing=false;}}));
+ipcMain.handle('release-open',safe(async()=>{await shell.openExternal('https://github.com/'+releaseConfig.githubRepository+'/releases');return true;}));
+app.setName('PSD-Lingo-Authorization-Console');app.setPath('userData',path.join(app.getPath('appData'),'PSD-Lingo-Authorization-Console'));
+app.whenReady().then(()=>{const w=new BrowserWindow({width:1250,height:880,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});w.setMenu(null);w.loadFile(path.join(__dirname,'index.html'));w.webContents.setWindowOpenHandler(()=>({action:'deny'}));w.webContents.on('will-navigate',e=>e.preventDefault());});
+app.on('window-all-closed',()=>app.quit());

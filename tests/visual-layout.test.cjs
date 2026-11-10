@@ -1,0 +1,34 @@
+const test=require('node:test');const assert=require('node:assert/strict');
+const {proposeVisualLayout}=require('../visual-layout.cjs');const {smartFit}=require('../layout.cjs');
+const fitText=(l,r)=>smartFit({text:l.customText??r.target,size:l.manual?.size||l.size,minSize:l.manual?.size||l.minSize,width:l.box[2],height:l.box[3],leading:l.manual?.leading||l.leading,tracking:l.manual?.tracking||0,allowWrap:l.smart?.allowWrap,allowLeading:false,trackingLimit:0},(t,s)=>({width:[...t].length*s*.6,height:s*.8,ascent:s*.7}));
+function fixture(){const layer={id:1,original:'中文标题',box:[72,120,178,36],font:'MicrosoftYaHei',size:24,minSize:18,leading:30,tracking:0,alignment:'left',stackIndex:0,parentId:null,issues:[],recordId:'r'};return {layer,file:{width:1080,height:4320,layers:[layer],containers:[]},record:{id:'r',target:'LUMA Arc Lamp'}};}
+test('capsule labels receive balanced padding and native radius-preserving expansion',()=>{
+ const {layer,file,record}=fixture();file.containers=[{id:9,kind:'shape',shapeType:'rectangle',radii:[26,26,26,26],box:[72,110,218,52],stackIndex:3,parentId:null,issues:[]}];record.target='LUMA Beautiful Arc Lamp';const before=JSON.stringify({file,layer,record});
+ const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.equal(JSON.stringify({file,layer,record}),before);assert.deepEqual(p.layerPatch.sourceBox,layer.box);assert.deepEqual(p.containerEdit.radii,[26,26,26,26]);const b=p.layerPatch.box,c=p.containerEdit.box;assert.ok(c[2]>218);assert.ok(Math.abs(b[0]-c[0]-(c[2]-b[2])/2)<.00001);assert.ok(Math.abs(b[1]-c[1]-(c[3]-b[3])/2)<.00001);assert.ok(b[0]-c[0]>=14.4-.01);assert.equal(p.layerPatch.manual.size,24);
+});
+test('a heading uses available horizontal column space before wrapping or shrinking',()=>{
+ const {layer,file,record}=fixture();record.target='Make room for inspiration.';layer.size=60;layer.minSize=40;layer.box=[72,200,460,70];const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.equal(p.layerPatch.manual.size,60);assert.equal(p.layerPatch.smart.allowWrap,false);assert.ok(p.layerPatch.box[2]>460);assert.equal(p.layerPatch.position.x,72);assert.equal(p.layerPatch.position.y,200);assert.ok(p.layerPatch.box[0]+p.layerPatch.box[2]<=1008);
+});
+test('same-row neighbouring text blocks horizontal expansion',()=>{
+ const {layer,file,record}=fixture();layer.box=[72,200,150,40];file.layers.push({id:2,box:[300,200,180,40]});record.target='Too long to fit';const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.ok(p.layerPatch.box[0]+p.layerPatch.box[2]<=292);assert.ok(p.layerPatch.manual.size>=18);
+});
+test('impossible fit leaves source, manual edits and container unchanged',()=>{
+ const {layer,file,record}=fixture();file.layers.push({id:2,box:[270,120,300,40]});record.target='Extremelylongunbreakableword'.repeat(30);const before=JSON.stringify({file,layer});const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,false);assert.equal(p.layerPatch,undefined);assert.equal(p.containerEdit,undefined);assert.equal(JSON.stringify({file,layer}),before);
+});
+test('manual target wording and font choice survive without changing document copy',()=>{
+ const {layer,file,record}=fixture();layer.customText='My chosen wording';layer.manual={size:25,font:'ArialMT',family:'Arial',weight:'bold',stretchX:100,stretchY:100,tracking:4,leading:31};const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);const next={...layer,...p.layerPatch};assert.equal(next.customText,'My chosen wording');assert.equal(fitText(next,record).text,'My chosen wording');assert.equal(next.manual.font,'ArialMT');assert.equal(next.manual.weight,'bold');assert.equal(record.target,'LUMA Arc Lamp');
+});
+test('repeated adaptation preserves immutable original source box',()=>{
+ const {layer,file,record}=fixture();const first=proposeVisualLayout(file,layer,record,fitText);assert.equal(first.ok,true);const next={...layer,...first.layerPatch};file.layers=[next];const p=proposeVisualLayout(file,next,{...record,target:'Another longer label'},fitText);assert.equal(p.ok,true);assert.deepEqual(p.layerPatch.sourceBox,layer.box);
+});
+test('container growth cannot intrude into a lower caption',()=>{
+ const {layer,file,record}=fixture();file.containers=[{id:9,kind:'shape',shapeType:'rectangle',radii:[26,26,26,26],box:[72,110,218,52],stackIndex:3,parentId:null,issues:[]}];file.layers.push({id:2,box:[72,176,300,40]});record.target='A neat label';const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.ok(p.containerEdit.box[1]+p.containerEdit.box[3]<=168);
+});
+test('ambiguous backgrounds require an explicit association instead of page-wide expansion',()=>{
+ const {layer,file,record}=fixture();const shape={id:9,kind:'shape',shapeType:'rectangle',radii:[26,26,26,26],box:[72,110,218,52],stackIndex:3,parentId:null,issues:[]};file.containers=[shape,{...shape,id:10}];assert.equal(proposeVisualLayout(file,layer,record,fitText).ok,false);layer.containerId=9;assert.equal(proposeVisualLayout(file,layer,record,fitText).ok,true);
+});
+test('inset capsule text does not turn its inner padding into a restrictive page gutter',()=>{
+ const {layer,file,record}=fixture();layer.box=[87,1526,148,34];layer.size=23;file.containers=[{id:9,kind:'shape',shapeType:'rectangle',radii:[24,24,24,24],box:[72,1515,233,48],stackIndex:3,parentId:null,issues:[]}];record.target='01 / Licht nach Wunsch';const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.equal(p.containerEdit.box[0],72);assert.ok(p.layerPatch.position.x>=72+13.8-.01);
+});
+test('large horizontal source padding must not become vertical padding in short capsule',()=>{const {layer,file,record}=fixture();layer.size=26;layer.minSize=26;layer.box=[110,127,185,26];file.containers=[{id:9,kind:'shape',shapeType:'rectangle',radii:[30,30,30,30],box:[72,110,260,60],stackIndex:3,parentId:null,issues:[]}];const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.equal(p.layerPatch.manual.size,26);assert.ok(p.containerEdit.box[3]<=62.4);assert.ok(p.layerPatch.box[1]>110);});
+test('regular three-card captions retain optical centers even when paragraph metadata says left',()=>{const {layer,file,record}=fixture();layer.box=[806,2682,108,27];layer.sourceBox=[...layer.box];layer.size=27;layer.minSize=20.25;layer.leading=33.75;layer.sourceAlignment='left';layer.manual={size:27,leading:33.75};layer.position={x:787.5,y:2685.5};layer.box=[787.5,2685.5,145,20];file.layers.push({id:2,sourceBox:[166,2682,108,27],box:[166,2682,108,27]},{id:3,sourceBox:[486,2682,108,27],box:[486,2682,108,27]});record.target='Modo descanso';const p=proposeVisualLayout(file,layer,record,fitText);assert.equal(p.ok,true);assert.ok(Math.abs(p.layerPatch.position.x+p.layerPatch.box[2]/2-860)<.1);assert.ok(p.layerPatch.manual.size>=20.25);});

@@ -1,0 +1,39 @@
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const esbuild=require('esbuild');
+(async()=>{
+const root=__dirname, destination=path.resolve(process.argv[2]||root), runtime=path.join(destination,'runtime');
+const cfg=require('./services/product-config.cjs');if(process.argv.includes('--release')&&(!cfg.authorizationEnabled||cfg.channel!=='production'||!cfg.serverUrl||!cfg.githubRepository||!cfg.leaseKeys['lease-1']||!cfg.updateKeys['update-1']||cfg.leaseKeys['lease-1']===cfg.updateKeys['update-1']))throw new Error('Formal release requires independently configured authorization and update trust keys');
+if(destination!==root){await fs.mkdir(destination,{recursive:true});for(const name of ['0.3.60更新说明.md','0.3.59更新说明.md','0.3.58更新说明.md','0.3.57更新说明.md','artwork-visibility.cjs','0.3.56更新说明.md','design-document-audit.cjs','design-space-options.cjs','0.3.55更新说明.md','design-text-layout.cjs','design-visual-refinement.cjs','text-display-style.cjs','0.3.54更新说明.md','0.3.53更新说明.md','0.3.52更新说明.md','0.3.51更新说明.md','0.3.50更新说明.md','0.3.49更新说明.md','0.3.48更新说明.md','0.3.47更新说明.md','0.3.46更新说明.md','0.3.45更新说明.md','0.3.44更新说明.md','language-recipe.cjs','localization-relations.cjs','0.3.43更新说明.md','language-reference.cjs','0.3.42更新说明.md','0.3.41更新说明.md','illustrator-preview.cjs','0.3.40更新说明.md','translation-workbook.cjs','translation-import.cjs','localization-presentation.cjs','illustrator-containers.cjs','0.3.39更新说明.md','0.3.38更新说明.md','0.3.37更新说明.md','sku-visual.cjs','review-policy.cjs','0.3.36更新说明.md','0.3.35更新说明.md','0.3.34更新说明.md','font-recheck.cjs','0.3.33更新说明.md','workflow-progress.cjs','0.3.32更新说明.md','native-json.cjs','text-style-map.cjs','sku-illustrator.cjs','0.3.31更新说明.md','sku-workflow.cjs','0.3.30更新说明.md','bulk-replace.cjs','photoshop-bulk.cjs','0.3.29更新说明.md','package.json','pnpm-lock.yaml','native-runner.cjs','illustrator.cjs','AI支持说明.md','0.3.27更新说明.md','0.3.28更新说明.md','design-layout-planner.cjs','design-layout-relations.cjs','0.3.25更新说明.md','0.3.26更新说明.md','ai-layout-repair.cjs','layout-learning-signals.cjs','learning-case-regions.cjs','0.3.22更新说明.md','0.3.23更新说明.md','0.3.24更新说明.md','visual-layout.cjs','design-layout-context.cjs','docs','core.cjs','container-fit.cjs','rectangle-shape.cjs','container-extraction.cjs','container-raster-detect.cjs','container-edit.cjs','batch.cjs','layout.cjs','position.cjs','alignment.cjs','photoshop-fit.cjs','photoshop-preview.cjs','metadata.cjs','photoshop-file.cjs','photoshop-file-io.cjs','photoshop-metadata.cjs','document-reader.cjs','main.cjs','preload.cjs','build.cjs','package-portable.cjs','启动测试版.cmd','使用说明.md','LAYOUT-MEMORY.md','界面交互设计.md','验证记录.md','renderer','tests','samples','第三方许可','services','installer','server','授权与更新部署手册.md','自动更新使用说明.md','PSB支持说明.md','0.3.5更新说明.md','0.3.7更新说明.md','0.3.8更新说明.md','0.3.9更新说明.md','0.3.10更新说明.md','0.3.11更新说明.md','0.3.12更新说明.md','0.3.13更新说明.md','0.3.14更新说明.md','0.3.15更新说明.md','0.3.16更新说明.md','0.3.17更新说明.md','0.3.18更新说明.md','0.3.19更新说明.md','0.3.20更新说明.md','0.3.21更新说明.md','0.3.20云接口接入说明.md','package-tools.cjs','0.3.6更新说明.md']){try{await fs.cp(path.join(root,name),path.join(destination,name),{recursive:true,filter:source=>!/(?:^|[\\/])(node_modules|\.wrangler|\.dev\.vars(?:\..*)?|\.env(?:\..*)?|[^\\/]*-private\.pem|admin-password-hash\.json|admin-token-secret\.txt|bootstrap-secret\.txt)(?:[\\/]|$)/.test(source)});}catch(e){if(e.code!=='ENOENT')throw e;}}}
+await fs.cp(path.join(root,'node_modules/electron/dist'),runtime,{recursive:true});
+await fs.rename(path.join(runtime,'electron.exe'),path.join(runtime,'PSD Lingo.exe'));
+require('node:child_process').execFileSync(path.join(root,'services/bin/sparkit-brand.exe'),['patch',path.join(runtime,'PSD Lingo.exe'),path.join(root,'renderer/assets/sparkit.ico')],{windowsHide:true});
+const app=path.join(runtime,'resources/app');await fs.mkdir(app,{recursive:true});
+esbuild.buildSync({entryPoints:[path.join(root,'main.cjs')],bundle:true,platform:'node',target:'node22',format:'cjs',outfile:path.join(app,'main.cjs'),external:['electron','@openai/codex-sdk'],minify:false});
+await fs.copyFile(path.join(root,'services/bin/psd-lingo-service.exe'),path.join(destination,'runtime/resources/psd-lingo-service.exe'));
+await fs.copyFile(path.join(root,'services/bin/illustrator-bridge.exe'),path.join(app,'illustrator-bridge.exe'));
+// The updater replaces resources/app only; ship the Photoshop bridge in that payload.
+await fs.copyFile(path.join(root,'services/bin/psd-lingo-service.exe'),path.join(app,'photoshop-bridge.exe'));
+await fs.copyFile(path.join(root,'services/bin/psd-lingo-service.exe'),path.join(app,'update-helper.exe'));
+await fs.copyFile(path.join(root,'preload.cjs'),path.join(app,'preload.cjs'));
+await fs.cp(path.join(root,'services/design-skills'),path.join(app,'design-skills'),{recursive:true});
+await fs.mkdir(path.join(app,'renderer'),{recursive:true});
+for(const name of ['index.html','spark-boot.js','bundle.js','style.css','license-status.css','ai-layout-highlight.css','sparkit.css','spark-desk.css','spark-startup.css','agent.css'])await fs.copyFile(path.join(root,'renderer',name),path.join(app,'renderer',name));
+await fs.cp(path.join(root,'renderer/assets'),path.join(app,'renderer/assets'),{recursive:true});
+await fs.copyFile(path.join(root,'services/bin/sparkit-brand.exe'),path.join(app,'sparkit-brand.exe'));
+await fs.writeFile(path.join(app,'package.json'),JSON.stringify({name:'psd-lingo',productName:'灵搭 Sparkit',version:require('./package.json').version,main:'main.cjs'}));
+const sdk=path.join(app,'node_modules/@openai/codex-sdk');await fs.mkdir(sdk,{recursive:true});
+await fs.cp(path.join(root,'node_modules/@openai/codex-sdk/dist'),path.join(sdk,'dist'),{recursive:true});
+await fs.copyFile(path.join(root,'node_modules/@openai/codex-sdk/package.json'),path.join(sdk,'package.json'));
+// Preserve all dependency license files used by bundled application code.
+const licenseDir=path.join(root,'第三方许可');await fs.mkdir(licenseDir,{recursive:true});
+const pnpm=path.join(root,'node_modules/.pnpm');for(const entry of await fs.readdir(pnpm)){
+  const modules=path.join(pnpm,entry,'node_modules');
+  let names;try{names=await fs.readdir(modules);}catch{continue;}
+  for(const name of names){if(name.startsWith('@'))continue;const folder=path.join(modules,name);let files;try{files=await fs.readdir(folder);}catch{continue;}
+    for(const file of files.filter(n=>/^(licen[cs]e|copying|notice)(\.|$)/i.test(n))){try{await fs.copyFile(path.join(folder,file),path.join(licenseDir,entry.replace(/[^a-zA-Z0-9.-]/g,'_')+'-'+file));}catch{}}
+  }
+}
+const JSZip=require('jszip'),zip=new JSZip();async function add(dir,prefix=''){for(const e of await fs.readdir(dir,{withFileTypes:true})){const file=path.join(dir,e.name),n=prefix+e.name;if(e.isDirectory())await add(file,n+'/');else zip.file(n,await fs.readFile(file));}}await add(app);const payload=path.join(destination,'PSD-Lingo-app-'+require('./package.json').version+'.zip');await fs.writeFile(payload,await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE',compressionOptions:{level:6}}));console.log('Unsigned application payload:',payload);
+console.log('Portable runtime ready:',runtime);
+})().catch(e=>{console.error(e);process.exitCode=1;});

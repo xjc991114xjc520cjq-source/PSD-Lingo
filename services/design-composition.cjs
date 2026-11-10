@@ -1,0 +1,15 @@
+// A visual design contract, separate from font fit and collision validation.
+const dimensions=['groupShape','hierarchyRhythm','readingZone','opticalSpacing'];
+const text={type:'string',minLength:1,maxLength:1200};
+const checksSchema={type:'array',minItems:4,maxItems:4,items:{type:'object',additionalProperties:false,properties:{id:{type:'string',enum:dimensions},verdict:{type:'string',enum:['accept','revise','uncertain']},evidence:text},required:['id','verdict','evidence']}};
+const planSchema={type:'array',maxItems:500,items:{type:'object',additionalProperties:false,properties:{groupId:{type:'string'},alternatives:{type:'array',minItems:2,maxItems:3,items:{type:'object',additionalProperties:false,properties:{approach:text,consequence:text},required:['approach','consequence']}},chosen:{type:'integer',minimum:0,maximum:2},reason:text},required:['groupId','alternatives','chosen','reason']}};
+const goodText=v=>typeof v==='string'&&v.trim().length>0&&v.length<=1200;
+function validateChecks(value){if(!Array.isArray(value)||value.length!==dimensions.length||new Set(value.map(v=>v?.id)).size!==dimensions.length||value.some(v=>!v||Object.keys(v).some(k=>!['id','verdict','evidence'].includes(k))||!dimensions.includes(v.id)||!['accept','revise','uncertain'].includes(v.verdict)||!goodText(v.evidence)))throw Error('设计审验缺少完整的版式、层级、阅读区及视觉留白证据');return value;}
+function validatePlan(value,proposals){const groups=new Set(proposals.map(p=>p.relationGroup||p.layerKey));if(!Array.isArray(value)||value.length!==groups.size||new Set(value.map(v=>v?.groupId)).size!==groups.size||value.some(v=>!v||Object.keys(v).some(k=>!['groupId','alternatives','chosen','reason'].includes(k))||!groups.has(v.groupId)||!goodText(v.reason)||!Array.isArray(v.alternatives)||v.alternatives.length<2||v.alternatives.length>3||!Number.isInteger(v.chosen)||v.chosen<0||v.chosen>=v.alternatives.length||v.alternatives.some(a=>!a||Object.keys(a).some(k=>!['approach','consequence'].includes(k))||!goodText(a.approach)||!goodText(a.consequence))||new Set(v.alternatives.map(a=>a.approach.trim())).size!==v.alternatives.length))throw Error('排版缺少关系组的不同结构方案比较与选择依据');return value;}
+const policy=`设计审验必须独立于文字技术检查。可读、不重叠、未截断、左轴一致，只能证明基本可用，不能单独证明版式通过。
+groupShape：看整个阅读组的可见轮廓、长短行和宽高节奏。标题层级不同也要形成完整组合，不能把副标题单行尽量拉长，再把主标题孤立折行。对比两种适合当前图案的结构，例如适度收小主标题使两级标题各占一行形成两行组合，或副标题与主标题同时分行并按整体区域居中；不是固定只能二选一，不能以压扁、极小字或破坏层级强凑一行。先解决标题组，再联动说明的起点、行数和产品留白。
+hierarchyRhythm：比较主次字面、行间与组间距；说明应从属于标题整体，而不是挤在标题长短不一形成的残余空间。同级标签协调，但长内容可合理分行，少行数不是唯一目标。
+readingZone：检查说明每一行在实际底图上是否连续、稳定地阅读，不能只问单字可辨。避开产品/实体遮挡与高干扰区；跨强明暗边界或光效时观察完整段落的连续性和归属。背景光效本身不是错误，不机械判相交，也不因原稿沿用就豁免用户要求修复的排布。
+opticalSpacing：将参数的数值、单位、标签视为完整块，同时检查左右两块与中间分隔符的可见空隙、纵向居中和整体重量。分隔符位于卡片几何中心、未碰字、或两侧文本框中心对称都不足以证明视觉居中。长标签挤近分隔符时，应比较两侧完整块的宽度、标签分行和位置，联动平衡实际字形到分隔符的留白。分隔符没有编辑权限时保持固定，优先调整已授权文字的组合；无可行方案则如实说明，不伪称移动过图案。
+上述四项都依据同状态真实整页和必要局部图；数值只辅助测量和排除冲突，不自动批准美感。看不清用uncertain；明确缺陷用revise。不得仅以“比修改前好”放行仍不协调的组合。证据简述结构关系与下一步，不复述整份文案、不记样本金额、字符或坐标。`;
+module.exports={dimensions,checksSchema,planSchema,validateChecks,validatePlan,policy};

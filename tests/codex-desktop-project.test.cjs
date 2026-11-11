@@ -24,3 +24,9 @@ test('timeout and missing protocol fail clearly, cancellation interrupts the fir
  bridge.open=async()=>{throw Error('No handler');};await assert.rejects(bridge.ensure({directory:path.resolve('.')}),/启用 codex:\/\//);
  const c=new AbortController();const cancelled=new CodexDesktopProject({read:async()=>null,open:async()=>{c.abort();}});await assert.rejects(cancelled.ensure({directory:path.resolve('.'),signal:c.signal}),{name:'AbortError'});
 });
+test('desktop thread receipt opens only the supplied persisted thread and rejects link injection',async()=>{
+ const urls=[],bridge=new CodexDesktopProject({open:async uri=>urls.push(uri)}),id='01a1c979-1b55-71c0-8b67-7e2d4a14c3fc';
+ await bridge.openThread(id);assert.deepEqual(urls,['codex://threads/'+id]);
+ for(const bad of ['new?prompt=send','../settings','',undefined])await assert.rejects(bridge.openThread(bad),/编号无效/);
+ assert.equal(urls.length,1);
+});

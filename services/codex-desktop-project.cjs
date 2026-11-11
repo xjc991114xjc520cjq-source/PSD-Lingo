@@ -16,6 +16,12 @@ async function readRegistration(home,directory,preferredId){
 }
 class CodexDesktopProject{
  constructor({read=readRegistration,open=uri=>require('electron').shell.openExternal(uri),wait=delay,timeoutMs=90000,pollMs=300,now=Date.now}={}){Object.assign(this,{read,open,wait,timeoutMs,pollMs,now});}
+ async openThread(threadId){
+  if(typeof threadId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId))throw Error('Codex 对话编号无效，未打开桌面链接');
+  // Separate app-server processes do not notify the desktop catalog. Opening
+  // the now-persisted thread makes the desktop read and index this exact chat.
+  await this.open('codex://threads/'+threadId);
+ }
  async ensure({directory,projectId,env=process.env,signal,onStatus=()=>{}}){
   signal?.throwIfAborted();const home=path.resolve(env.CODEX_HOME||path.join(os.homedir(),'.codex'));
   let registered=await this.read(home,directory,projectId);signal?.throwIfAborted();if(registered)return registered;

@@ -74,6 +74,17 @@ test('invalid and oversized analysis answers never pollute history, valid respon
 
 test('same-task follow-up uses one persistent process and sends only new events, not full task replay',async t=>{let turns=0;const f=await fixture(t,async({call,params})=>{if(turns++===0){assert.ok(params.input[0].text.includes('Initial approved requirements'));await call('software_operations',ops('workspace'));}else{assert.ok(params.input[0].text.includes('New scope'));assert.ok(!params.input[0].text.includes('工具目录：'));}},async()=>({checked:true}));f.a.start({request:'Initial approved requirements'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;f.a.followUp('New scope');await f.a.runPromise;assert.equal(f.starts,1);assert.equal(f.a.current.status,'completed');assert.equal(f.a.current.performance.nativeTurns,2);assert.equal(f.a.current.performance.inputTokens,100);});
 
+test('new desktop thread is received after its first completed turn, without replay on follow-up',async t=>{
+ let turns=0;const received=[];const f=await fixture(t,async()=>{turns++;assert.equal(received.length,turns===1?0:1);},undefined,{syncThread:async id=>{assert.equal(turns,1);received.push(id);}});
+ f.a.start({request:'Original'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;assert.deepEqual(received,['thread-1']);
+ f.a.followUp('Continue');await f.a.runPromise;assert.equal(f.starts,1);assert.equal(f.a.current.performance.nativeTurns,2);assert.equal(received.length,1);assert.equal(f.a.current.status,'completed');
+});
+test('desktop receipt failure retains completed software work and reports a separate warning',async t=>{
+ const f=await fixture(t,async({call})=>call('software_operations',ops('edit_text')),async()=>({saved:true}),{syncThread:async()=>{throw Error('Protocol handler missing');}});
+ f.a.start({request:'Original'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;
+ assert.equal(f.a.current.status,'completed',f.a.current.error);assert.ok(f.a.current.history.some(h=>h.type==='tool_result'&&h.result.saved));assert.ok(f.a.current.history.some(h=>h.type==='desktop_sync_warning'&&h.message.includes('Protocol handler missing')));assert.equal(f.starts,1);
+});
+
 test('startup preparation gathers workspace and one workbook without model planning',async t=>{const executed=[];const f=await fixture(t,async({params})=>{assert.ok(params.input[0].text.includes('prepared-workspace'));},async(tool,args)=>{executed.push({tool,args});return {data:'prepared-workspace'};});f.a.start({request:'Original',files:[{id:'book',path:'D:/book.xlsx'}]});await f.a.runPromise;assert.equal(executed.length,1);assert.equal(executed[0].tool,'read_batch');assert.deepEqual(executed[0].args.queries.map(q=>q.tool),['workspace','read_document']);assert.equal(f.a.current.status,'completed',f.a.current.error);});
 
 

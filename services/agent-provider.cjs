@@ -4,8 +4,8 @@ const {assistantCredentials,requireLocalAssistant}=require('./assistant-connecti
 const {readKnowledge}=require('./localization-knowledge.cjs');
 const {taskData,imageId,recordMetrics}=require('./agent-context.cjs');
 const sessions=new WeakMap();
-async function thinkAgent(task,{signal,prompt,schema,runTool,askUser},{settings,fetch,env,directory,knowledgeDirectory,prepareProject,runTask=runStructuredTask,nativeThink=require('./agent-native-provider.cjs').thinkNative}={}){
- if(runTool)return nativeThink(task,{signal,prompt,schema,runTool,askUser},{settings,env,directory,knowledgeDirectory,prepareProject});
+async function thinkAgent(task,{signal,prompt,schema,runTool,askUser},{settings,fetch,env,directory,knowledgeDirectory,prepareProject,syncThread,runTask=runStructuredTask,nativeThink=require('./agent-native-provider.cjs').thinkNative}={}){
+ if(runTool)return nativeThink(task,{signal,prompt,schema,runTool,askUser},{settings,env,directory,knowledgeDirectory,prepareProject,syncThread});
  const credentials=requireLocalAssistant(await assistantCredentials(settings));if(task.model)credentials.localModel=task.model;
  const connection=JSON.stringify([credentials.executable,credentials.localModel,env]);let state=sessions.get(task);
  if(!state||state.connection!==connection){state={connection,session:{},cursor:0,images:new Set()};sessions.set(task,state);}

@@ -1,4 +1,4 @@
-import {captureBindingRequest,applyBindingResult} from './ai-binding.js';
+import {captureBindingRequest,applyBindingResult,parameterParts,isParameterValue} from './ai-binding.js';
 import {planAiFile} from '../design-layout-planner.cjs';
 import {auditDesignFile,deliveryBoardsFor} from '../design-document-audit.cjs';
 import {validateArtworkHides} from '../artwork-visibility.cjs';
@@ -24,7 +24,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   }
   if(tool==='set_text_presence'){
    if(typeof args.layerKey!=='string'||!/^\d+:\d+$/.test(args.layerKey)||!['hidden','clear','restore'].includes(args.mode)||typeof args.reason!=='string'||!args.reason.trim()||args.reason.length>2000)throw Error('文字对象处理参数无效');
-   const [fi,li]=args.layerKey.split(':').map(Number),f=current(fi),l=f.layers[li];if(!l||l.issues?.length||l.artworkHidden)throw Error('文字不可处理，请检查对象或先恢复artwork隐藏');
+   const [fi,li]=args.layerKey.split(':').map(Number),f=current(fi),l=f.layers[li];if(l&&args.mode!=='restore'&&isParameterValue(l.original))throw Error('原有参数数值须保留为独立大字，不能隐藏或清除后合入小标签；仅翻译标签，值需翻译但不支持时报告能力缺口');if(!l||l.issues?.length||l.artworkHidden)throw Error('文字不可处理，请检查对象或先恢复artwork隐藏');
    if(!l.presencePrior&&args.mode==='restore')return {changed:false};
    if(!l.nativeCreation&&args.mode!=='restore'&&f.artworkHides?.some(e=>e.objectId==='t:'+l.id))throw Error('文字已由对象隐藏处理');
    history.transaction(()=>{if(args.mode==='restore'){Object.assign(l,l.presencePrior);delete l.presencePrior;delete l.nativeDisposition;delete l.presenceReason;}else{l.presencePrior||={visible:l.visible!==false,skipExport:!!l.skipExport};l.nativeDisposition=args.mode;l.presenceReason=args.reason;l.visible=false;l.skipExport=true;}state.checked=false;},'ai-text-presence');render();
@@ -37,6 +37,9 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
     return {total:list.length,offset,objects:list.slice(offset,offset+limit).map(o=>({...o,hidden:!!f.artworkHides?.some(e=>e.objectId===o.objectId)})),note:all.length?'纯矢量候选不证明是文字或重复；隐藏前必须查看局部对照':'无候选或旧项目未读取此能力，请重新导入该AI副本'};
    }
    const object=f.artworkObjects?.find(o=>o.objectId===args.objectId);if(!object)throw Error('对象不存在或不受支持，请先查看 artwork_objects');
+   const textLayer=f.layers.find(l=>l.id===object.layerId);
+   if(tool==='set_artwork_visibility'&&args.hidden&&isParameterValue(textLayer?.original))throw Error('原有参数数值须保留字体、字重和主次位置，不能以消重为由隐藏或删除');
+   const textPresence=textLayer?{layerKey:args.fileIndex+':'+f.layers.indexOf(textLayer),mode:args.hidden?(args.mode||'hidden'):'restore'}:null;
    const key=f.fingerprint+'|'+object.objectId;
    if(tool==='inspect_artwork'){
     const result=await call('inspectArtwork',{path:f.path,fingerprint:f.fingerprint,objectId:object.objectId});if(!isCurrent())throw Error('任务已变化，本次对象检查已丢弃');
@@ -44,13 +47,13 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    }
    if(typeof args.hidden!=='boolean'||typeof args.reason!=='string'||!args.reason.trim())throw Error('请明确隐藏或恢复及其依据');
    if(args.hidden&&inspectedArtwork.get(key)!==object.sourceIdentity)throw Error('隐藏前必须 inspect_artwork 查看真实局部对照');
-   const existing=(f.artworkHides||[]).find(e=>e.objectId===object.objectId);if(!!existing===args.hidden&&(!existing||(existing.mode||'hidden')===(args.mode||'hidden')))return {changed:false,hidden:args.hidden,objectId:object.objectId};
+   const existing=(f.artworkHides||[]).find(e=>e.objectId===object.objectId);if(!!existing===args.hidden&&(!existing||(existing.mode||'hidden')===(args.mode||'hidden')))return {changed:false,hidden:args.hidden,objectId:object.objectId,textPresence};
    if(args.mode!==undefined&&!['hidden','clear'].includes(args.mode))throw Error('对象处理模式无效');
    const edit={objectId:object.objectId,sourceIdentity:object.sourceIdentity,reason:args.reason,...(args.mode==='clear'?{mode:'clear'}:{})};
    const next=(f.artworkHides||[]).filter(e=>e.objectId!==object.objectId);if(args.hidden)next.push(edit);validateArtworkHides(next,{objects:f.artworkObjects,format:f.format,textActions:textActionsFor(f)});
    if(!isCurrent())throw Error('任务已变化，未修改对象可见性');
    history.transaction(()=>{f.artworkHides=next;const l=f.layers.find(l=>l.id===object.layerId);if(l){if(args.hidden){l.artworkHiddenPrior||={skipExport:!!l.skipExport,visible:l.visible!==false};l.skipExport=true;l.visible=false;l.artworkHidden=true;}else{l.skipExport=l.artworkHiddenPrior?.skipExport??false;l.visible=l.artworkHiddenPrior?.visible??true;delete l.artworkHidden;delete l.artworkHiddenPrior;}}state.checked=false;},'ai-artwork-visibility');render();
-   return {fileIndex:args.fileIndex,changed:true,hidden:args.hidden,objectId:object.objectId,boardNames:object.boardNames,boardBox:object.boardBox,box:object.box,visualAcceptance:'可见性已更新，可Ctrl+Z撤回；必须重新preview所在画板并审阅，export_files后才生成原生副本'};
+   return {fileIndex:args.fileIndex,changed:true,hidden:args.hidden,objectId:object.objectId,textPresence,boardNames:object.boardNames,boardBox:object.boardBox,box:object.box,visualAcceptance:'可见性已更新，可Ctrl+Z撤回；必须重新preview所在画板并审阅，export_files后才生成原生副本'};
   }
   if(tool==='edit_text'){
    if(!Array.isArray(args.changes)||!args.changes.length||args.changes.length>500)throw Error('文字编辑列表无效');
@@ -63,6 +66,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
     if(c.recordIds!==undefined){ids=c.recordIds;if(!Array.isArray(ids)||!ids.length||ids.length>100||new Set(ids).size!==ids.length||ids.some(id=>!state.records.some(r=>r.id===id)))throw Error('合并文案引用无效');const separator=c.separator??'\n';if(!['\n',' ',''].includes(separator))throw Error('合并分隔符无效');text=ids.map(id=>state.records.find(r=>r.id===id).target).join(separator);}
     else{ids=[l.recordId];if(!state.records.some(r=>r.id===l.recordId))throw Error('直接改字需要先绑定参考文案');text=c.text;}
     if(typeof text!=='string'||!text.trim()||text.length>100000)throw Error('目标文案不能为空或超过10万字符');
+    if(ids.length===1){const record=state.records.find(r=>r.id===ids[0]),part=parameterParts(state.files[fi],l,record);if(part&&text===record.target)text=part.label;}
     return {l,text,ids,reason:c.reason.trim()};
    });
    if(!isCurrent())throw Error('任务已变化，本次改字未应用');

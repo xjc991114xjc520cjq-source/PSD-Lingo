@@ -79,6 +79,17 @@ test('successful retry clears only the recovered operation and can complete',asy
 });
 
 test('retry on another file preserves unresolved preview failure',async()=>{let n=0;const steps=[step('tool','preview',{fileIndex:0}),step('tool','preview',{fileIndex:1,retry:true}),step('complete')];const a=new AgentTask({think:async()=>steps[n++],execute:async(_tool,args)=>{if(args.fileIndex===0)throw Error('first file unavailable');return {images:[]};}});a.start({request:'check files'});await a.runPromise;assert.equal(a.current.status,'failed');assert.match(a.current.error,/first file unavailable/);});
+
+test('verified alternative object operation resolves only the same text presence action',async()=>{
+ for(const recovered of [{layerKey:'0:6',mode:'clear'},{layerKey:'0:5',mode:'clear'},{layerKey:'0:6',mode:'hidden'}]){
+  let n=0;const steps=[step('tool','set_text_presence',{layerKey:'0:6',mode:'clear',reason:'First attempt'}),step('tool','set_artwork_visibility',{fileIndex:0,objectId:'t:7',hidden:true,mode:recovered.mode,reason:'Verified alternate interface'}),step('tool','export_files'),step('complete')];
+  const a=new AgentTask({think:async()=>steps[n++],execute:async tool=>{if(tool==='set_text_presence')throw Error('unsupported text');return tool==='set_artwork_visibility'?{changed:true,hidden:true,textPresence:recovered}:{qualityPassed:true,saved:1};}});a.start({request:'Remove a verified duplicate'});await a.runPromise;assert.equal(a.current.status,recovered.layerKey==='0:6'&&recovered.mode==='clear'?'completed':'failed');assert.equal(a.current.history.filter(h=>h.type==='tool_error').length,1);
+ }
+});
+test('changing only the reason on a successful text retry does not retain its obsolete error',async()=>{
+ let n=0,calls=0;const steps=[step('tool','set_text_presence',{layerKey:'0:1',mode:'clear',reason:'Old reason'}),step('tool','set_text_presence',{layerKey:'0:1',mode:'clear',reason:'Confirmed reason'}),step('tool','export_files'),step('complete')];
+ const a=new AgentTask({think:async()=>steps[n++],execute:async tool=>{if(tool==='set_text_presence'&&++calls===1)throw Error('transient error');return tool==='export_files'?{qualityPassed:true,saved:1}:{changed:true};}});a.start({request:'Verified removal'});await a.runPromise;assert.equal(a.current.status,'completed');
+});
 test('confirmed successful import resolves its earlier guard failure without clearing another document failure',async()=>{
  for(const otherFailure of [false,true]){
   const args={fileId:'same-copy',selection:{segments:[{sheet:'Copy',rowStart:2,rowEnd:9}]}};

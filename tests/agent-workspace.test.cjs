@@ -14,6 +14,18 @@ test('layout reuse commits once and invalidates for changes to task, model/rules
 });
 function fixture(call=async()=>{}){const state={files:[{name:'source.ai',path:'source.ai',layers:[{id:1,name:'Title',original:'标题',issues:[]},{id:2,name:'kept',recordId:'old',issues:[]}]}],records:[{id:'old',target:'Old'},{id:'new',target:'New'}]},transactions=[];return {state,transactions,run:createAgentWorkspace({state,call,history:{transaction:(fn,reason)=>{transactions.push(reason);fn();}},render:()=>{},selectFile:()=>{},selectedLayer:()=>{},importOriginal:async()=>{},getVisual:()=>[],makePlan:async()=>({files:[]})})};}
 
+test('assistant cannot remove a mixed-style parameter value through either text or artwork tools',async()=>{
+ const f=fixture(),file=f.state.files[0];Object.assign(file,{format:'AI',fingerprint:'source',artworkObjects:[{objectId:'t:1',layerId:1,sourceIdentity:'source'}]});
+ Object.assign(file.layers[0],{original:'3.55±0.3mm',issues:['混合文字样式尚不支持']});
+ await assert.rejects(f.run('set_text_presence',{layerKey:'0:0',mode:'clear',reason:'Put the entire parameter in the label'}),/原有参数数值/);
+ await assert.rejects(f.run('set_artwork_visibility',{fileIndex:0,objectId:'t:1',hidden:true,mode:'clear',reason:'Remove repeated old value'}),/原有参数数值/);assert.equal(f.transactions.length,0);
+});
+test('copy-edit of a compound parameter row cannot replace the original label with value-plus-label prose',async()=>{
+ const f=fixture(),file=f.state.files[0];Object.assign(file.layers[0],{original:'总行程',box:[50,145,100,20]});file.layers.push({id:3,original:'3.55±0.3mm',box:[50,100,100,40],font:'Display-Bold',size:38,issues:['mixed']});
+ f.state.records.push({id:'parameter',original:'3.55±0.3MM 总行程',target:'Total Travel: 3.55 ± 0.3 mm'});
+ await f.run('edit_text',{changes:[{layerKey:'0:0',recordIds:['parameter'],reason:'Approved translation row'}]});assert.equal(file.layers[0].customText,'Total Travel');assert.equal(file.layers[2].font,'Display-Bold');assert.equal(file.layers[2].size,38);assert.equal(file.layers[2].skipExport,undefined);
+});
+
 test('same attachment selection import preserves bindings; changed identity requires explicit replacement',async()=>{
  let reads=0;const f=fixture(async()=>{reads++;return {records:[{id:'fresh',target:'Approved'}],name:'copy',fingerprint:'doc'};});const args={path:'D:/copy.xlsx',attachmentIdentity:'v1',selection:{segments:[{sheet:'EN'}]},replaceExisting:true};await f.run('import_document',args);f.state.files[0].layers[0].recordId='fresh';f.state.files[0].layers[0].customText='User adjustment';const result=await f.run('import_document',{...args,replaceExisting:false});assert.equal(result.reused,true);assert.equal(reads,1);assert.equal(f.state.files[0].layers[0].customText,'User adjustment');await assert.rejects(f.run('import_document',{...args,attachmentIdentity:'v2',replaceExisting:false}),/现有绑定/);await assert.rejects(f.run('import_document',{...args,selection:{segments:[{sheet:'RU'}]},replaceExisting:false}),/现有绑定/);
 });

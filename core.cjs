@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const {validateMixedEdits}=require('./mixed-text.cjs');
 const {validateCreation,validateTextActions,photoshopTextObjects}=require('./native-text-objects.cjs');
 const {validateArtworkHides}=require('./artwork-visibility.cjs');
 const {canonicalText,insertBreaks,manualStyleIssues}=require('./layout.cjs');
@@ -84,9 +85,11 @@ function validatePlan(plan) {
   }
   let count = 0;
   for (const file of plan.files) {
+    validateMixedEdits(file.mixedTextEdits,{records:plan.records,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.mixedTextEdits||[]).length;
     validateTextActions(file.textActions,{jobs:file.jobs});count+=(file.textActions||[]).length;
     validateArtworkHides(file.artworkHides,{textActions:file.textActions,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.artworkHides||[]).length;
-    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length&&!file.textActions?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
+    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length&&!file.textActions?.length&&!file.mixedTextEdits?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
+    if((file.mixedTextEdits||[]).some(e=>file.jobs.some(j=>j.layerId===e.layerId)||(file.textActions||[]).some(a=>a.layerId===e.layerId)||(file.artworkHides||[]).some(a=>a.objectId==='t:'+e.layerId)))throw Error('同一混合文字不能同时普通改字、隐藏或清除');
     const seen = new Set();
     for (const job of file.jobs) {
       validateCreation(job,{width:file.width,height:file.height});if(job.layerId<0&&!job.nativeCreation)throw Error("新增文字缺少创建合同");

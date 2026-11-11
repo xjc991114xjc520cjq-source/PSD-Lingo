@@ -14,6 +14,16 @@ test('layout reuse commits once and invalidates for changes to task, model/rules
 });
 function fixture(call=async()=>{}){const state={files:[{name:'source.ai',path:'source.ai',layers:[{id:1,name:'Title',original:'标题',issues:[]},{id:2,name:'kept',recordId:'old',issues:[]}]}],records:[{id:'old',target:'Old'},{id:'new',target:'New'}]},transactions=[];return {state,transactions,run:createAgentWorkspace({state,call,history:{transaction:(fn,reason)=>{transactions.push(reason);fn();}},render:()=>{},selectFile:()=>{},selectedLayer:()=>{},importOriginal:async()=>{},getVisual:()=>[],makePlan:async()=>({files:[]})})};}
 
+test('mixed style edits use an undo transaction, reject missing copy and preserve independent parameter labels',async()=>{
+ const f=fixture(),file=f.state.files[0];file.format='AI';Object.assign(file.layers[0],{original:'1亿次',issues:['混合文字样式尚不支持'],alignment:'center'});
+ const target='Lifespan: 100 Million Keystrokes';f.state.records.push({id:'life',target,digest:require('../core.cjs').hash(target)});
+ const args={layerKey:'0:0',recordId:'life',part:'parameter-value',spans:[{text:'100 Million',sourceStart:0},{text:' Keystrokes',sourceStart:1}],reason:'Preserve original mixed number typography'};
+ await assert.rejects(f.run('edit_mixed_text',{...args,spans:[{text:'100',sourceStart:0}]}));assert.equal(f.transactions.length,0);
+ const result=await f.run('edit_mixed_text',args);assert.equal(result.changed,true);assert.equal(file.mixedTextEdits[0].target,'100 Million Keystrokes');assert.equal(file.layers[1].recordId,'old');assert.equal(file.layers[0].original,'1亿次');assert.equal(f.transactions[0],'ai-mixed-text');
+ const workspace=await f.run('workspace',{});assert.equal(workspace.files[0].layers[0].mixedTextEdit.target,'100 Million Keystrokes');
+ await f.run('edit_mixed_text',{layerKey:'0:0',restore:true});assert.equal(file.mixedTextEdits.length,0);assert.equal(f.transactions.at(-1),'ai-mixed-text-restore');
+});
+
 test('assistant cannot remove a mixed-style parameter value through either text or artwork tools',async()=>{
  const f=fixture(),file=f.state.files[0];Object.assign(file,{format:'AI',fingerprint:'source',artworkObjects:[{objectId:'t:1',layerId:1,sourceIdentity:'source'}]});
  Object.assign(file.layers[0],{original:'3.55±0.3mm',issues:['混合文字样式尚不支持']});
@@ -88,4 +98,18 @@ test('whole-page diagnosis automatically guides the next joint layout, while unc
  const call=async(name,r)=>{if(name==='agentCacheContext')return {taskId:'task',revision,model:'selected',warnings:[]};if(name==='agentExport')return {saved:1,failed:0,results:[{output:'final.ai',delivery:{reopened:true,verified:true,boards:[{name:'A',crop:[0,0,500,800]}]}}]};if(name==='agentDeliveryVisual')return {stage:'current',crop:r.crop,origin:'exported-jpeg',deliveryEvidence:{reopened:true},dataURL:'actual-jpg'};if(name==='suggestLayout'&&r.phase==='audit')return {repairGuidanceVersion:1,audit:{checks:require('../services/design-page-audit.cjs').checks.map(id=>({id,verdict:id==='hierarchy'?'fail':'pass',evidence:'Actual rendered grouping inspected',layerKeys:['7']})),designChecks:require('../services/design-composition.cjs').dimensions.map(id=>({id,verdict:'accept',evidence:'Other rendered relationships inspected'})),skillReviews:manifest.skills.map(s=>({id:s.id,verdict:'accept',evidence:'Applicable rendered relationship inspected'})),repairPlan:[repair]}};if(name==='suggestLayout'){proposals++;received=r;return {proposals:[],rejected:[]};}return true;};
  const run=createAgentWorkspace({state,call,buildRequest:buildDesignLayoutRequest,fitText:()=>({ok:true,width:150,height:30}),getVisual:async({crop}={})=>[{stage:'current',crop:crop||[0,0,500,800],dataURL:'actual'}],makePlan:async()=>({files:[{path:'source.ai'}]}),selectFile:()=>{},selectedLayer:()=>{},history:{transaction:fn=>fn()},render:()=>{}});
  assert.equal((await run('export_files',{})).qualityPassed,false);await run('design_layout',{fileIndex:0});assert.equal(received.priorWholePageRepairPlan[0].id,'title-group');assert.equal(proposals,1);assert.equal((await run('design_layout',{fileIndex:0,replan:true})).stoppedNoProgress,true);assert.equal(proposals,1);revision++;await run('design_layout',{fileIndex:0});assert.equal(proposals,2);assert.equal(received.priorWholePageRepairPlan.length,0);
+});
+
+test('independent workspace preparation removes all old operations, rejects stale reset before mutation',async()=>{
+ const f=fixture();Object.assign(f.state.files[0],{artworkHides:[{objectId:'old'}],containerEdits:[{}],mixedTextEdits:[{}]});f.state.sourceDocument={old:true};let resets=0;
+ const run=createAgentWorkspace({state:f.state,resetWorkspace:()=>{resets++;Object.assign(f.state,{files:[],records:[],sourceDocument:null,docName:'',docFingerprint:''})}});
+ await assert.rejects(run('prepare_independent_task',{},'',()=>false),/过期/);assert.equal(resets,0);
+ const result=await run('prepare_independent_task',{});assert.equal(result.prepared,true);assert.equal(f.state.files.length,0);assert.equal(f.state.records.length,0);assert.equal(f.state.sourceDocument,null);assert.equal(resets,1);
+});
+
+test('explicit export scope excludes old blocked files before validation, planning, export and audits',async()=>{
+ const f=fixture();f.state.files[0].layers[1].issues=['old invalid'];f.state.files.push({name:'06.psd',path:'06.psd',layers:[]});let scope,calls=0;
+ const run=createAgentWorkspace({state:f.state,selectFile:()=>{},makePlan:async options=>{scope=options.fileIndices;return {files:[]}},call:async name=>{if(name==='agentExport'){calls++;return {results:[],saved:0,failed:0}};return null}});
+ const r=await run('export_files',{fileIndices:[1]});assert.deepEqual([...scope],[1]);assert.equal(calls,1);assert.equal(r.blocked,undefined);assert.deepEqual([...r.audits],[]);
+ for(const fileIndices of [[],[2],[-1],[1,1],['1']])await assert.rejects(run('export_files',{fileIndices}),/fileIndices/);
 });

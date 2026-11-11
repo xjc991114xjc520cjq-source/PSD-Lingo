@@ -13,7 +13,7 @@ export function parameterParts(file,layer,record){
 }
 export function captureBindingRequest(state){
  const files=state.files,records=state.records,signature=copySignature(records),targets=new Map();
- files.forEach((f,fi)=>f.layers.forEach((layer,li)=>{if(!layer.recordId&&!layer.skipExport)targets.set(fi+':'+li,{file:f,layer});}));
+ files.forEach((f,fi)=>f.layers.forEach((layer,li)=>{if(!layer.recordId&&!layer.skipExport&&!f.mixedTextEdits?.some(e=>e.layerId===layer.id))targets.set(fi+':'+li,{file:f,layer});}));
  return {files,records,signature,targets,request:{layers:[...targets].map(([layerKey,{file,layer}])=>({layerKey,file:file.name,name:layer.name,original:layer.original,group:layer.group,boardNames:layer.boardNames,box:layer.box,font:layer.font,size:layer.size})),records:records.map(({id,key,original,target,source,context})=>({id,key,original,target,source,context}))}};
 }
 export function applyBindingResult(state,capture,matches){

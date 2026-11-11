@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const {installAgent}=require('../services/agent-integration.cjs');
-async function fixture(t,{output=true,importWorkbook}={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'agent-integration-')),handlers={},events={};const file=path.join(directory,'copy.txt');await fs.writeFile(file,'Approved');let selected=[file],steps=[],last,exported=[],commands=[];
+async function fixture(t,{output=true,importWorkbook,onCommand,onThink}={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'agent-integration-')),handlers={},events={};const file=path.join(directory,'copy.txt');await fs.writeFile(file,'Approved');let selected=[file],steps=[],last,exported=[],commands=[];
  const settings={credentials:async()=>({mode:'api',apiModel:'test',apiKey:'fixture-secret',apiProtocol:'responses',apiBaseUrl:'https://example.invalid/v1'}),get:async()=>({mode:'api',apiModel:'test',executable:'C:/codex.exe',localModel:'local-test'})};
  const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)}}catch(e){return {ok:false,error:e.message}}};
  const invoke=(name,value)=>handlers[name]({},value);
- const webContents={send:(channel,data)=>{if(channel==='agent-state')last=data;if(channel==='agent-command'){commands.push(data);queueMicrotask(async()=>{let value;if(data.tool==='export_files')value=await invoke('agent-export',{files:[]});else value={ok:true,value:{files:[]}};events['agent-command-result']({sender:webContents},{id:data.id,ok:value.ok,value:value.value,error:value.error});});}}};
- const service=installAgent({importWorkbook,ipcMain:{handle:(n,f)=>handlers[n]=f,on:(n,f)=>events[n]=f},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:selected})},window:()=>({webContents}),dataDirectory:()=>directory,settings:()=>settings,guard:()=>{},isBusy:()=>false,localEnv:()=>process.env,safe,runPhotoshop:async(plan,dir)=>{exported.push(dir);return {saved:1,failed:0};},fetch:()=>assert.fail('Assistant cannot use API'),think:async task=>{assert.equal(task.mode,'local');return steps.shift()||{kind:'complete',message:'done',tool:'',arguments:'{}',questions:[]};}});t.after(async()=>{await service.close();await fs.rm(directory,{recursive:true,force:true,maxRetries:3,retryDelay:20});});
+ const webContents={send:(channel,data)=>{if(channel==='agent-state')last=data;if(channel==='agent-command'){commands.push(data);queueMicrotask(async()=>{let value;if(onCommand)value=await onCommand(data,invoke);else if(data.tool==='prepare_independent_task')value={ok:true,value:{prepared:true}};else if(data.tool==='export_files')value=await invoke('agent-export',{files:[]});else value={ok:true,value:{files:[]}};events['agent-command-result']({sender:webContents},{id:data.id,ok:value.ok,value:value.value,error:value.error});});}}};
+ const service=installAgent({importWorkbook,ipcMain:{handle:(n,f)=>handlers[n]=f,on:(n,f)=>events[n]=f},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:selected})},window:()=>({webContents}),dataDirectory:()=>directory,settings:()=>settings,guard:()=>{},isBusy:()=>false,localEnv:()=>process.env,safe,runPhotoshop:async(plan,dir)=>{exported.push(dir);return {saved:1,failed:0};},fetch:()=>assert.fail('Assistant cannot use API'),think:async task=>{assert.equal(task.mode,'local');onThink?.(task);return steps.shift()||{kind:'complete',message:'done',tool:'',arguments:'{}',questions:[]};}});t.after(async()=>{await service.close();await fs.rm(directory,{recursive:true,force:true,maxRetries:3,retryDelay:20});});
  if(output){selected=[directory];await invoke('agent-output');selected=[file];}
  return {directory,file,invoke,exported,steps,commands,get last(){return last},select:paths=>selected=paths};}
 test('missing or vanished output directory is rejected before task creation or model execution',async t=>{
@@ -55,4 +55,22 @@ test('project choices persist for new tasks while follow-up keeps the original p
  await f.invoke('agent-project-save',{name:'新项目',parentDirectory:f.directory});await f.invoke('agent-followup',{text:'Continue',fileIds:[]});await finished(f);assert.equal(f.last.codexProject.key,firstKey);
  await f.invoke('agent-start',{request:'New task',fileIds:[]});await finished(f);assert.equal(f.last.codexProject.name,'新项目');assert.notEqual(f.last.codexProject.key,firstKey);
  const get=await f.invoke('agent-project');assert.equal(get.value.name,'新项目');assert.equal((await fs.stat(path.join(f.directory,'agent-project.json'))).isFile(),true);
+});
+
+test('independent tasks reset before model, keep follow-up state and reject out-of-task exports before writes',async t=>{
+ const plans=[],seen=[],f=await fixture(t,{onThink:task=>seen.push({prepared:task.workspacePrepared,paths:[...task.sourcePaths]}),onCommand:async(data,invoke)=>{
+  if(data.tool==='prepare_independent_task')return {ok:true,value:{prepared:true}};
+  if(data.tool==='export_files'){const r=await invoke('agent-export',plans.shift());return r;}
+  return {ok:true,value:{imported:true}};
+ }}),source=path.join(f.directory,'06.ai'),stale=path.join(f.directory,'05.ai');await fs.writeFile(source,'new source');const id=(await f.invoke('agent-files',{paths:[source]})).value[0].id;
+ const tool=(name,args={})=>({kind:'tool',message:name,tool:name,arguments:JSON.stringify(args),questions:[]});
+ plans.push({files:[{path:stale}]});f.steps.push(tool('import_source',{fileId:id}),tool('export_files'));
+ await f.invoke('agent-start',{request:'Only new source',fileIds:[id],workspaceMode:'independent'});await finished(f);
+ assert.equal(seen[0].prepared,true);assert.deepEqual(seen[0].paths,[]);assert.equal(f.commands[0].tool,'prepare_independent_task');assert.equal(f.exported.length,0);assert.match(f.last.error,/本独立任务以外/);assert.deepEqual(f.last.sourcePaths,[source]);assert.equal(f.last.workspaceMode,'independent');
+ plans.push({files:[{path:source}]});f.steps.push(tool('export_files'));await f.invoke('agent-followup',{text:'Continue with correct scope',fileIds:[id]});await finished(f);
+ assert.equal(f.last.status,'completed',f.last.error);assert.equal(f.exported.length,1);assert.equal(f.commands.filter(c=>c.tool==='prepare_independent_task').length,1);
+});
+
+test('independent workspace reset failure blocks all model execution',async t=>{
+ let calls=0;const f=await fixture(t,{onThink:()=>calls++,onCommand:async()=>({ok:false,error:'reset failed'})});await f.invoke('agent-start',{request:'new',fileIds:[],workspaceMode:'independent'});await finished(f);assert.equal(calls,0);assert.equal(f.last.status,'failed');assert.match(f.last.error,/reset failed/);
 });

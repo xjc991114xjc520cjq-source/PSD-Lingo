@@ -3,7 +3,8 @@ import {planAiFile} from '../design-layout-planner.cjs';
 import {auditDesignFile,deliveryBoardsFor} from '../design-document-audit.cjs';
 import {validateArtworkHides} from '../artwork-visibility.cjs';
 import {createTextLayer,textActionsFor} from '../native-text-objects.cjs';
-export function createAgentWorkspace({state,call,importOriginal,render,history,fitText,buildRequest,getVisual,makePlan,selectFile,selectedLayer}){
+import {makeMixedEdit} from '../mixed-text.cjs';
+export function createAgentWorkspace({state,call,importOriginal,render,history,fitText,buildRequest,getVisual,makePlan,selectFile,selectedLayer,resetWorkspace}){
  const pageReferences=new Map();
  const inspectedArtwork=new Map();
  const auditsCache=new Map(),layoutsCache=new Map();
@@ -11,12 +12,24 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
  const snapshot=()=>JSON.stringify({files:state.files,records:state.records,docFingerprint:state.docFingerprint},(key,value)=>['preview','learningSource'].includes(key)?undefined:value);
  const cacheContext=async()=>{const value=await call('agentCacheContext');return value?.taskId&&!value.warnings?.length?JSON.stringify(value):null;};
  const pathKey=p=>String(p).replace(/\\/g,'/').toLowerCase();
- const summary=(args={})=>{const offset=Math.max(0,Math.floor(Number(args.offset)||0)),limit=Math.min(200,Math.max(1,Math.floor(Number(args.limit)||100)));return {files:state.files.map((f,i)=>({fileIndex:i,name:f.name,path:f.path,format:f.format,width:f.width,height:f.height,boards:f.boards||f.artboards||null,totalLayers:f.layers.length,bound:f.layers.filter(l=>l.recordId).length,layers:f.layers.slice(offset,offset+limit).map((l,j)=>({layerKey:i+':'+(offset+j),id:l.id,name:l.name,original:l.original,target:typeof l.customText==='string'?l.customText:state.records.find(r=>r.id===l.recordId)?.target,recordId:l.recordId,box:l.box,boardBox:l.boardBox,boardNames:l.boardNames,group:l.group,capitalization:l.capitalization,font:l.font,size:l.size,visible:l.visible,issues:l.issues,skipExport:l.skipExport}))})),document:state.docName,totalRecords:state.records.length,records:state.records.slice(offset,offset+limit),offset,limit};};
+ const summary=(args={})=>{const offset=Math.max(0,Math.floor(Number(args.offset)||0)),limit=Math.min(200,Math.max(1,Math.floor(Number(args.limit)||100)));return {files:state.files.map((f,i)=>({fileIndex:i,name:f.name,path:f.path,format:f.format,width:f.width,height:f.height,boards:f.boards||f.artboards||null,totalLayers:f.layers.length,bound:f.layers.filter(l=>l.recordId).length,layers:f.layers.slice(offset,offset+limit).map((l,j)=>({layerKey:i+':'+(offset+j),id:l.id,name:l.name,original:l.original,target:typeof l.customText==='string'?l.customText:state.records.find(r=>r.id===l.recordId)?.target,recordId:l.recordId,box:l.box,boardBox:l.boardBox,boardNames:l.boardNames,group:l.group,capitalization:l.capitalization,font:l.font,size:l.size,visible:l.visible,issues:l.issues,mixedStyleRuns:l.mixedStyleRuns,mixedTextEdit:f.mixedTextEdits?.find(e=>e.layerId===l.id),skipExport:l.skipExport}))})),document:state.docName,totalRecords:state.records.length,records:state.records.slice(offset,offset+limit),offset,limit};};
  function current(index){if(!Number.isInteger(index)||!state.files[index])throw Error('fileIndex 不存在，请先查看 workspace');selectFile(index);return state.files[index];}
  return async function execute(tool,args,model,isCurrent=()=>true){
   if(!isCurrent())throw Error('当前操作已过期，未开始软件修改');
   const agentCall=(name,value)=>call(name,['suggest','suggestLayout'].includes(name)?{...value,assistantModel:model}:value);
+  if(tool==='prepare_independent_task'){if(!resetWorkspace)throw Error('工作区隔离接口未就绪');resetWorkspace();pageReferences.clear();inspectedArtwork.clear();auditsCache.clear();layoutsCache.clear();diagnoses.clear();return {prepared:true,files:0,records:0};}
   if(tool==='workspace')return summary(args);
+  if(tool==='edit_mixed_text'){
+   if(typeof args.layerKey!=='string'||!/^\d+:\d+$/.test(args.layerKey))throw Error('混合文字位置无效');
+   const [fi,li]=args.layerKey.split(':').map(Number),f=current(fi),l=f.layers[li];if(f.format!=='AI'||!l)throw Error('混合改字需要AI原生文字');
+   if(args.restore===true){if(!f.mixedTextEdits?.some(e=>e.layerId===l.id))return {changed:false};history.transaction(()=>{f.mixedTextEdits=f.mixedTextEdits.filter(e=>e.layerId!==l.id);state.checked=false;},'ai-mixed-text-restore');render();return {changed:true,fileIndex:fi,layerKey:args.layerKey,restored:true};}
+   if(l.recordId||f.artworkHides?.some(e=>e.objectId==='t:'+l.id))throw Error('请先解除该对象普通绑定或隐藏，不能叠加两种修改');
+   const edit=makeMixedEdit(l,args,state.records),next=[...(f.mixedTextEdits||[]).filter(e=>e.layerId!==l.id),edit];
+   if(JSON.stringify(f.mixedTextEdits)===JSON.stringify(next))return {changed:false,target:edit.target};
+   if(!isCurrent())throw Error('任务已变化，未应用混合改字');
+   history.transaction(()=>{f.mixedTextEdits=next;state.checked=false;},'ai-mixed-text');render();
+   return {changed:true,fileIndex:fi,layerKey:args.layerKey,target:edit.target,boardBox:l.boardBox,visualAcceptance:'分段样式映射已保存，可Ctrl+Z。由Illustrator原生预览和导出修改同一文字对象；必须preview所在整页并export_files通过最终图像审验，当前尚未生成文件'};
+  }
   if(tool==='create_text'){
    const f=current(args.fileIndex),l=createTextLayer(f,args,state.records);if(!isCurrent())throw Error('任务已变化');
    history.transaction(()=>{f.layers.push(l);state.checked=false;},'ai-text-create');render();
@@ -46,6 +59,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
     if(result.object?.sourceIdentity!==object.sourceIdentity)throw Error('对象已变化，请重新导入');inspectedArtwork.set(key,object.sourceIdentity);return {...result,note:'两张图依次为原稿局部和仅隐藏此候选后的局部；不是当前译文成果。检查消失的所有内容是否确实可隐藏。'};
    }
    if(typeof args.hidden!=='boolean'||typeof args.reason!=='string'||!args.reason.trim())throw Error('请明确隐藏或恢复及其依据');
+   if(args.hidden&&f.mixedTextEdits?.some(e=>object.objectId==='t:'+e.layerId))throw Error('此对象已有混合改字，不能再隐藏；请先restore原生混合修改');
    if(args.hidden&&inspectedArtwork.get(key)!==object.sourceIdentity)throw Error('隐藏前必须 inspect_artwork 查看真实局部对照');
    const existing=(f.artworkHides||[]).find(e=>e.objectId===object.objectId);if(!!existing===args.hidden&&(!existing||(existing.mode||'hidden')===(args.mode||'hidden')))return {changed:false,hidden:args.hidden,objectId:object.objectId,textPresence};
    if(args.mode!==undefined&&!['hidden','clear'].includes(args.mode))throw Error('对象处理模式无效');
@@ -77,11 +91,12 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   if(tool==='import_document'){
    const importKey=args.attachmentIdentity?JSON.stringify([pathKey(args.path),args.attachmentIdentity,args.selection]):null;
    if(importKey&&state.sourceDocument?.agentImportKey===importKey)return {name:state.docName,records:state.records,reused:true,message:'同一附件及文案范围已导入，保留现有绑定与调整'};
-   if(state.files.some(f=>f.layers.some(l=>l.recordId))&&!args.replaceExisting)throw Error('存在现有绑定；需先询问用户是否重新导入并清除绑定，确认后传 replaceExisting:true');
+   if(state.files.some(f=>f.layers.some(l=>l.recordId)||f.mixedTextEdits?.length)&&!args.replaceExisting)throw Error('存在现有绑定或混合改字；需先询问用户是否重新导入并清除绑定，确认后传 replaceExisting:true');
    const d=await call('importDocument',{path:args.path,selection:args.selection});if(d.selectionRequired)return d;
    if(!isCurrent())throw Error('接管已暂停、终止或收到新补充，未替换当前文案');
    state.records=d.records;state.docName=d.name;state.docFingerprint=d.fingerprint;state.sourceDocument={...d,agentImportKey:importKey};state.chosen=null;
    for(const f of state.files)for(const l of f.layers){l.recordId=null;l.suggestedId=null;delete l.customText;delete l.copyAdjustment;}
+   for(const f of state.files)f.mixedTextEdits=[];
    state.checked=false;render();return {name:d.name,records:d.records,notices:d.notices||[]};
   }
   if(tool==='auto_bind'||tool==='bind_copy'){
@@ -92,7 +107,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    let result;history.transaction(()=>{result=applyBindingResult(state,capture,matches);state.checked=false;},'ai-binding');render();return result;
   }
   if(tool==='preview'){
-   const f=current(args.fileIndex),requireCurrent=!!textActionsFor(f).length||!!f.artworkHides?.length||f.layers.some(l=>l.recordId&&!l.skipExport&&!l.issues?.length);let crop=args.crop;
+   const f=current(args.fileIndex),requireCurrent=!!textActionsFor(f).length||!!f.artworkHides?.length||!!f.mixedTextEdits?.length||f.layers.some(l=>l.recordId&&!l.skipExport&&!l.issues?.length);let crop=args.crop;
    if(args.boardName!==undefined){if(crop!==undefined||typeof args.boardName!=='string')throw Error('请选择一个画板或一个局部预览范围');const boxes=f.layers.filter(l=>l.boardNames?.length===1&&l.boardNames[0]===args.boardName).map(l=>l.boardBox).filter(Boolean);if(!boxes.length||boxes.some(b=>JSON.stringify(b)!==JSON.stringify(boxes[0])))throw Error('画板范围不明确，请重新核对 workspace');crop=[...boxes[0]];}
    if(crop!==undefined&&(!Array.isArray(crop)||crop.length!==4||!crop.every(Number.isFinite)||crop[0]<0||crop[1]<0||crop[2]<=0||crop[3]<=0||crop[0]+crop[2]>f.width+.01||crop[1]+crop[3]>f.height+.01))throw Error('局部预览范围无效');
    const visuals=await getVisual({scope:'full',...(crop?{crop}:{}),requireCurrent,retryBackground:args.retry===true});if(!isCurrent())throw Error('预览期间任务已变化，本次预览已丢弃');if(requireCurrent&&!visuals?.some(v=>v.stage==='current'))throw Error('当前译文替换预览缺失，不能用原稿图代替');const list=Array.isArray(visuals)?visuals:[];if(!list.length)throw Error('当前尚无真实预览，请等待原生背景生成后重试');return {fileIndex:args.fileIndex,evidence:list.map(v=>({stage:v.stage,crop:v.crop,quality:v.quality})),images:list.map(v=>v.dataURL)};
@@ -121,16 +136,19 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    history.transaction(()=>{for(const item of result.accepted)Object.assign(f.layers.find(l=>l.id===item.id),item.candidate);f.containerEdits=result.working.containerEdits;state.checked=false;},'ai-design-layout');render();const response={changed:before!==JSON.stringify({layers:f.layers,edits:f.containerEdits,records:state.records}),accepted:result.accepted.length,failures:result.failures,retainedContext:result.retainedContext||[],visualReviews:result.visualReviews,boards:result.boards,learning:result.learning,warning:result.warning,visualAcceptance:'待查看最终预览及原生导出'};if(context){layoutsCache.set(layoutKey(),structuredClone(response));if(layoutsCache.size>8)layoutsCache.delete(layoutsCache.keys().next().value);}return response;
   }
   if(tool==='export_files'){
-   const blocked=state.files.flatMap(f=>f.layers.filter(l=>l.recordId&&l.issues?.length&&!l.skipExport).map(l=>({file:f.name,layer:l.name,issues:l.issues})));
+   const indices=args.fileIndices===undefined?state.files.map((_,i)=>i):args.fileIndices;if(!Array.isArray(indices)||!indices.length||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||!state.files[i]))throw Error('导出fileIndices无效，请查看workspace');
+   const selected=indices.map(i=>state.files[i]);
+   const blocked=selected.flatMap(f=>f.layers.filter(l=>l.recordId&&l.issues?.length&&!l.skipExport).map(l=>({file:f.name,layer:l.name,issues:l.issues})));
    if(blocked.length)return {blocked,exported:false,message:'受限文字未导出；请让用户确认处理方式，不能自行跳过'};
    const before=JSON.stringify({files:state.files,records:state.records}),audits=[],context=await cacheContext();
-   const plan=await makePlan();
+   const plan=await makePlan({fileIndices:indices});
+   if(plan.files.some(p=>!selected.some(f=>pathKey(f.path)===pathKey(p.path))))throw Error('导出计划超出所选文件范围，未开始写入');
    for(const item of plan.files){if(!/\.ai$/i.test(item.path))continue;const f=state.files.find(f=>pathKey(f.path)===pathKey(item.path));item.deliveryBoards=deliveryBoardsFor(f,state.records);if(!item.deliveryBoards.length)throw Error('目标画板归属不明确，未开始最终导出');}
    if(!isCurrent()||before!==JSON.stringify({files:state.files,records:state.records}))throw Error('项目已变化，未开始导出');
    await call('agentToolProgress',{label:'保存原生副本、重开核验并导出目标画板JPG',indeterminate:true});
    const result=await call('agentExport',plan),deliveryStages=[];
-   for(let index=0;index<state.files.length;index++){
-    const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length&&!textActionsFor(f).length)continue;
+   for(const index of indices){
+    const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length)continue;
     const auditCall=(name,value)=>agentCall(name,{...value,assistantReferenceIds:pageReferences.get(f.fingerprint+'|'+value.activeBoard?.name)||[]});
     const item=plan.files.find(p=>pathKey(p.path)===pathKey(f.path)),native=item&&result.results?.[plan.files.indexOf(item)],requireDelivery=/\.ai$/i.test(f.path);
     deliveryStages.push({file:f.name,nativeSave:native?.output?'saved':'failed',nativeReopen:native?.delivery?.reopened?'passed':'not-verified',jpeg:native?.delivery?.verified?'passed':'not-verified',finalAudit:'pending'});

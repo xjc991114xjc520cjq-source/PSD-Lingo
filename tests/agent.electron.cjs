@@ -13,6 +13,7 @@ app.whenReady().then(async()=>{let exit=0;try{
   integration.recordUsage({taskName:'fixture',usage:{input_tokens:12000,cached_input_tokens:8000,output_tokens:200},promptBytes:800,imageCount:0});assert.equal(task.mode,'local');const body={model:task.model,input:deps.prompt};requests.push(body);let value;
   if(round++===0)value=result('tool','读取当前软件项目','workspace');
   else if(round===2)value=result('question','请确认语言与范围','',{},[{id:'language',title:'制作哪一种语言？',options:['英文','日文']},{id:'scope',title:'需要处理哪些内容？',options:['全部','仅价格块']}]);
+  else if(task.workspaceMode==='independent'&&!task.history.some(h=>h.type==='tool_result'&&h.tool==='workspace'))value=result('tool','读取隔离后的工作区','workspace');
   else if(round===3)value=result('tool','将确认文案绑定到当前标题','bind_copy',{matches:[{layerKey:'0:0',recordId:'demo-1'}]});
   else value=result('complete','已完成软件中的标题绑定；这是界面自动化夹具，没有导出原生文件。');
   return value;
@@ -63,7 +64,9 @@ app.whenReady().then(async()=>{let exit=0;try{
  await js('window.perfTranscriptNode=document.querySelector("#agentTranscript .agent-message")');
  win.webContents.send('agent-state',{...snapshot,performance:{calls:3,inputTokens:100,cachedInputTokens:60,outputTokens:20,reusedOperations:2,usageReportedCalls:3},progress:{current:1,total:2},eventVersion:snapshot.eventVersion});
  await wait('document.querySelector(".agent-counts").textContent.includes("100")');assert.equal(await js('window.perfTranscriptNode===document.querySelector("#agentTranscript .agent-message")'),true);assert.ok((await js('document.querySelector(".agent-counts").textContent')).includes('缓存 60'));evidence.push('progress-only update keeps transcript DOM and shows actual cache usage');
- await js(`document.getElementById('agentNewTask').click()`);assert.equal(await js(`document.querySelector('#agentTranscript').textContent`),'');assert.equal(await js(`document.querySelector('#agentModel').disabled`),false);
+ await js(`document.getElementById('agentNewTask').click()`);assert.equal(await js(`document.querySelector('#agentTranscript').textContent`),'');assert.equal(await js(`document.querySelector('#agentModel').disabled`),false);assert.equal(await js(`document.querySelector('#agentFiles').textContent`),'');
+ await js(`document.getElementById('agentRequest').value='仅分析新任务';document.getElementById('agentStart').click()`);await wait(`document.getElementById('agentStatus').textContent==='本轮任务已结束'`);const independent=(await js('window.desktop.agentState()')).value;assert.equal(independent.workspaceMode,'independent');const isolated=independent.history.find(h=>h.type==='tool_result'&&h.tool==='workspace').result;assert.equal(isolated.files.length,0);assert.equal(isolated.records.length,0);assert.equal(independent.files.length,0);assert.ok(independent.history.some(h=>h.type==='workspace_reset'));
+
  await js(`document.documentElement.classList.add('spark-reduce-motion')`);assert.equal(await js(`getComputedStyle(document.querySelector('.agent-orbit')).animationName`),'none');
  await fs.writeFile(out+'/04-completed.png',(await win.webContents.capturePage()).toPNG());
  // Older event must never roll the visible state backwards.

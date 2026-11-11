@@ -14,6 +14,7 @@ function detailCrops(request,audit,board){
 }
 function auditTargets(file,records){
  const targets=file.layers.filter(l=>l.visible!==false&&!l.skipExport&&records.some(r=>r.id===l.recordId));
+ for(const e of file.mixedTextEdits||[]){const l=file.layers.find(l=>l.id===e.layerId);if(!l||!records.some(r=>r.id===e.recordId))throw Error('混合改字来源失效，无法审阅');if(!targets.some(t=>t.id===l.id))targets.push({...l,recordId:e.recordId,artworkOnly:true});}
  const hidden=(file.artworkHides||[]).map(e=>({edit:e,object:file.artworkObjects?.find(o=>o.objectId===e.objectId&&o.sourceIdentity===e.sourceIdentity)}));
  if(hidden.some(h=>!h.object))throw Error('隐藏对象缺少已验证来源，无法审阅');
  for(const {object:o} of hidden)if(!targets.some(l=>l.boardNames?.length===1&&l.boardNames[0]===o.boardNames[0]))targets.push({id:'artwork:'+o.objectId,box:o.box,boardBox:o.boardBox,boardNames:o.boardNames,artworkOnly:true});
@@ -32,9 +33,10 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   const intersects=b=>b[0]<g.crop[0]+g.crop[2]&&b[0]+b[2]>g.crop[0]&&b[1]<g.crop[1]+g.crop[3]&&b[1]+b[3]>g.crop[1];
   request.layers=request.layers.filter(l=>intersects(l.sourceBox)||intersects(l.box));request.containers=request.containers.filter(c=>intersects(c.box));
   request.artworkObjects=(file.artworkObjects||[]).filter(o=>o.boardNames?.includes(g.name)).map(o=>({...o,hidden:hidden.some(h=>h.object.objectId===o.objectId)}));
-  request.textObjectActions=textActionsFor(file);request.createdTextObjects=file.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
+  request.nativeMixedEdits=(file.mixedTextEdits||[]).filter(e=>g.ids.includes(e.layerId));request.textObjectActions=textActionsFor(file);request.createdTextObjects=file.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
   request.visibilityEdits=hidden.filter(h=>h.object.boardNames.includes(g.name)).map(h=>({...h.edit,box:h.object.box,kind:h.object.kind}));
   const ids=new Set(file.layers.filter(l=>g.ids.includes(l.id)).flatMap(l=>[l.recordId,...(l.copyAdjustment?.recordIds||[])]));
+  for(const e of request.nativeMixedEdits)ids.add(e.recordId);
   const anchors=new Set(records.filter(r=>ids.has(r.id)).flatMap(r=>(r.context?.imageCandidates||[]).map(a=>a.media)));
   request.copyReferences=records.filter(r=>ids.has(r.id)||(r.context?.imageCandidates||[]).some(a=>anchors.has(a.media))).map(r=>({id:r.id,original:r.original,target:r.target,source:r.source,boundInThisBoard:ids.has(r.id)}));
   request.referenceLimits='图片锚点只帮助找候选资料，不证明归属。不能把共享锚点或未使用条目直接判作本页漏文案，也不能以绑定数作完整性证明。';

@@ -1,6 +1,6 @@
 // Real renderer + preload + IPC + task controller, deterministic provider. No Adobe documents opened.
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-project-ui';let win,integration;
+const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-project-ui';let win,integration,workRecords;
 app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let exit=0;try{
  await fs.mkdir(out,{recursive:true});await fs.rm(out+'/agent-project.json',{force:true});await fs.rm(out+'/verified.json',{force:true});const evidence=[],errors=[],requests=[];let round=0,updateChecks=0;
@@ -8,7 +8,8 @@ app.whenReady().then(async()=>{let exit=0;try{
  const settings={get:async()=>({mode:'api',executable:'C:/codex.exe',apiModel:'api-unused',localModel:'test-main',hasApiKey:true}),credentials:async()=>({mode:'api',apiModel:'test-main',apiKey:'test-private',apiProtocol:'responses',apiBaseUrl:'https://fixture.invalid/v1'}),read:async()=>({apiKey:'test-private',apiBaseUrl:'https://fixture.invalid/v1'})};
  const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)}}catch(e){return {ok:false,error:e.message}}};
  for(const [name,fn]of Object.entries({'check-update':()=>{updateChecks++;return {configured:true,available:null}},'load-codex-settings':settings.get,'service-ready':()=>true,'layout-memory-status':()=>({}),'status':()=>({active:true,version:'test',authorization:{active:true},updates:{}})}))ipcMain.handle(name,safe(fn));
- integration=require('../services/agent-integration.cjs').installAgent({ipcMain,dialog:{showOpenDialog:async(_,options)=>({canceled:false,filePaths:[options.properties.includes('openDirectory')?out+'/folder':out+'/需求.txt']})},window:()=>win,dataDirectory:()=>out,settings:()=>settings,safe,guard:()=>{},isBusy:()=>false,localEnv:async()=>process.env,fetch:()=>assert.fail('Assistant API forbidden'),listModels:async c=>{assert.equal(c.mode,'local');return {mode:'local',models:['test-main','test-selected']};},think:async(task,deps)=>{
+ workRecords=require('../services/work-records.cjs').installWorkRecords({ipcMain,safe,dataDirectory:()=>out,version:'test',shell:{showItemInFolder:()=>{}},hydrateProject:async p=>p,isBusy:()=>integration?.active()});
+ integration=require('../services/agent-integration.cjs').installAgent({workRecords,ipcMain,dialog:{showOpenDialog:async(_,options)=>({canceled:false,filePaths:[options.properties.includes('openDirectory')?out+'/folder':out+'/需求.txt']})},window:()=>win,dataDirectory:()=>out,settings:()=>settings,safe,guard:()=>{},isBusy:()=>false,localEnv:async()=>process.env,fetch:()=>assert.fail('Assistant API forbidden'),listModels:async c=>{assert.equal(c.mode,'local');return {mode:'local',models:['test-main','test-selected']};},think:async(task,deps)=>{
   integration.recordUsage({taskName:'fixture',usage:{input_tokens:12000,cached_input_tokens:8000,output_tokens:200},promptBytes:800,imageCount:0});assert.equal(task.mode,'local');const body={model:task.model,input:deps.prompt};requests.push(body);let value;
   if(round++===0)value=result('tool','读取当前软件项目','workspace');
   else if(round===2)value=result('question','请确认语言与范围','',{},[{id:'language',title:'制作哪一种语言？',options:['英文','日文']},{id:'scope',title:'需要处理哪些内容？',options:['全部','仅价格块']}]);
@@ -69,4 +70,4 @@ app.whenReady().then(async()=>{let exit=0;try{
  assert.deepEqual(errors.filter(e=>!e.includes('Content-Security-Policy')),[]);
  evidence.push('output required before model or task creation','folder picker registers path only','visible sidebar update button invokes real preload IPC once','full application sidebar entry','current project RPC','provider/model selection','attachment picker','all questions required','supplement preserves drafts and original context','pause/resume','real logo','compact layout','reduced motion','no native file writes','follow-up keeps history','independent new task');
  await fs.writeFile(out+'/verified.json',JSON.stringify({passed:true,evidence,requests:requests.length,rendererErrors:errors},null,2));console.log('PASS AI assistant integrated Electron UI',evidence.length);
- }catch(e){console.error(e);exit=1;if(win)await fs.writeFile(out+'/failed.png',(await win.webContents.capturePage()).toPNG());}finally{await integration?.close();win?.destroy();app.exit(exit)}});
+ }catch(e){console.error(e);exit=1;if(win)await fs.writeFile(out+'/failed.png',(await win.webContents.capturePage()).toPNG());}finally{await integration?.close();await workRecords?.flush();win?.destroy();app.exit(exit)}});

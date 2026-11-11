@@ -218,7 +218,7 @@ export function createLayoutEditor({$,file,layer,record,fitText,call,changed,sel
     return {quality:'native-background',dataURL:thumb.toDataURL('image/png'),provenance:{backgroundKey:bg,expectedBackgroundKey:bg,renderRevision:revision,expectedRenderRevision:revision},crop:[left,top,width,height]};
   }
   function resetImportedPreview(){previewEpoch++;clearTimeout(timer);backgrounds.clear();backgroundJobs.clear();lastBackgrounds.clear();images.clear();failures.clear();lastVisualSignature='';drag=null;moveDrag=null;guides=[];closeTextEditor();const c=$('replacementArt');c.getContext('2d').clearRect(0,0,c.width,c.height);}
-  function designVisuals({file:working=file(),layer:target=layer(),scope='current',crop:requestedCrop}={}){
+  function designVisuals({file:working=file(),layer:target=layer(),scope='current',crop:requestedCrop,sourceOnly=false}={}){
     const f=file();if(!f||f.demo||working?.fingerprint!==f.fingerprint)return [];
     // Original artwork is readable before copy binding and without a selected text layer.
     // Source boxes only choose the crop; replacement placement still uses visible glyphs.
@@ -228,6 +228,7 @@ export function createLayoutEditor({$,file,layer,record,fitText,call,changed,sel
     const make=()=>{const c=document.createElement('canvas'),s=Math.min(1,1280/width,1600/height);c.width=Math.max(1,Math.ceil(width*s));c.height=Math.max(1,Math.ceil(height*s));return c;};
     const encode=c=>{let url=c.toDataURL('image/png');while(url.length>1300000&&c.width>200){const small=document.createElement('canvas');small.width=Math.ceil(c.width*.75);small.height=Math.ceil(c.height*.75);small.getContext('2d').drawImage(c,0,0,small.width,small.height);c.width=small.width;c.height=small.height;c.getContext('2d').drawImage(small,0,0);url=c.toDataURL('image/png');}return url;};
     const art=$('art'),sourceImage=art.dataset.image===f.preview?art:images.get(f.preview),sourceWidth=sourceImage?.naturalWidth||sourceImage?.width,sourceHeight=sourceImage?.naturalHeight||sourceImage?.height;if(sourceWidth&&sourceHeight){const c=make();c.getContext('2d').drawImage(sourceImage,left/f.width*sourceWidth,top/f.height*sourceHeight,width/f.width*sourceWidth,height/f.height*sourceHeight,0,0,c.width,c.height);visuals.push({stage:'source',quality:'original-source',crop:[...crop],dataURL:encode(c)});}
+    if(sourceOnly)return visuals;
     const k=key(working),url=backgrounds.get(k),img=url&&images.get(url);
     if(img?.complete&&img.naturalWidth){const c=make(),ctx=c.getContext('2d');ctx.scale(c.width/width,c.height/height);ctx.translate(-left,-top);ctx.drawImage(img,0,0,f.width,f.height);for(const l of bound(working))drawReplacementLayer(ctx,l,record(l.recordId));const bg=visualToken(k),rev=visualToken(visualSignature(working));visuals.push({stage:'current',quality:'native-background',crop:[...crop],dataURL:encode(c),provenance:{backgroundKey:bg,expectedBackgroundKey:bg,renderRevision:rev,expectedRenderRevision:rev}});}
     return visuals;

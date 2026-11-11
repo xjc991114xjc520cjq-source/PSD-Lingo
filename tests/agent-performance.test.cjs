@@ -7,6 +7,11 @@ const {createExportCache}=require('../services/agent-export-cache.cjs');
 const {hashFile}=require('../photoshop-file-io.cjs');
 const step=(tool,args={})=>({kind:tool?'tool':'complete',message:'Checked',tool:tool||'',arguments:JSON.stringify(args),questions:[]});
 async function temp(t){const d=await fs.mkdtemp(path.join(os.tmpdir(),'perf-'));t.after(()=>fs.rm(d,{recursive:true,force:true}));return d;}
+test('final native cache validates every JPG and preserves same-state write reuse',async t=>{
+ const dir=await temp(t),source=path.join(dir,'source.ai'),output=path.join(dir,'final.ai'),jpg=path.join(dir,'board.jpg');await fs.writeFile(source,'original');let writes=0;
+ const run=createExportCache(async()=>{writes++;await fs.writeFile(output,'AI-'+writes);await fs.writeFile(jpg,'JPG-'+writes);return {saved:1,failed:0,results:[{output,delivery:{verified:true,boards:[{path:jpg}]}}]};}),task={},plan={files:[{path:source,fingerprint:await hashFile(source)}]};
+ await run(task,plan,dir);assert.equal((await run(task,plan,dir)).reused,true);assert.equal(writes,1);await fs.writeFile(jpg,'external modification');assert.equal((await run(task,plan,dir)).reused,undefined);assert.equal(writes,2);await fs.unlink(jpg);await run(task,plan,dir);assert.equal(writes,3);
+});
 test('exact duplicate references are lossless and never replace user instructions or raw history',()=>{
  const history=[{type:'user_supplement',text:'Keep original price'},{type:'tool_result',tool:'workspace',result:{layers:[1,2]}},{type:'tool_result',tool:'workspace',result:{layers:[1,2]}},{type:'tool_error',error:'Pending issue'},{type:'user_answer',answers:{a:'Keep original price'}}],before=JSON.stringify(history);
  const projected=historyFor(history);assert.equal(projected[2].resultUnchangedFromEvent,1);assert.deepEqual(history[projected[2].resultUnchangedFromEvent].result,history[2].result);assert.equal(historyFor(history,2)[0].resultUnchangedFromEvent,1);assert.equal(JSON.stringify(history),before);assert.equal(projected[4].answers.a,'Keep original price');

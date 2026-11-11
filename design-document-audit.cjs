@@ -12,13 +12,17 @@ function detailCrops(request,audit,board){
  const unique=[...new Map(candidates.map(b=>[JSON.stringify(b),b])).values()].sort((a,b)=>a[1]-b[1]||a[0]-b[0]);
  return unique.length<=6?unique:Array.from({length:6},(_,i)=>unique[Math.round(i*(unique.length-1)/5)]);
 }
-async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,cache,cacheIdentity='',forceReview=false,isCancelled=()=>false,onProgress=()=>{}}){
+function auditTargets(file,records){
  const targets=file.layers.filter(l=>l.visible!==false&&!l.skipExport&&records.some(r=>r.id===l.recordId));
  const hidden=(file.artworkHides||[]).map(e=>({edit:e,object:file.artworkObjects?.find(o=>o.objectId===e.objectId&&o.sourceIdentity===e.sourceIdentity)}));
  if(hidden.some(h=>!h.object))throw Error('隐藏对象缺少已验证来源，无法审阅');
  for(const {object:o} of hidden)if(!targets.some(l=>l.boardNames?.length===1&&l.boardNames[0]===o.boardNames[0]))targets.push({id:'artwork:'+o.objectId,box:o.box,boardBox:o.boardBox,boardNames:o.boardNames,artworkOnly:true});
- if(!targets.length&&!textActionsFor(file).length)return {passed:false,scope:'bound-artboards',boards:[],failures:['没有可审阅的已绑定画板']};
  for(const a of textActionsFor(file)){const l=file.layers.find(l=>l.id===a.layerId);if(!targets.some(t=>t.boardNames?.[0]===l.boardNames?.[0]))targets.push({...l,artworkOnly:true,boardBox:l.boardBox||[0,0,file.width,file.height],boardNames:l.boardNames?.length?l.boardNames:['画布']});}
+ return {targets,hidden};
+}
+function deliveryBoardsFor(file,records){const {targets}=auditTargets(file,records);return boardGroups(file,targets).map(g=>({name:g.name,crop:g.crop}));}
+async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,cache,cacheIdentity='',forceReview=false,requireDelivery=false,isCancelled=()=>false,onProgress=()=>{}}){
+ const {targets,hidden}=auditTargets(file,records);
  const groups=boardGroups(file,targets);if(!groups.length)return {passed:false,scope:'bound-artboards',boards:[],failures:['画板归属不明确，不能将总览视为整页验收']};
  const boards=[],failures=[];let reusedBoards=0;
  for(let i=0;i<groups.length;i++){
@@ -37,6 +41,7 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   Object.assign(request,{designReviewSources:require('./services/design-plugins/manifest.json').skills.map(s=>({...s,required:['design-critique','graphic-judgment'].includes(s.id)})),phase:'audit',designReviewVersion:1,designSkillIdentity:require('./services/design-skill-manifest.json'),activeBoard:{name:g.name,box:g.crop},selectedLayerKeys:g.ids.map(String),scope:'full'});
   const visuals=await getVisual({file,layer,scope:'full',crop:g.crop,requireCurrent:true});
   if(!visuals?.some(v=>v.stage==='current'))throw Error('整页审阅缺少实际当前画面');
+  if(requireDelivery){const current=visuals.find(v=>v.stage==='current');if(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened)throw Error('最终审验必须使用保存重开后的实际JPG');request.finalDelivery=current.deliveryEvidence;}
   request.visuals=visuals.filter(v=>['source','current'].includes(v.stage)).slice(0,2);
   const cacheKey=cache&&JSON.stringify([cacheIdentity,file.fingerprint,request]);
   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
@@ -65,4 +70,4 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
  }
  return {passed:!failures.length,scope:'bound-artboards',boards,failures,reusedBoards};
 }
-module.exports={auditDesignFile};
+module.exports={auditDesignFile,deliveryBoardsFor};

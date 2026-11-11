@@ -1,6 +1,6 @@
 import {captureBindingRequest,applyBindingResult} from './ai-binding.js';
 import {planAiFile} from '../design-layout-planner.cjs';
-import {auditDesignFile} from '../design-document-audit.cjs';
+import {auditDesignFile,deliveryBoardsFor} from '../design-document-audit.cjs';
 import {validateArtworkHides} from '../artwork-visibility.cjs';
 import {createTextLayer,textActionsFor} from '../native-text-objects.cjs';
 export function createAgentWorkspace({state,call,importOriginal,render,history,fitText,buildRequest,getVisual,makePlan,selectFile,selectedLayer}){
@@ -120,17 +120,25 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    const blocked=state.files.flatMap(f=>f.layers.filter(l=>l.recordId&&l.issues?.length&&!l.skipExport).map(l=>({file:f.name,layer:l.name,issues:l.issues})));
    if(blocked.length)return {blocked,exported:false,message:'受限文字未导出；请让用户确认处理方式，不能自行跳过'};
    const before=JSON.stringify({files:state.files,records:state.records}),audits=[],context=await cacheContext();
+   const plan=await makePlan();
+   for(const item of plan.files){if(!/\.ai$/i.test(item.path))continue;const f=state.files.find(f=>pathKey(f.path)===pathKey(item.path));item.deliveryBoards=deliveryBoardsFor(f,state.records);if(!item.deliveryBoards.length)throw Error('目标画板归属不明确，未开始最终导出');}
+   if(!isCurrent()||before!==JSON.stringify({files:state.files,records:state.records}))throw Error('项目已变化，未开始导出');
+   await call('agentToolProgress',{label:'保存原生副本、重开核验并导出目标画板JPG',indeterminate:true});
+   const result=await call('agentExport',plan),deliveryStages=[];
    for(let index=0;index<state.files.length;index++){
     const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length&&!textActionsFor(f).length)continue;
     const auditCall=(name,value)=>agentCall(name,{...value,assistantReferenceIds:pageReferences.get(f.fingerprint+'|'+value.activeBoard?.name)||[]});
-    try{audits.push({file:f.name,...await auditDesignFile({file:f,records:state.records,fitText,buildRequest,getVisual,call:auditCall,cache:context?auditsCache:null,cacheIdentity:context+'|'+JSON.stringify([...pageReferences]),forceReview:args.reviewAgain===true,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',p).catch(()=>{});}})});}
+    const item=plan.files.find(p=>pathKey(p.path)===pathKey(f.path)),native=item&&result.results?.[plan.files.indexOf(item)],requireDelivery=/\.ai$/i.test(f.path);
+    deliveryStages.push({file:f.name,nativeSave:native?.output?'saved':'failed',nativeReopen:native?.delivery?.reopened?'passed':'not-verified',jpeg:native?.delivery?.verified?'passed':'not-verified',finalAudit:'pending'});
+    const actualVisual=async options=>{const source=(await getVisual({...options,requireCurrent:false,sourceOnly:true})).filter(v=>v.stage==='source');const b=native.delivery.boards.find(b=>options.crop&&options.crop[0]>=b.crop[0]&&options.crop[1]>=b.crop[1]&&options.crop[0]+options.crop[2]<=b.crop[0]+b.crop[2]+.01&&options.crop[1]+options.crop[3]<=b.crop[1]+b.crop[3]+.01);if(!b)throw Error('未找到对应画板的最终JPG');return [...source,await call('agentDeliveryVisual',{output:native.output,boardName:b.name,crop:options.crop})];};
+    try{if(requireDelivery&&(!native?.delivery?.verified||native.error))throw Error(native?.error||'没有经过保存重开与完整性核验的JPG，不使用工作区预览冒充最终审验');audits.push({file:f.name,...await auditDesignFile({file:f,records:state.records,fitText,buildRequest,getVisual:requireDelivery?actualVisual:getVisual,requireDelivery,call:auditCall,cache:context?auditsCache:null,cacheIdentity:context+'|'+JSON.stringify([...pageReferences]),forceReview:args.reviewAgain===true,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',{...p,label:(requireDelivery?'最终JPG / ':'')+p.label}).catch(()=>{});}})});}
     catch(e){if(!isCurrent())throw e;audits.push({file:f.name,passed:false,failures:['审阅未完成：'+e.message]});}
+    deliveryStages.at(-1).finalAudit=audits.at(-1).passed?'passed':'failed';
     diagnoses.set(f.fingerprint,{identity:JSON.stringify([context,f,state.records]),boards:audits.at(-1).boards||[]});if(diagnoses.size>16)diagnoses.delete(diagnoses.keys().next().value);
    }
-   if(!isCurrent()||before!==JSON.stringify({files:state.files,records:state.records}))throw Error('审阅期间项目已变化，未开始导出');
-   const plan=await makePlan();if(!isCurrent())throw Error('接管已暂停、终止或收到新补充，未开始导出');
-   const result=await call('agentExport',plan),failures=audits.flatMap(a=>a.failures.map(s=>a.file+'：'+s));
-   return {...result,qualityPassed:audits.length>0&&audits.every(a=>a.passed),audits,failures,visualAcceptance:failures.length?'已导出待修副本；存在整页审阅未通过项，不能称为制作完成':'已完成已绑定画板的模型视觉审阅；仍需原生重开与用户确认'};
+   if(!isCurrent()||before!==JSON.stringify({files:state.files,records:state.records}))throw Error('最终审阅期间项目已变化；已保存副本保留，审阅结果作废');
+   const failures=[...(result.results||[]).filter(r=>r.error).map(r=>r.file+'：'+r.error),...audits.flatMap(a=>a.failures.map(s=>a.file+'：'+s))];
+   return {...result,qualityPassed:!result.failed&&!result.uncertain&&audits.length>0&&audits.every(a=>a.passed),audits,failures,deliveryStages,visualAcceptance:failures.length?'已保留现有副本；原生导出或最终整页审验未通过，不能称为制作完成':'已完成目标画板审验；AI使用保存重开后实际导出的JPG，设计通过仍待用户确认'};
   }
   throw Error('未接入的软件工作区操作：'+tool);
  };

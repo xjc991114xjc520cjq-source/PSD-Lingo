@@ -11,8 +11,11 @@ function createExportCache(run){
   }
   const result=await run(plan,directory),outputs=[];
   if(!result.uncertain&&!result.failed&&result.saved>0&&Array.isArray(result.results)){
-   for(const r of result.results){if(!r.output)continue;const relative=path.relative(directory,r.output);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))continue;try{if((await fs.stat(r.output)).isFile())outputs.push({path:r.output,hash:await hashFile(r.output)});}catch{}}
-   if(outputs.length===result.saved)entries.set(task,{key,directory,result:structuredClone(result),outputs});
+   let complete=true;
+   for(const r of result.results){if(!r.output){complete=false;continue;}const artifacts=[r.output,...(r.delivery?.boards||[]).map(b=>b.path)];
+    for(const artifact of artifacts){const relative=path.relative(directory,artifact);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative)){complete=false;continue;}try{if(!(await fs.stat(artifact)).isFile())throw Error('not a file');outputs.push({path:artifact,hash:await hashFile(artifact)});}catch{complete=false;}}
+   }
+   if(complete&&result.results.length===result.saved)entries.set(task,{key,directory,result:structuredClone(result),outputs});
   }
   return result;
  };

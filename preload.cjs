@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('desktop', {
   agentSupplement:v=>ipcRenderer.invoke('agent-supplement',v),
   agentAnswer:v=>ipcRenderer.invoke('agent-answer',v),
   agentExport:v=>ipcRenderer.invoke('agent-export',v),
+  agentDeliveryVisual:v=>ipcRenderer.invoke('agent-delivery-visual',v),
   agentToolProgress:v=>ipcRenderer.invoke('agent-tool-progress',v),
   agentCommandResult:v=>ipcRenderer.send('agent-command-result',v),
   onAgentState:callback=>{const fn=(_,v)=>callback(v);ipcRenderer.on('agent-state',fn);return()=>ipcRenderer.removeListener('agent-state',fn);},

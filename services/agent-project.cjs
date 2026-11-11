@@ -16,7 +16,16 @@ class AgentProject{
  async prepare(session,snapshot){
   const v=validateProject(snapshot),directory=rootOf(v);await fs.mkdir(directory,{recursive:true});await fs.access(directory,require('node:fs').constants.W_OK);
   let project;
-  try{project=v.projectId?(await session.request('project/read',{projectId:v.projectId})).project:(await session.request('project/create',{idempotencyKey:'sparkit:'+v.key,name:v.name,roots:[{path:directory}],metadata:{integration:'sparkit'}})).project;}
+  try{
+   // Reuse the first matching project in the user's sidebar order. A saved
+   // integration id may precede the project later created in the desktop UI.
+   let cursor=null;const seen=new Set();
+   do{const page=await session.request('project/list',{limit:100,sortKey:'position',sortDirection:'asc',...(cursor?{cursor}:{})});
+    if(!Array.isArray(page.data))throw Error('Codex 项目列表无效');
+    project=page.data.find(p=>p.name===v.name&&typeof p.id==='string'&&p.id&&p.roots?.some(r=>typeof r.path==='string'&&path.resolve(r.path).toLowerCase()===directory.toLowerCase()));
+    if(project)break;cursor=page.nextCursor;if(cursor&&(seen.has(cursor)||seen.size>=20))throw Error('Codex 项目列表分页无效');if(cursor)seen.add(cursor);
+   }while(cursor);
+   project=project||(v.projectId?(await session.request('project/read',{projectId:v.projectId})).project:(await session.request('project/create',{idempotencyKey:'sparkit:'+v.key,name:v.name,roots:[{path:directory}],metadata:{integration:'sparkit'}})).project);}
   catch(e){throw Error('Codex 项目建立或读取失败，未创建项目外对话。请检查本机 Codex 版本及项目设置：'+e.message);}
   if(!project||typeof project.id!=='string'||!project.id||!project.roots?.some(r=>typeof r.path==='string'&&path.resolve(r.path).toLowerCase()===directory.toLowerCase()))throw Error('Codex 项目目录与已保存位置不同，请人工确认项目设置后重新开始');
   const bound={...v,projectId:project.id};const current=await this.get();if(current.key===v.key)await this.write(bound);

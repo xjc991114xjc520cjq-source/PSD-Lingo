@@ -7,6 +7,9 @@ const illustrator=require('./illustrator.cjs');
 const path = require('node:path');
 // Keep the existing profile, device namespace and update identity across the rebrand.
 if(app.isPackaged&&!app.commandLine.hasSwitch('user-data-dir'))app.setPath('userData',path.join(app.getPath('appData'),'PSD Lingo'));
+const primaryInstance=!app.isPackaged||app.requestSingleInstanceLock();
+if(!primaryInstance)app.quit();
+const {revealWindow,watchWindowStartup}=require('./services/app-startup.cjs');
 require('./services/process-logging.cjs').installProcessLogging({directory:path.join(app.getPath('userData'),'diagnostics')});
 const windowsBrand=require('./services/windows-brand.cjs');
 const { spawn } = require('node:child_process');
@@ -108,6 +111,7 @@ async function checkPlan(plan) {
   return plan;
 }
 app.whenReady().then(async () => {
+  if(!primaryInstance)return;
   app.setAppUserModelId('PSDLingo');
   codexSettings=new CodexSettings({dataDir:app.getPath('userData'),helperPath});
   const options={config:productConfig,version:app.getVersion(),dataDir:app.getPath('userData'),fetch:(...args)=>net.fetch(...args),onChange:changed};
@@ -116,16 +120,17 @@ app.whenReady().then(async () => {
   learningCloud=require('./services/learning-case-cloud.cjs').createCaseCloud({directory:learningDirectory(),enabled:productConfig.learningCloudEnabled===true&&productConfig.authorizationEnabled,ready:()=>!!authorization.lease&&authorization.status().active,upload:record=>authorization.uploadCase(record),encode:async bytes=>{let image=require('electron').nativeImage.createFromBuffer(bytes);if(image.isEmpty())throw Error('案例截图无法解码');const size=image.getSize();if(size.width>640||size.height>480)image=image.resize({width:Math.max(1,Math.round(size.width*Math.min(640/size.width,480/size.height))),quality:'best'});const result=image.toJPEG(70);if(result.length>100000)throw Error('案例截图压缩后仍过大，已保留本机待处理');return 'data:image/jpeg;base64,'+result.toString('base64');},summary:createLearningCloud({directory:learningDirectory(),enabled:productConfig.learningCloudEnabled===true&&productConfig.authorizationEnabled,ready:()=>!!authorization.lease&&authorization.status().active,upload:samples=>authorization.uploadLearning(samples)})});learningCloud.start();
   win = new BrowserWindow({width: 1510, height: 980, minWidth: 1150, minHeight: 760, show:false, title: '灵搭 Sparkit '+app.getVersion()+' · 文案与排版工作台', icon:path.join(__dirname,'renderer/assets/sparkit.ico'), backgroundColor: '#191a1e', titleBarStyle:'hidden', titleBarOverlay:{color:'#191a1e',symbolColor:'#eceae6',height:38}, autoHideMenuBar: true,
     webPreferences: {preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true}});
-  win.once('ready-to-show',()=>win.show());
+  watchWindowStartup(win,{onTimeout:()=>console.warn('主窗口首帧事件未触发，已启用启动显示保障')});
   windowsBrand.install({app,icon:path.join(__dirname,'renderer/assets/sparkit.ico'),isUpdating:()=>updates.phase==='restarting'});
   win.setMenu(null);
   await updates.init();
   win.on('focus',()=>updates.check(false).catch(()=>{}));
-  win.loadFile(path.join(__dirname, 'renderer/index.html'));
+  await win.loadFile(path.join(__dirname, 'renderer/index.html'));
   win.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   win.webContents.on('will-navigate', e => e.preventDefault());
-  authorization.init();
-});
+  authorization.init().catch(e=>console.error('授权初始化失败：'+e.message));
+}).catch(error=>{console.error('应用启动失败：',error);dialog.showErrorBox('灵搭 Sparkit 启动失败','启动未完成：'+error.message+'\n项目与原稿未被清除。请保留诊断记录后重试。');app.quit();});
+app.on('second-instance',()=>revealWindow(win,{focus:true}));
 app.on('window-all-closed', () => { agentIntegration.close();codexAbort?.abort();authorization?.close();updates?.close();learningCloud?.close();knowledgeCloud?.close(); app.quit(); });
 let bulkEngine;
 function bulk(){return bulkEngine||(bulkEngine=new (require('./photoshop-bulk.cjs').PhotoshopBulk)(path.join(app.getPath('userData'),'bulk-previews'),{helperPath}));}
@@ -168,7 +173,7 @@ ipcMain.handle('renew-license',safe(async()=>authorization.renew()));
 ipcMain.handle('check-update',safe(async()=>updates.check(true)));
 ipcMain.handle('defer-update',safe(async skip=>updates.defer(!!skip)));
 ipcMain.handle('install-update',safe(async()=>{if(psBusy||batchBusy||codexAbort||agentIntegration.active())throw new Error('请等待当前 Photoshop 或 Codex 任务完成后更新');if(!app.isPackaged)throw new Error('自动安装仅在便携发布包中可用');const updateHelper=await fs.access(path.join(__dirname,'update-helper.exe')).then(()=>path.join(__dirname,'update-helper.exe'),()=>helperPath);return updates.install({appPath:app.getAppPath(),exe:process.execPath,helperPath:updateHelper,quit:()=>app.quit(),onProgress:p=>win.webContents.send('update-progress',p)});}));
-ipcMain.handle('service-ready',safe(async()=>{const ack=process.argv.find(a=>a.startsWith('--update-ack='))?.slice(13),nonce=process.argv.find(a=>a.startsWith('--update-nonce='))?.slice(15);if(ack&&/^[a-f0-9]{48}$/.test(nonce||'')){const expected=path.join(app.getPath('userData'),'updates','ack-'+nonce);if(path.resolve(ack)===path.resolve(expected))await fs.writeFile(expected,nonce);}return true;}));
+ipcMain.handle('service-ready',safe(async()=>{await require('./services/update-ack.cjs').acknowledgeStartup({argv:process.argv,dataDir:app.getPath('userData')});return true;}));
 ipcMain.handle('preview-background',safe(async request=>{
   if(psBusy||batchBusy)throw new Error('原生文件任务正在运行，请等待当前任务完成后重试预览。');
   if(!request||imported.get(request.path)!==request.fingerprint||!Array.isArray(request.ids)||request.ids.length>500||request.ids.some(id=>!Number.isInteger(id)))throw new Error('预览请求无效，请重新导入 PSD');

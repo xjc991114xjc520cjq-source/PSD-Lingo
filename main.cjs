@@ -131,7 +131,7 @@ app.whenReady().then(async () => {
   authorization.init().catch(e=>console.error('授权初始化失败：'+e.message));
 }).catch(error=>{console.error('应用启动失败：',error);dialog.showErrorBox('灵搭 Sparkit 启动失败','启动未完成：'+error.message+'\n项目与原稿未被清除。请保留诊断记录后重试。');app.quit();});
 app.on('second-instance',()=>revealWindow(win,{focus:true}));
-app.on('window-all-closed', () => { agentIntegration.close();codexAbort?.abort();authorization?.close();updates?.close();learningCloud?.close();knowledgeCloud?.close(); app.quit(); });
+app.on('window-all-closed', async () => { codexAbort?.abort();authorization?.close();updates?.close();learningCloud?.close();knowledgeCloud?.close();try{await agentIntegration.close();await workRecords.flush();}catch(e){console.error('关闭时保存工作记录失败：'+e.message);}app.quit(); });
 let bulkEngine;
 function bulk(){return bulkEngine||(bulkEngine=new (require('./photoshop-bulk.cjs').PhotoshopBulk)(path.join(app.getPath('userData'),'bulk-previews'),{helperPath}));}
 async function bulkTask(action){if(psBusy||batchBusy)throw Error('原生文件任务正在运行，请稍后再试');psBusy=true;try{return await action();}finally{psBusy=false;win?.focus();}}
@@ -233,22 +233,25 @@ ipcMain.handle('save-project', safe(async project => {
   if (r.canceled) return null;
   await fs.writeFile(r.filePath, JSON.stringify(project, null, 2), 'utf8'); return r.filePath;
 }));
-ipcMain.handle('load-project', safe(async (options = {}) => {
-  let selected;
-  if(options && Object.hasOwn(options,'path'))selected=options.path;
-  else{const r=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'PSD Lingo 项目',extensions:['json']}]});if(r.canceled)return null;selected=r.filePaths[0];}
-  const projectPath=await importFilePath(selected,['.json'],'项目',20*1024*1024);
-  const data = JSON.parse(await fs.readFile(projectPath, 'utf8'));
+async function hydrateSavedProject(data){
   if (data.version !== 1 || !Array.isArray(data.files) || !Array.isArray(data.records) || data.files.length > 100) throw new Error('项目格式不正确。');
   for (const record of data.records) if (typeof record.target !== 'string' || hash(record.target) !== record.digest) throw new Error('项目文案校验失败。');
   const files = [];
   for (const file of data.files) {
     if (file.demo) { files.push(file); continue; }
     const loaded = await readPsd(file.path);
-    if (loaded.fingerprint !== file.fingerprint) throw new Error('PSD 已改变：' + file.name + '。请重新导入并绑定。');
+    if (loaded.fingerprint !== file.fingerprint) throw new Error('原稿已改变：' + file.name + '。请重新导入并绑定。');
     files.push({...file, ...loaded});
   }
   return {...data, files};
+}
+ipcMain.handle('load-project', safe(async (options = {}) => {
+  let selected;
+  if(options && Object.hasOwn(options,'path'))selected=options.path;
+  else{const r=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'PSD Lingo 项目',extensions:['json']}]});if(r.canceled)return null;selected=r.filePaths[0];}
+  const projectPath=await importFilePath(selected,['.json'],'项目',20*1024*1024);
+  const data = JSON.parse(await fs.readFile(projectPath, 'utf8'));
+  return hydrateSavedProject(data);
 }));
 ipcMain.handle('export-plan', safe(async plan => {
   protectedAction('psd-export');
@@ -380,6 +383,9 @@ ipcMain.handle('add-workbook-language',safe(async request=>{
  if(doc.selectionRequired)throw Error('请先选择并预览表格范围');
  const id=require('node:crypto').randomUUID();doc.name=doc.name.replace(/\.xlsx$/i,'')+'-'+doc.sheet+'-'+doc.selection.segments.map(s=>s.targetColumns+s.rowStart+'-'+s.rowEnd).join('_');batchDocuments.set(id,doc);return {...doc,id};
 }));
+ipcMain.handle('restore-work-batch',safe(async saved=>{
+ if(psBusy||batchBusy)throw Error('请先完成当前原生任务');const template=validateTemplate(saved.template);await checkPlan(template.plan);const restored=[],next=new Map();for(const d of saved.documents||[]){if(d.error){restored.push(d);continue;}const doc=/\.xlsx$/i.test(d.path)?await importWorkbook(d.path,{fingerprint:d.fingerprint,selection:d.selection}):await readLanguageDocument(d.path,template.splitMode);if(doc.fingerprint!==d.fingerprint)throw Error('语言文档已变化：'+d.name);const id=require('node:crypto').randomUUID();next.set(id,doc);restored.push({...d,...doc,id,selected:d.selected});}activeBatchTemplate=template;batchDocuments=next;return {template,documents:restored};
+}));
 ipcMain.handle('cancel-language-batch',safe(async()=>{batchCancelled=true;return {message:'将在当前语言完成后停止，其余文档不执行'};}));
 ipcMain.handle('prepare-batch-preview',safe(async request=>{
   if(batchBusy)throw new Error('请等待批量任务完成');if(!activeBatchTemplate)throw new Error('请先打开排版模板');
@@ -458,4 +464,5 @@ ipcMain.handle('codex-suggest', safe(async request => {
   }finally{clearTimeout(timeout);if(codexAbort===controller)codexAbort=null;}
 }));
 
-const agentIntegration=require('./services/agent-integration.cjs').installAgent({ipcMain,dialog,window:()=>win,dataDirectory:()=>app.getPath('userData'),settings:()=>codexSettings,fetch:(...args)=>net.fetch(...args),localEnv:()=>withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)),guard:()=>protectedAction('codex-match'),isBusy:()=>psBusy||batchBusy||!!codexAbort,importWorkbook,runPhotoshop,safe,cancelAi:()=>codexAbort?.abort()});
+const workRecords=require('./services/work-records.cjs').installWorkRecords({ipcMain,safe,dataDirectory:()=>app.getPath('userData'),version:app.getVersion?.()||'',shell:require('electron').shell,hydrateProject:hydrateSavedProject,captureRuntime:s=>{const ref=s?.workflows?.batch?.reference;return {reference:ref?.plan?.id?referenceLanguageFlow?.plans.get(ref.plan.id):null,recipe:ref?.recipe?.plan?.id?recipeLanguageFlow?.plans.get(ref.recipe.plan.id):null};},restoreRuntime:async s=>{const ref=s.workflows?.batch?.reference;if(s.runtime?.reference&&ref?.plan){const p=s.runtime.reference;for(const d of [p.source,p.reference])if(await hashFile(d.path)!==d.fingerprint)throw Error('参考成稿或原稿已变化，请重新核对');const id=require('node:crypto').randomUUID();languageReference().plans.set(id,{...p,id});ref.plan={...p,id};}if(s.runtime?.recipe&&ref?.recipe?.plan){const p=s.runtime.recipe;if(await hashFile(p.source)!==p.recipe.source.fingerprint)throw Error('排版方案原稿已变化');const id=require('node:crypto').randomUUID();languageRecipe().plans.set(id,p);ref.recipe.plan.id=id;}return s;},isBusy:()=>psBusy||batchBusy||!!codexAbort||agentIntegration.active()});
+const agentIntegration=require('./services/agent-integration.cjs').installAgent({workRecords,ipcMain,dialog,window:()=>win,dataDirectory:()=>app.getPath('userData'),settings:()=>codexSettings,fetch:(...args)=>net.fetch(...args),localEnv:()=>withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)),guard:()=>protectedAction('codex-match'),isBusy:()=>psBusy||batchBusy||!!codexAbort,importWorkbook,runPhotoshop,safe,cancelAi:()=>codexAbort?.abort()});

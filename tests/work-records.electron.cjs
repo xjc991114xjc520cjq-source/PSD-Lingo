@@ -1,0 +1,53 @@
+// Real renderer/preload/IPC and persistent store. Deterministic assistant; no Adobe or remote model.
+const {app,BrowserWindow,ipcMain}=require('electron');
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+const out=process.env.SPARKIT_RECORD_TEST_OUTPUT||'D:/PSD-Lingo/work/work-records-ui',root=path.resolve(__dirname,'..');
+app.setPath('userData',out+'/electron-profile');
+app.on('window-all-closed',()=>{});
+let win,records,agent;
+app.whenReady().then(async()=>{let code=0;try{
+ await fs.mkdir(out,{recursive:true});const data=await fs.mkdtemp(out+'/run-');await fs.mkdir(data+'/output');await fs.writeFile(data+'/brief.txt','fixture requirement');
+ const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)};}catch(e){return {ok:false,error:e.message};}};
+ let config={mode:'local',localModel:'fixture-main',executable:'fixture-codex',hasApiKey:true},round=0;
+ const settings={get:async()=>config,credentials:async()=>({...config,apiKey:'DO-NOT-PERSIST'}),read:async()=>config};
+ for(const [name,fn]of Object.entries({'load-codex-settings':settings.get,'save-codex-settings':v=>(config={...config,...v}),status:()=>({active:true,version:'fixture',authorization:{active:true},updates:{}}),'service-ready':()=>true,'layout-memory-status':()=>({}),'check-update':()=>({configured:true,available:null})}))ipcMain.handle(name,safe(fn));
+ records=require('../services/work-records.cjs').installWorkRecords({ipcMain,safe,dataDirectory:()=>data,version:'test',shell:{showItemInFolder:()=>{}},isBusy:()=>agent?.active(),hydrateProject:async p=>p});
+ agent=require('../services/agent-integration.cjs').installAgent({workRecords:records,ipcMain,safe,dataDirectory:()=>data,window:()=>win,settings:()=>settings,isBusy:()=>false,guard:()=>{},localEnv:async()=>process.env,fetch:()=>assert.fail('no API'),dialog:{showOpenDialog:async(_,options)=>({canceled:false,filePaths:[options.properties.includes('openDirectory')?data+'/output':data+'/brief.txt']})},runPhotoshop:()=>assert.fail('no Adobe'),listModels:async()=>({models:['fixture-main','fixture-selected']}),think:async()=>{
+  if(round++===0)return {kind:'question',message:'确认任务',tool:'',arguments:'{}',questions:[{id:'language',title:'目标语言',options:['英文','日文']}]};
+  return {kind:'complete',message:'记录测试已完成，没有生成客户成品。',tool:'',arguments:'{}',questions:[]};
+ }});
+ const errors=[];async function open(){win=new BrowserWindow({show:false,width:1440,height:960,webPreferences:{preload:path.join(root,'preload.cjs'),contextIsolation:true}});win.webContents.on('console-message',(_,level,msg)=>{if(level>=3&&!msg.includes('Content-Security-Policy')){errors.push(msg);console.error(msg);}});await win.loadFile(path.join(root,'renderer/index.html'));await wait(`document.getElementById('openWorkRecords')?.onclick`);await js(`window.sparkitStartup?.skip?.()`);}
+ const js=s=>win.webContents.executeJavaScript(s);
+ async function wait(expr){await js(`new Promise((resolve,reject)=>{let start=Date.now();const t=setInterval(()=>{if(${expr}){clearInterval(t);resolve();}else if(Date.now()-start>15000){clearInterval(t);reject(Error('Wait: '+${JSON.stringify(expr)}));}},25);})`);}
+ const click=async id=>{await js(`document.getElementById(${JSON.stringify(id)}).click()`);if(id==='skuClose')await wait(`!document.getElementById('skuWorkflowDialog').open`);};
+ const rows=async()=> (await records.get().list()).items;
+ async function settled(){await js('new Promise(r=>setTimeout(r,180))');await records.flush();}
+ async function show(id){await click('openWorkRecords');await wait(`document.querySelectorAll('.work-record-row').length>0`);await js(`document.querySelector('[data-record-id="${id}"]').click()`);await wait(`document.querySelector('.work-record-detail').dataset.recordId==='${id}'&&document.getElementById('workRecordRestoreAfter')`);}
+ await open();await click('loadDemo');await wait(`document.querySelectorAll('#files .file-card').length===1`);await settled();
+ let list=await rows();const demo=list.find(r=>r.action==='loadDemo');assert.ok(demo,'demo action recorded');assert.equal(demo.status,'edited');
+ await click('exactMatch');await click('confirmBinding');await settled();
+ // Real edit controls commit a persistent before/after pair, independent of the undo stack.
+ await js(`document.getElementById('editSize').value='31';document.getElementById('editSize').dispatchEvent(new Event('change',{bubbles:true}))`);await settled();
+ list=await rows();const edit=list.find(r=>r.title==='修改字号');assert.ok(edit,'manual font edit recorded');const saved=await records.get().read(edit.id);assert.equal(saved.after.project.files[0].layers[0].manual.size,31);
+ await js(`document.getElementById('editSize').value='43';document.getElementById('editSize').dispatchEvent(new Event('change',{bubbles:true}))`);await settled();
+ // Destroy and reopen the real renderer: records must not depend on its memory or Undo history.
+ win.destroy();await open();await show(edit.id);await click('workRecordRestoreAfter');await wait(`document.getElementById('workRecords').hidden&&document.getElementById('editSize').value==='31'`);
+ assert.equal(await js(`document.querySelectorAll('#files .file-card').length`),1);
+ await show(demo.id);await click('workRecordRerun');await settled();list=await rows();assert.ok(list.some(r=>r.id!==demo.id&&r.parentId===demo.id&&r.action==='loadDemo'),'rerun creates linked record');assert.ok(list.some(r=>r.title==='恢复前自动备份当前工作区'));
+ // Secondary manual workflow parameters, including rows without IDs.
+ await click('openSkuWorkflow');await js(`document.getElementById('skuTarget').focus();document.getElementById('skuTarget').value='Recorded target';document.getElementById('skuTarget').dispatchEvent(new Event('change',{bubbles:true}))`);await settled();
+ const param=(await rows()).find(r=>r.status==='configured');assert.ok(param);await click('skuClose');await show(param.id);await click('workRecordRestoreAfter');await wait(`document.getElementById('skuWorkflowDialog').open&&document.getElementById('workRecords').hidden`);assert.equal(await js(`document.getElementById('skuTarget').value`),'Recorded target');await click('skuClose');
+ // Assistant file/model/output, intermediate supplement, Q&A, and replay into a fresh task.
+ await click('openAgentSidebar');await wait(`document.querySelectorAll('#agentModelList option').length===2`);await click('agentChooseOutput');await wait(`document.querySelector('.agent-output').textContent.includes('output')`);await click('agentAddFiles');await wait(`document.getElementById('agentFiles').textContent.includes('brief.txt')`);
+ await js(`document.getElementById('agentModel').value='fixture-selected';document.getElementById('agentRequest').value='Keep the original requirements';`);await click('agentStart');await wait(`document.querySelector('.agent-question textarea')`);
+ await js(`document.getElementById('agentSupplement').value='Keep the old price';`);await click('agentSendSupplement');await js(`document.querySelector('.agent-question textarea').value='English'`);await click('agentSubmitAnswers');await wait(`document.getElementById('agentStatus').textContent==='本轮任务已结束'`);await settled();
+ const record=(await rows()).find(r=>r.kind==='assistant'&&!r.legacy);assert.ok(record);const task=await records.get().read(record.id);assert.equal(task.agent.model,'fixture-selected');assert.ok(task.agent.history.some(h=>h.type==='user_supplement'));assert.ok(task.agent.history.some(h=>h.type==='user_answer'));assert.ok(task.after);
+ await js(`Promise.resolve(document.getElementById('agentDialog').close()).then(()=>true)`);await show(record.id);await fs.writeFile(out+'/01-record-detail.png',(await win.webContents.capturePage()).toPNG());
+ await click('workRecordRestoreBefore');await wait(`document.getElementById('agentDialog').open`);const draft=await js(`({request:document.getElementById('agentRequest').value,model:document.getElementById('agentModel').value,files:document.getElementById('agentFiles').textContent})`);assert.ok(draft.request.includes('Keep the original requirements'));assert.ok(draft.request.includes('Keep the old price'));assert.ok(draft.request.includes('English'));assert.equal(draft.model,'fixture-selected');assert.ok(draft.files.includes('brief.txt'));
+ await click('agentStart');await wait(`document.getElementById('agentStatus').textContent==='本轮任务已结束'`);await settled();assert.ok((await rows()).some(r=>r.kind==='assistant'&&r.parentId===record.id));
+ // Old on-disk task migration never duplicates tasks captured by the new record service.
+ const restarted=new (require('../services/work-records.cjs').WorkRecords)({directory:data+'/work-records'});const restartedList=await restarted.list();assert.equal(restartedList.items.filter(r=>r.kind==='assistant').length,2);assert.equal(restartedList.items.filter(r=>r.legacy).length,0);
+ await js(`document.getElementById('agentDialog').close()`);await show(record.id);win.setSize(1150,760);await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');await fs.writeFile(out+'/02-compact-detail.png',(await win.webContents.capturePage()).toPNG());
+ const geometry=await js(`(()=>{const s=document.getElementById('workRecords'),b=s.getBoundingClientRect();return {left:b.left,right:b.right,width:innerWidth,overflow:s.scrollWidth>s.clientWidth}})()`);assert.ok(geometry.left>=0&&geometry.right<=geometry.width&&!geometry.overflow,JSON.stringify(geometry));
+ assert.deepEqual(errors,[]);await fs.writeFile(out+'/verified.json',JSON.stringify({passed:true,data,checks:['manual exact settings','restart restoration','linked rerun','automatic workspace backup','secondary workflow parameters','assistant complete transcript and model','supplement and answers replay','fresh attachment registration','no duplicate migration','compact UI'],geometry},null,2));console.log('PASS work records real Electron integration');
+ }catch(e){code=1;console.error(e);if(win&&!win.isDestroyed()){console.error(await win.webContents.executeJavaScript('document.getElementById("toast").textContent'));await fs.writeFile(out+'/failure.png',(await win.webContents.capturePage()).toPNG());}}finally{await agent?.close();await records?.flush();win?.destroy();app.exit(code);}});

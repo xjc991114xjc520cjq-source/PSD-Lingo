@@ -21,6 +21,14 @@ test('invalid preparation does not replace the main project and nested previews 
  const f=fixture();await assert.rejects(f.preview.enter({...f.result,plan:{...f.result.plan,files:[]}},'bad'),/不一致/);assert.equal(f.state.files,f.files);assert.equal(f.preview.isActive(),false);
  await f.preview.enter(f.result,'german');await assert.rejects(f.preview.enter(f.result,'other'),/先保存/);assert.equal(f.state.batchPreviewId,'german');f.preview.exit();
 });
+
+test('persistent work records reconstruct the preview base so return restores the original workspace',async()=>{
+ const f=fixture();await f.preview.enter(f.result,'german');const saved=JSON.parse(JSON.stringify(f.preview.captureWork()));
+ f.state.files[0].layers[0].customText='translated edit';await f.preview.restoreWork(saved);
+ assert.equal(f.preview.isActive(),true);assert.equal(f.state.files[0].layers[0].customText,'translated edit');
+ f.preview.exit();assert.equal(f.state.files[0].layers[0].customText,'original-main-edit');assert.equal(f.state.records[0].target,'original');assert.equal(f.getRestored().left,41);
+ await f.preview.restoreWork(null);assert.equal(f.preview.isActive(),false);
+});
 test('language workspace retains source provenance and an adjustable minimum instead of locking translated size',async()=>{
  const f=fixture();f.result.plan.files[0].jobs[0].box=[0,0,30,20];f.result.plan.files[0].jobs[0].minSize=13;await f.preview.enter(f.result,'german');
  const l=f.state.files[0].layers[0];assert.equal(l.minSize,13);assert.deepEqual(Array.from(l.sourceBox),[0,0,30,20]);assert.deepEqual(Array.from(l.box),[50,60,90,30]);assert.equal(f.files[0].layers[0].minSize,undefined);f.preview.exit();

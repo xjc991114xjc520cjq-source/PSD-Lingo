@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  restoreWorkBatch:v=>ipcRenderer.invoke('restore-work-batch',v),
+  workRecordBegin:v=>ipcRenderer.invoke('work-record-begin',v),
+  workRecordFinish:v=>ipcRenderer.invoke('work-record-finish',v),
+  workRecordList:v=>ipcRenderer.invoke('work-record-list',v),
+  workRecordRead:v=>ipcRenderer.invoke('work-record-read',v),
+  workRecordRestore:v=>ipcRenderer.invoke('work-record-restore',v),
+  workRecordOpen:v=>ipcRenderer.invoke('work-record-open',v),
+  agentRestoreDraft:v=>ipcRenderer.invoke('agent-restore-draft',v),
   agentProject:()=>ipcRenderer.invoke('agent-project'),
   agentProjectSave:v=>ipcRenderer.invoke('agent-project-save',v),
   agentProjectFolder:()=>ipcRenderer.invoke('agent-project-folder'),

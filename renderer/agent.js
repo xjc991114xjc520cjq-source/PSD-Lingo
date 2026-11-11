@@ -67,5 +67,5 @@ export function installAgentUi({call,execute,openSettings,isBusy=()=>false}){
  // Shortcuts outside this modal must not mutate the covered workspace.
  document.addEventListener('keydown',e=>{if(dialog.open&&!dialog.contains(e.target)){e.stopImmediatePropagation();e.preventDefault();}},true);
  control.hidden=true;
- return {dialog,isActive:()=>active(current),update};
+  return {dialog,isActive:()=>active(current),update,submitDraft:()=>start.click(),capture:()=>({...(current||{}),request:current?.request||compose.value,model:current?.model||model.value,files:current?.files||files,outputDirectory:selectedOutput,codexProject:current?.codexProject||savedProject}),async restoreDraft(input){if(active(current))throw Error('请先结束当前助手任务');const draft=await call('agentRestoreDraft',input);fresh.click();ignoredTaskId=current?.id||ignoredTaskId;current=null;await loadProject();if(draft.codexProject)showProject(draft.codexProject);files=draft.files;selectedOutput=draft.outputDirectory;outputLabel.textContent=selectedOutput;compose.value=draft.request;model.value=draft.model;model.disabled=false;refresh.disabled=false;settings.disabled=false;start.textContent='分析并开始工作';renderFiles();if(!dialog.open)dialog.showModal();compose.focus();}};
 }

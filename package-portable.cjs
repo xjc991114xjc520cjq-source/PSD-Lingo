@@ -19,7 +19,7 @@ await fs.copyFile(path.join(root,'preload.cjs'),path.join(app,'preload.cjs'));
 await fs.cp(path.join(root,'services/design-skills'),path.join(app,'design-skills'),{recursive:true});
 await fs.cp(path.join(root,'services/design-plugins'),path.join(app,'design-plugins'),{recursive:true});
 await fs.mkdir(path.join(app,'renderer'),{recursive:true});
-for(const name of ['index.html','spark-boot.js','bundle.js','style.css','license-status.css','ai-layout-highlight.css','sparkit.css','spark-desk.css','spark-startup.css','agent.css'])await fs.copyFile(path.join(root,'renderer',name),path.join(app,'renderer',name));
+for(const name of ['index.html','spark-boot.js','bundle.js','style.css','license-status.css','ai-layout-highlight.css','sparkit.css','spark-desk.css','spark-startup.css','agent.css','work-records.css'])await fs.copyFile(path.join(root,'renderer',name),path.join(app,'renderer',name));
 await fs.cp(path.join(root,'renderer/assets'),path.join(app,'renderer/assets'),{recursive:true});
 await fs.copyFile(path.join(root,'services/bin/sparkit-brand.exe'),path.join(app,'sparkit-brand.exe'));
 await fs.writeFile(path.join(app,'package.json'),JSON.stringify({name:'psd-lingo',productName:'灵搭 Sparkit',version:require('./package.json').version,main:'main.cjs'}));

@@ -1,3 +1,4 @@
+import {installWorkRecords,readWorkControls,writeWorkControls} from './work-records.js';
 import {textActionsFor,validateCreation} from '../native-text-objects.cjs';
 import {displayText} from '../text-display-style.cjs';
 import {presentationSuggestions,validatePresentation} from '../localization-presentation.cjs';
@@ -46,13 +47,13 @@ import {previewDimensions} from '../photoshop-file.cjs';
 import {smartFit,manualStyleFor} from '../layout.cjs';
 const $ = id => document.getElementById(id);
 const state = {files: [], records: [], docName: '', docFingerprint: '', sourceDocument: null, fileIndex: 0, layerIndex: 0, chosen: null, scale: 1, tool: 'select', settings: {}, checked: false};
-let contextProperties,bindingProgress,containerSplit,history,aiHighlights;let toastTimer, layoutEditor, containerEditor, layoutLearning, workflow;
+let workRecords=null;let contextProperties,bindingProgress,containerSplit,history,aiHighlights;let toastTimer, layoutEditor, containerEditor, layoutLearning, workflow;
 const layoutCache=new Map();
 function toast(text, error = false) { $('toast').textContent = text; $('toast').className = error ? 'error' : ''; $('toast').style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').style.display = 'none', error ? 10000 : 5500); }
 const pendingWorkspaceCalls=new Set();
 async function call(method, payload) {
   if (!window.desktop) throw new Error('请通过“启动测试版.cmd”打开桌面软件。此页面仅支持示例预览。');
-  const lock=['importPsd','importDocument','loadProject','resplitDocument','runPhotoshop','runLanguageBatch','prepareBatchPreview','loadBatchTemplate','saveBatchTemplate','exportPlan','suggest','suggestLayout'].includes(method);if(lock)pendingWorkspaceCalls.add(method);try{const r = await window.desktop[method](payload); if (!r.ok) throw new Error(r.error); return r.value;}finally{if(lock)pendingWorkspaceCalls.delete(method);}
+  const lock=['importPsd','importDocument','loadProject','resplitDocument','runPhotoshop','runLanguageBatch','prepareBatchPreview','loadBatchTemplate','saveBatchTemplate','exportPlan','suggest','suggestLayout'].includes(method);if(lock)pendingWorkspaceCalls.add(method);try{const execute=async value=>{const r=await window.desktop[method](value);if(!r.ok)throw new Error(r.error);return r.value;};return workRecords?await workRecords.trackedCall(method,payload,execute):await execute(payload);}finally{if(lock)pendingWorkspaceCalls.delete(method);}
 }
 const file = () => state.files[state.fileIndex];
 const layer = () => file()?.layers[state.layerIndex];
@@ -226,8 +227,8 @@ async function makePlan({allowEmpty=false}={}){
   if(!files.length&&!allowEmpty)throw new Error('没有可执行的文字层；所有绑定层已跳过或尚未绑定。');
   return {version:1,createdAt:new Date().toISOString(),docName:state.docName,docFingerprint:state.docFingerprint,records:state.records,files,skipped,copyAdjustments:state.files.flatMap(f=>f.layers.filter(l=>l.copyAdjustment&&l.customText===l.copyAdjustment.text).map(l=>({file:f.name,boardNames:l.boardNames||[],layerId:l.id,layer:l.name,...l.copyAdjustment})))};
 }
-function task(fn){return async()=>{try{await fn();}catch(e){if($('settingsDialog').open)$('savedKeyState').textContent=e.message;toast(e.message,true);}};}
-$('loadDemo').onclick=demo;
+function task(fn){return async()=>{try{if(workRecords)await workRecords.runAction(fn);else await fn();}catch(e){if($('settingsDialog').open)$('savedKeyState').textContent=e.message;toast(e.message,true);}};}
+$('loadDemo').onclick=task(demo);
 async function importOriginal(paths){
  const items=await call('importPsd',paths?{paths}:undefined);if(!items.length)return;
  $('importPsd').disabled=true;
@@ -272,7 +273,7 @@ $('clearDocument').onclick=task(async()=>{assertCanRemoveImport();if(!state.reco
  assertCanRemoveImport();clearImportedDocument(state);finishImportRemoval();toast('已清除文档和绑定，可以重新导入文案。');});
 
 $('importPsd').onclick=task(()=>runFileImport(()=>importOriginal()));
-async function importCopy(path){const d=await importTranslation(call,{splitMode:$('splitMode').value,...(path?{path}:{})});if(!d)return;state.records=d.records;state.docName=d.name;state.docFingerprint=d.fingerprint;state.sourceDocument={name:d.name,rawText:d.rawText,format:d.format,splitMode:d.splitMode,selection:d.selection,notices:d.notices||[],records:d.records};state.chosen=null;$('searchRecords').value='';for(const f of state.files)for(const l of f.layers){l.recordId=null;l.suggestedId=null;delete l.customText;delete l.copyAdjustment;}state.checked=false;render();toast('已导入 '+d.records.length+' 条文案。重新导入文档后，旧绑定已清除。');}
+async function importCopy(path){const d=await importTranslation(call,{splitMode:$('splitMode').value,...(path?{path}:{})});if(!d)return;state.records=d.records;state.docName=d.name;state.docFingerprint=d.fingerprint;state.sourceDocument={path:d.path,name:d.name,rawText:d.rawText,format:d.format,splitMode:d.splitMode,selection:d.selection,notices:d.notices||[],records:d.records};state.chosen=null;$('searchRecords').value='';for(const f of state.files)for(const l of f.layers){l.recordId=null;l.suggestedId=null;delete l.customText;delete l.copyAdjustment;}state.checked=false;render();toast('已导入 '+d.records.length+' 条文案。重新导入文档后，旧绑定已清除。');}
 $('importDoc').onclick=task(()=>runFileImport(()=>importCopy()));
 $('resplitDoc').onclick=task(async()=>{
   const mode=$('splitMode').value, source=state.sourceDocument||{name:state.docName,records:state.records};
@@ -328,7 +329,7 @@ const originalNavigation=installPreviewNavigation($('viewport'),$('stage'),{getS
 // transient UI state and must not create an undo step or change the edit branch.
 function viewSnapshot(viewport,stage){const v=$(viewport).getBoundingClientRect(),s=$(stage).getBoundingClientRect();return {left:s.left-v.left,top:s.top-v.top};}
 function restoreView(viewport,stage,value){const v=$(viewport),r=v.getBoundingClientRect(),s=$(stage).getBoundingClientRect();v.scrollLeft+=s.left-r.left-value.left;v.scrollTop+=s.top-r.top-value.top;}
-history=installHistory({onBegin:()=>{aiHighlights?.clear();layoutLearning?.begin();},onCommit:entry=>{if(['history','undo','redo'].includes(entry.reason))layoutLearning?.discardPending();else layoutLearning?.commit(entry);},context:()=>JSON.stringify([state.batchPreviewId||'',state.files.map(f=>[f.path,f.fingerprint,f.layers.filter(l=>!l.nativeCreation).map(l=>l.id)]),state.records.map(r=>[r.id,r.digest])]),
+history=installHistory({onBegin:()=>{workRecords?.beginEdit();aiHighlights?.clear();layoutLearning?.begin();},onCommit:entry=>{workRecords?.recordEdit(entry);if(['history','undo','redo'].includes(entry.reason))layoutLearning?.discardPending();else layoutLearning?.commit(entry);},context:()=>JSON.stringify([state.batchPreviewId||'',state.files.map(f=>[f.path,f.fingerprint,f.layers.filter(l=>!l.nativeCreation).map(l=>l.id)]),state.records.map(r=>[r.id,r.digest])]),
  read:()=>JSON.parse(JSON.stringify({artworkHides:state.files.map(f=>f.artworkHides||[]),containers:state.files.map(f=>f.containers||[]),extractedContainers:state.files.map(f=>f.extractedContainers||[]),containerEdits:state.files.map(f=>f.containerEdits||[]),files:state.files.map(f=>f.layers.map(({transformSelected,...l})=>l)),magneticSnap:$('magneticSnap').checked,alignmentTarget:$('alignmentTarget').value})),
  write:s=>{state.files.forEach((f,i)=>{f.artworkHides=JSON.parse(JSON.stringify(s.artworkHides?.[i]||[]));f.containers=JSON.parse(JSON.stringify(s.containers?.[i]||[]));f.extractedContainers=JSON.parse(JSON.stringify(s.extractedContainers?.[i]||[]));f.containerEdits=JSON.parse(JSON.stringify(s.containerEdits?.[i]||[]));});state.files.forEach((f,i)=>{const selected=new Set(f.layers.filter(l=>l.transformSelected).map(l=>l.id));f.layers=JSON.parse(JSON.stringify(s.files[i])).map(l=>selected.has(l.id)?{...l,transformSelected:true}:l);});state.layerIndex=Math.min(state.layerIndex,Math.max(0,(file()?.layers.length||1)-1));state.checked=false;$('magneticSnap').checked=!!s.magneticSnap;$('alignmentTarget').value=s.alignmentTarget==='canvas'?'canvas':'selection';render();applyScale();layoutEditor.draw();},notify:toast});
 containerEditor=createContainerEditor({$,state,file,layer,record,fitText,selectLayer:selectedLayer,onSelection:selection=>{if(selection)contextProperties?.show(selection);else contextProperties?.clear();},changed:()=>{state.checked=false;render();},transaction:(action,reason)=>history.transaction(action,reason),toast});
@@ -361,15 +362,35 @@ if(window.desktop)call('serviceReady').catch(e=>toast(e.message,true));
 
 const batchPreview=createBatchPreview({state,parseImported,makePlan,refresh:reset=>{render();if(reset)fitView();else applyScale();},getView:()=>({original:viewSnapshot('viewport','stage'),replacement:viewSnapshot('replacementViewport','replacementStage'),replacementZoom:$('replacementZoom').value}),restoreView:v=>{if(v){restoreReplacementZoom($('replacementZoom'),v.replacementZoom);applyScale();layoutEditor.draw();restoreView('viewport','stage',v.original);restoreView('replacementViewport','replacementStage',v.replacement);}}});
 const autoLayoutLanguage=createBatchLayoutRuntime({parseImported,fitText,call,getSettings:()=>state.settings});
-installBatch({autoLayoutLanguage,onLearningResult:outcome=>{void startLearningTask(()=>layoutLearning?.refreshStatus?.(outcome));},$,call,toast,state,makePlan,preview:batchPreview});
+const batchUi=installBatch({recordAction:fn=>workRecords?workRecords.runAction(fn):fn(),autoLayoutLanguage,onLearningResult:outcome=>{void startLearningTask(()=>layoutLearning?.refreshStatus?.(outcome));},$,call,toast,state,makePlan,preview:batchPreview});
 
-installBulkReplace({state,file,layer,call,toast,$});
+const bulkUi=installBulkReplace({state,file,layer,call,toast,$,recordAction:fn=>workRecords?workRecords.runAction(fn):fn()});
 
-installSkuWorkflow({$,file,call,toast});
+const skuUi=installSkuWorkflow({$,file,call,toast,recordAction:fn=>workRecords?workRecords.runAction(fn):fn()});
 
 import {installSparkit} from './sparkit.js';
 installSparkit({state,toast,importPaths:paths=>runFileImport(()=>importOriginal(paths))});
-installAgentUi({call,openSettings,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||state.batchPreviewId||aiLayout.isBusy?.()||!!document.querySelector('dialog[open]:not(#agentDialog)'),execute:createAgentWorkspace({state,call,importOriginal:paths=>runFileImport(()=>importOriginal(paths)),render,history,fitText,buildRequest:buildDesignLayoutRequest,getVisual:options=>layoutEditor.readyDesignVisuals(options),makePlan,selectFile,selectedLayer})});
+const agentUi=installAgentUi({call,openSettings,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||state.batchPreviewId||aiLayout.isBusy?.()||!!document.querySelector('dialog[open]:not(#agentDialog)'),execute:createAgentWorkspace({state,call,importOriginal:paths=>runFileImport(()=>importOriginal(paths)),render,history,fitText,buildRequest:buildDesignLayoutRequest,getVisual:options=>layoutEditor.readyDesignVisuals(options),makePlan,selectFile,selectedLayer})});
 
 if(window.desktop)call('serviceReady').catch(e=>toast(e.message,true));
 
+
+function captureWork(){
+ const {apiKey,hasApiKey,...settings}=state.settings||{};
+ return {version:1,inspectorTab:document.querySelector('.binding-panel')?.dataset.mode,disclosures:[...document.querySelectorAll('details')].filter(n=>!n.closest('#agentDialog,#workRecords')).map(n=>({id:n.id,index:[...document.querySelectorAll('details')].indexOf(n),open:n.open})),batchPreview:batchPreview.captureWork?.(),project:{version:1,docName:state.docName,docFingerprint:state.docFingerprint,sourceDocument:state.sourceDocument,records:state.records,files:state.files.map(({preview,learningSource,...f})=>f),layoutPreferences:{magneticSnap:$('magneticSnap').checked,alignmentTarget:$('alignmentTarget').value}},selection:{fileIndex:state.fileIndex,layerIndex:state.layerIndex,chosen:state.chosen,scale:state.scale,tool:state.tool},controls:readWorkControls(),settings,assistant:agentUi.capture(),route:document.body.dataset.sparkRoute||'editor',dialog:document.querySelector('dialog[open]')?.id||'',view:{original:viewSnapshot('viewport','stage'),replacement:viewSnapshot('replacementViewport','replacementStage')},workspace:workspaceLayout.getLayout(),workflows:{sku:skuUi.captureWork?.(),bulk:bulkUi.captureWork?.(),batch:batchUi.captureWork?.()}};
+}
+async function restoreWork(snapshot){
+ const p=snapshot.project,restored=[];await batchPreview.restoreWork?.(null);state.batchPreviewId=null;$('batchPreviewBar').hidden=true;
+ for(const f of p?.files||[]){if(f.demo){restored.push(f);continue;}const parsed=await parseImported(f);restored.push({...parsed,...f,preview:parsed.preview,learningSource:parsed.learningSource,layers:structuredClone(f.layers)});}
+ await Promise.all([...document.querySelectorAll('dialog[open]')].map(d=>d.close()));
+ if(snapshot.settings){const existing=await call('loadCodexSettings');state.settings=await call('saveCodexSettings',{...existing,...snapshot.settings,apiKey:''});}
+ Object.assign(state,{files:restored,records:p?.records||[],docName:p?.docName||'',docFingerprint:p?.docFingerprint||'',sourceDocument:p?.sourceDocument||null,...snapshot.selection,checked:false});state.fileIndex=Math.min(state.fileIndex||0,Math.max(0,state.files.length-1));state.layerIndex=Math.min(state.layerIndex||0,Math.max(0,(file()?.layers.length||1)-1));
+ layoutCache.clear();layoutEditor.resetImportedPreview?.();layoutLearning?.discardPending?.();contextProperties?.clear();containerEditor?.clearSelection?.();layoutEditor?.clearSelection?.();
+ writeWorkControls(snapshot.controls);skuUi.restoreWork?.(snapshot.workflows?.sku);await batchUi?.restoreWork?.(snapshot.workflows?.batch);bulkUi.restoreWork?.(snapshot.workflows?.bulk);await batchPreview.restoreWork?.(snapshot.batchPreview);
+ writeWorkControls(snapshot.controls);workspaceLayout.setLayout?.(snapshot.workspace);render();await window.sparkitNavigate?.(snapshot.route==='home'?'home':'editor');applyScale();layoutEditor.draw();
+ if(snapshot.inspectorTab==='layout')$('layoutTab').click();else $('bindingTab').click();for(const d of snapshot.disclosures||[]){const n=d.id?$(d.id):document.querySelectorAll('details')[d.index];if(n?.tagName==='DETAILS')n.open=d.open;}
+ if(snapshot.view){restoreView('viewport','stage',snapshot.view.original);restoreView('replacementViewport','replacementStage',snapshot.view.replacement);}
+ if(snapshot.dialog&&snapshot.dialog!=='agentDialog'){const dialog=$(snapshot.dialog);if(dialog?.tagName==='DIALOG'&&!dialog.open)dialog.showModal();}
+ skuUi.refreshWork?.();if(snapshot.dialog==='bulkReplaceDialog')await bulkUi.prepareReplay?.('restore');
+}
+workRecords=installWorkRecords({call,capture:captureWork,restore:restoreWork,prepareReplay:async action=>{await skuUi.prepareReplay?.(action);await bulkUi.prepareReplay?.(action);},toast,agent:()=>agentUi,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||!!state.batchPreviewId||aiLayout.isBusy?.()||skuUi.isBusy?.()||bulkUi.isBusy?.()||batchUi?.isBusy?.()});

@@ -90,7 +90,7 @@ export function installWorkspaceLayout({onResize=()=>{},document:doc=globalThis.
   paint(false);
   return {
     reset(){finish(true);layout={...DEFAULT_WORKSPACE_LAYOUT};try{storage?.removeItem(KEY);}catch{}paint();},
-    getLayout(){return {...layout};},
+    getLayout(){return {...layout};},setLayout(value){finish(true);layout=clampWorkspaceLayout(value,main.clientWidth);paint();},
     destroy(){finish(true);destroyed=true;observer?.disconnect();cleanups.forEach(fn=>fn());separators.forEach(node=>node.remove());main.classList.remove('workspace-resizable');}
   };
 }

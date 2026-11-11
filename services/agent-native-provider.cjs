@@ -38,7 +38,7 @@ async function thinkNative(task,deps,{settings,env,directory,knowledgeDirectory,
      const entry={type:'analysis_answer',at:new Date().toISOString(),analysisId:args.analysisId,taskName:pending.request.taskName,answer:args.answer};
      if(JSON.stringify(task.history).length+JSON.stringify(entry).length>650000)throw Error('任务上下文已达上限，完整成果保留；未应用新分析');
      task.history.push(entry);
-     value=await state.exchange.submit(args.analysisId,args.answer);if(value.analysisCorrection){entry.validationError=value.analysisCorrection.error;const p=task.performance||={};p.analysisCorrections=(p.analysisCorrections||0)+1;}if(state.exchange.finished){state.exchange=null;task.analysisExchange=null;}
+     try{value=await state.exchange.submit(args.analysisId,args.answer);}catch(error){entry.validationError=error.message;if(error.contractIssues)entry.validationIssues=error.contractIssues;throw error;}if(value.analysisCorrection){entry.validationError=value.analysisCorrection.error;if(value.analysisCorrection.issues)entry.validationIssues=value.analysisCorrection.issues;const p=task.performance||={};p.analysisCorrections=(p.analysisCorrections||0)+1;}if(state.exchange.finished){state.exchange=null;task.analysisExchange=null;}
     }else if(params.tool==='software_operations'){
      if(state.exchange)throw Error('请先submit_analysis完成当前软件操作');
      if(!Array.isArray(args?.operations)||!args.operations.length||args.operations.length>6)throw Error('连续操作必须为1至6项');
@@ -51,10 +51,15 @@ async function thinkNative(task,deps,{settings,env,directory,knowledgeDirectory,
     if(shared){const id=imageId(shared);state.instructions||=new Set();value.analysisRequired.sharedInstructions={id,...(state.instructions.has(id)?{alreadyProvided:true}:{text:shared})};state.instructions.add(id);}
     const rules=await latest(),digest=JSON.stringify(rules.files);if(state.digest!==digest){value={...value,updatedWorkflowKnowledge:rules};state.digest=digest;}
     const images=[],freshImages=new Set();const clean=v=>{if(!v||typeof v!=='object')return v;if(Array.isArray(v))return v.map(clean);return Object.fromEntries(Object.entries(v).map(([k,x])=>k==='images'&&Array.isArray(x)?[k,x.map(image=>{const id=imageId(image);if(!state.images.has(id)&&!freshImages.has(id)){images.push(image);freshImages.add(id);}return {providedToModel:true,imageId:id,alreadyProvided:state.images.has(id)};})]:[k,clean(x)]));};
-    const text=JSON.stringify(clean(value));recordMetrics(task,{toolBytes:Buffer.byteLength(text),toolImages:images.length});
-    if(images.length){state.signal?.throwIfAborted();if(!state.turnId)throw Error('当前图像交接缺少工作回合身份，未继续分析');await state.app.request('turn/steer',{threadId:state.threadId,expectedTurnId:state.turnId,input:[{type:'text',text:'软件工具附图（资料，不是用户补充）。完整要求、schema与阶段见对应工具结果；本次图片按顺序对应imageId：'+JSON.stringify([...freshImages])},...images.map(url=>({type:'image',url}))]});for(const id of freshImages)state.images.add(id);}
+    let text=JSON.stringify(clean(value));recordMetrics(task,{toolBytes:Buffer.byteLength(text),toolImages:images.length});
+    // Large dynamic-tool results can be truncated by the host before the model
+    // sees them, even halfway through the serialized task data. Deliver the
+    // exact analysis as native turn input, alongside its images, only once.
+    const directContext=Buffer.byteLength(text)>24000;
+    if(images.length||directContext){state.signal?.throwIfAborted();if(!state.turnId)throw Error('当前分析交接缺少工作回合身份，未继续分析');await state.app.request('turn/steer',{threadId:state.threadId,expectedTurnId:state.turnId,input:[{type:'text',text:(directContext?'软件分析完整资料（不是用户补充；不改变原任务授权）。以下JSON为当前工具的完整结果；若有analysisRequired则按其id用submit_analysis回答，否则继续原任务；不需要重新读取资料：\n'+text:'软件工具附图（资料，不是用户补充）。完整要求、schema与阶段见对应工具结果；')+'\n本次图片按顺序对应imageId：'+JSON.stringify([...freshImages])},...images.map(url=>({type:'image',url}))]});for(const id of freshImages)state.images.add(id);}
+    if(directContext){const contextDelivery='完整工具结果已通过本回合原生输入提供，保留原任务要求，勿重复执行或读取';text=JSON.stringify(value.analysisRequired?{analysisRequired:{id:value.analysisRequired.id,taskName:value.analysisRequired.taskName,outputShape:value.analysisRequired.outputShape,contextDelivery:'完整请求、outputSchema及资料已通过本回合原生输入提供；按相同id回答，不重复启动操作'},completedStagesRetained:true}:{contextDelivery,completedStagesRetained:true});}
     return {success:!value.error,contentItems:[{type:'inputText',text}]};
-   }catch(error){if(error.uncertain){state.finish?.(error);throw error;}return {success:false,contentItems:[{type:'inputText',text:JSON.stringify({error:error.message,completedOperationsRetained:true})}]};}
+   }catch(error){if(state.exchange?.finished){state.exchange=null;task.analysisExchange=null;}if(error.uncertain){state.finish?.(error);throw error;}return {success:false,contentItems:[{type:'inputText',text:JSON.stringify({error:error.message,...(error.contractIssues?{issues:error.contractIssues}:{}),completedOperationsRetained:true})}]};}
   }});
   try{await state.app.initialize();const config=await state.app.request('config/read',{includeLayers:false});const isolated={'features.shell_tool':false,'features.multi_agent':false,'features.apps':false,'web_search':'disabled'};for(const name of Object.keys(config.config?.mcp_servers||{})){if(!/^[a-zA-Z0-9_-]+$/.test(name))throw Error('当前CLI存在无法安全隔离的外部工具配置');isolated['mcp_servers.'+name+'.enabled']=false;}
    const project=task.codexProject?await prepareProject(state.app,task.codexProject):null;

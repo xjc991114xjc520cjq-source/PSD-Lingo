@@ -4,9 +4,41 @@ const {thinkNative,closeNativeTask}=require('../services/agent-native-provider.c
 const tick=()=>new Promise(r=>setImmediate(r));
 const complete={kind:'complete',message:'Fixture checked',tool:'',arguments:'{}',questions:[]};
 async function fixture(t,script,execute,nativeOptions={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'native-task-'));let session,starts=0,tools=0,steers=0;
- const a=new AgentTask({directory,execute:execute||(async()=>({checked:true})),think:(task,deps)=>thinkNative(task,deps,{directory:directory+'/context',settings:{get:async()=>({mode:'local',executable:'C:/codex.exe',localModel:'selected-local'})},env:{Path:'test',OPENAI_API_KEY:'must-not-use'},validate:async()=>{},createSession:options=>{starts++;session={closed:false,queue:Promise.resolve(),initialize:async()=>{},close(){this.closed=true;options.onEvent('transport/closed',{error:Error('closed')});},request:async(method,params)=>{if(method==='config/read')return {config:{mcp_servers:{unrelated:{}}}};if(method==='thread/start'){assert.equal(params.model,task.model||'selected-local');assert.equal(params.config['mcp_servers.unrelated.enabled'],false);assert.equal(params.allowProviderModelFallback,false);assert.equal(params.dynamicTools.length,2);return {thread:{id:'thread-'+starts}};}if(method==='turn/start'){assert.equal(params.effort,'high');queueMicrotask(async()=>{try{const call=async(tool,args)=>{tools++;return options.onRequest('item/tool/call',{threadId:'thread-'+starts,turnId:'turn',tool,arguments:args});};await script({call,task,deps,params,options});if(!session.closed){options.onEvent('thread/tokenUsage/updated',{threadId:'thread-'+starts,tokenUsage:{total:{inputTokens:100,cachedInputTokens:60,outputTokens:10}}});options.onEvent('item/completed',{threadId:'thread-'+starts,item:{type:'agentMessage',text:JSON.stringify(complete)}});options.onEvent('turn/completed',{threadId:'thread-'+starts,turn:{id:'turn',status:'completed'}});}}catch(error){options.onEvent('transport/closed',{error});}});return {turn:{id:'turn'}};}if(method==='turn/steer'){steers++;assert.equal(params.expectedTurnId,'turn');assert.ok(params.input.some(i=>i.type==='image'));session.lastImages=params.input.filter(i=>i.type==='image').map(i=>i.url);return {turnId:'turn'};}if(method==='turn/interrupt')return {};throw Error(method);}};return session;},...nativeOptions})});
- t.after(async()=>{closeNativeTask(a.current);await a.pending;await fs.rm(directory,{recursive:true,force:true});});return {a,get starts(){return starts;},get tools(){return tools;},get steers(){return steers;}};}
+ const a=new AgentTask({directory,execute:execute||(async()=>({checked:true})),think:(task,deps)=>thinkNative(task,deps,{directory:directory+'/context',settings:{get:async()=>({mode:'local',executable:'C:/codex.exe',localModel:'selected-local'})},env:{Path:'test',OPENAI_API_KEY:'must-not-use'},validate:async()=>{},createSession:options=>{starts++;session={closed:false,queue:Promise.resolve(),initialize:async()=>{},close(){this.closed=true;options.onEvent('transport/closed',{error:Error('closed')});},request:async(method,params)=>{if(method==='config/read')return {config:{mcp_servers:{unrelated:{}}}};if(method==='thread/start'){assert.equal(params.model,task.model||'selected-local');assert.equal(params.config['mcp_servers.unrelated.enabled'],false);assert.equal(params.allowProviderModelFallback,false);assert.equal(params.dynamicTools.length,2);return {thread:{id:'thread-'+starts}};}if(method==='turn/start'){assert.equal(params.effort,'high');queueMicrotask(async()=>{try{const call=async(tool,args)=>{tools++;return options.onRequest('item/tool/call',{threadId:'thread-'+starts,turnId:'turn',tool,arguments:args});};await script({call,task,deps,params,options});if(!session.closed){options.onEvent('thread/tokenUsage/updated',{threadId:'thread-'+starts,tokenUsage:{total:{inputTokens:100,cachedInputTokens:60,outputTokens:10}}});options.onEvent('item/completed',{threadId:'thread-'+starts,item:{type:'agentMessage',text:JSON.stringify(complete)}});options.onEvent('turn/completed',{threadId:'thread-'+starts,turn:{id:'turn',status:'completed'}});}}catch(error){options.onEvent('transport/closed',{error});}});return {turn:{id:'turn'}};}if(method==='turn/steer'){steers++;assert.equal(params.expectedTurnId,'turn');assert.ok(params.input.some(i=>i.type==='image')||params.input[0].text.startsWith('软件分析完整资料'));session.lastText=params.input[0].text;session.lastImages=params.input.filter(i=>i.type==='image').map(i=>i.url);return {turnId:'turn'};}if(method==='turn/interrupt')return {};throw Error(method);}};return session;},...nativeOptions})});
+ t.after(async()=>{closeNativeTask(a.current);await a.pending;await fs.rm(directory,{recursive:true,force:true});});return {a,get starts(){return starts;},get tools(){return tools;},get steers(){return steers;},get lastText(){return session.lastText;}};}
 const ops=(tool,args={})=>({operations:[{tool,arguments:JSON.stringify(args),message:tool}]});
+
+test('large analysis reaches native input intact once, keeping tool receipt small and the same turn',async t=>{
+ const prompt='Approved context '+ '完整设计证据'.repeat(9000)+' END-OF-CONTEXT';let executions=0;
+ const f=await fixture(t,async({call,options,task})=>{
+  // Observe the actual app-server steer payload, before answering the tool.
+  const r=JSON.parse((await call('software_operations',ops('design_layout'))).contentItems[0].text);
+  assert.ok(r.analysisRequired.contextDelivery);assert.equal(r.analysisRequired.prompt,undefined);assert.ok(JSON.stringify(r).length<4000);
+  assert.equal(task.analysisExchange.pending.request.prompt,prompt);
+  const result=await call('submit_analysis',{analysisId:r.analysisRequired.id,answer:'{}'});assert.equal(JSON.parse(result.contentItems[0].text).operationResult.accepted,1);
+ },async(_tool,_args,{task})=>{executions++;await runStructuredTask({}, {mode:'local'},{outputSchema:{type:'object'},buildPrompt:()=>prompt,localAnalysis:r=>task.analysisExchange.ask(r),parseOutput:JSON.parse});return {accepted:1};});
+ // Use the fixture's normal transport; its steer captures/validates text-only delivery.
+ f.a.start({request:'Preserve original task'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;
+ assert.equal(f.a.current.status,'completed',f.a.current.error);assert.equal(executions,1);assert.equal(f.steers,1);assert.equal(f.starts,1);assert.equal(f.a.current.performance.nativeTurns,1);const delivered=f.lastText.split('\n')[1];assert.equal(JSON.parse(delivered).analysisRequired.prompt,prompt);
+});
+
+test('terminal analysis failure records the final reason and releases the stale analysis gate',async t=>{
+ const f=await fixture(t,async({call,task})=>{
+  const first=JSON.parse((await call('software_operations',ops('design_layout'))).contentItems[0].text);
+  for(let i=0;i<3;i++)await call('submit_analysis',{analysisId:first.analysisRequired.id,answer:'{}'});
+  const last=task.history.filter(h=>h.type==='analysis_answer').at(-1);assert.match(last.validationError,/Missing evidence/);assert.equal(task.analysisExchange,null);
+  const r=await call('software_operations',ops('workspace'));assert.ok(!r.contentItems[0].text.includes('请先submit_analysis'));
+ },async(tool,_args,{task})=>{if(tool==='workspace')return {checked:true};await task.analysisExchange.ask({validateAnswer:()=>{throw Error('Missing evidence');}});});
+ f.a.start({request:'Original'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;
+ assert.equal(f.a.current.status,'failed');assert.equal(f.a.current.history.filter(h=>h.type==='analysis_answer').length,3);
+});
+
+test('large document/workspace results use the same lossless delivery without replaying the read',async t=>{
+ const payload={rows:Array.from({length:500},(_,i)=>({id:i,value:'Approved data '+i+' 内容'.repeat(20)})),end:'LAST-ROW-RETAINED'};let reads=0;
+ const f=await fixture(t,async({call})=>{const r=JSON.parse((await call('software_operations',ops('workspace'))).contentItems[0].text);assert.ok(r.contextDelivery);assert.equal(r.analysisRequired,undefined);assert.ok(JSON.stringify(r).length<1000);},async()=>{reads++;return payload;});
+ f.a.start({request:'Read once'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;
+ assert.equal(f.a.current.status,'completed',f.a.current.error);assert.equal(reads,1);assert.equal(f.steers,1);const delivered=JSON.parse(f.lastText.split('\n')[1]);assert.deepEqual(delivered.items[0].result,payload);
+});
 
 test('invalid design plan and review are corrected in-place without replaying renders or dropping skill rejection',async t=>{
  let runs=0,renders=0,applied=0;
@@ -22,7 +54,7 @@ test('invalid design plan and review are corrected in-place without replaying re
   r=JSON.parse((await call('submit_analysis',{analysisId:id,answer:JSON.stringify(review)})).contentItems[0].text);assert.match(r.analysisCorrection.error,/插件审验未通过/);
   review.groups[0].verdict='revise';r=JSON.parse((await call('submit_analysis',{analysisId:id,answer:JSON.stringify(review)})).contentItems[0].text);assert.equal(r.operationResult.needsRepair,true);
  },async(_tool,_args,{task})=>{runs++;renders++;
-  const ask=(taskName,parseOutput)=>runStructuredTask({}, {mode:'local'},{localAnalysis:r=>task.analysisExchange.ask(r),buildPrompt:()=> 'Use actual image and all checks',parseOutput,taskName});
+  const ask=(taskName,parseOutput)=>runStructuredTask({}, {mode:'local'},{localAnalysis:r=>task.analysisExchange.ask(r),buildPrompt:()=> 'Use actual image and all checks',outputSchema:{},parseOutput,taskName});
   await ask('design_layout',raw=>composition.validatePlan(JSON.parse(raw).compositionPlan,[{relationGroup:'title'}]));renders++;
   const review=await ask('design_visual_review',raw=>validateReview(raw,request));if(review.matches.groups[0].verdict==='accept')applied++;
   return {needsRepair:review.matches.groups[0].verdict==='revise'};
@@ -38,7 +70,7 @@ test('analysis correction limit fails closed; cancellation invalidates retained 
 
 test('shared skill instructions are sent once per exact content in one session and resent after model change',async t=>{
  let turns=0;const observed=[];
- const f=await fixture(t,async({call})=>{for(const shared of ['Complete joint skills','Complete joint skills','Updated joint skills']){const r=JSON.parse((await call('software_operations',ops('design_layout'))).contentItems[0].text);observed.push(r.analysisRequired.sharedInstructions);await call('submit_analysis',{analysisId:r.analysisRequired.id,answer:'{}'});}turns++;},async(_tool,_args,{task})=>{const n=observed.length%3;await runStructuredTask({}, {mode:'local'},{analysisInstructions:n===2?'Updated joint skills':'Complete joint skills',localAnalysis:r=>task.analysisExchange.ask(r),buildPrompt:()=> 'Current image and schema',parseOutput:JSON.parse});return {accepted:1};});
+ const f=await fixture(t,async({call})=>{for(const shared of ['Complete joint skills','Complete joint skills','Updated joint skills']){const r=JSON.parse((await call('software_operations',ops('design_layout'))).contentItems[0].text);observed.push(r.analysisRequired.sharedInstructions);await call('submit_analysis',{analysisId:r.analysisRequired.id,answer:'{}'});}turns++;},async(_tool,_args,{task})=>{const n=observed.length%3;await runStructuredTask({}, {mode:'local'},{analysisInstructions:n===2?'Updated joint skills':'Complete joint skills',localAnalysis:r=>task.analysisExchange.ask(r),buildPrompt:()=> 'Current image and schema',outputSchema:{},parseOutput:JSON.parse});return {accepted:1};});
  f.a.start({request:'Inspect all design skills'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;f.a.current.model='changed';f.a.followUp('Keep original requirements');await f.a.runPromise;
  assert.equal(f.a.current.status,'completed',f.a.current.error);assert.equal(observed.length,6,JSON.stringify(observed));for(let i=0;i<2;i++){assert.equal(observed[i*3].text,'Complete joint skills');assert.equal(observed[i*3+1].alreadyProvided,true);assert.equal(observed[i*3+1].text,undefined);assert.equal(observed[i*3+2].text,'Updated joint skills');}assert.equal(turns,2);
 });

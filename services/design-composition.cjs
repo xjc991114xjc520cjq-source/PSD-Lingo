@@ -5,7 +5,22 @@ const checksSchema={type:'array',minItems:4,maxItems:4,items:{type:'object',addi
 const planSchema={type:'array',maxItems:500,items:{type:'object',additionalProperties:false,properties:{groupId:{type:'string'},alternatives:{type:'array',minItems:2,maxItems:3,items:{type:'object',additionalProperties:false,properties:{approach:text,consequence:text},required:['approach','consequence']}},chosen:{type:'integer',minimum:0,maximum:2},reason:text},required:['groupId','alternatives','chosen','reason']}};
 const goodText=v=>typeof v==='string'&&v.trim().length>0&&v.length<=1200;
 function validateChecks(value){if(!Array.isArray(value)||value.length!==dimensions.length||new Set(value.map(v=>v?.id)).size!==dimensions.length||value.some(v=>!v||Object.keys(v).some(k=>!['id','verdict','evidence'].includes(k))||!dimensions.includes(v.id)||!['accept','revise','uncertain'].includes(v.verdict)||!goodText(v.evidence)))throw Error('设计审验缺少完整的版式、层级、阅读区及视觉留白证据');return value;}
-function validatePlan(value,proposals){const groups=new Set(proposals.map(p=>p.relationGroup||p.layerKey));if(!Array.isArray(value)||value.length!==groups.size||new Set(value.map(v=>v?.groupId)).size!==groups.size||value.some(v=>!v||Object.keys(v).some(k=>!['groupId','alternatives','chosen','reason'].includes(k))||!groups.has(v.groupId)||!goodText(v.reason)||!Array.isArray(v.alternatives)||v.alternatives.length<2||v.alternatives.length>3||!Number.isInteger(v.chosen)||v.chosen<0||v.chosen>=v.alternatives.length||v.alternatives.some(a=>!a||Object.keys(a).some(k=>!['approach','consequence'].includes(k))||!goodText(a.approach)||!goodText(a.consequence))||new Set(v.alternatives.map(a=>a.approach.trim())).size!==v.alternatives.length))throw Error('排版缺少关系组的不同结构方案比较与选择依据');return value;}
+function validatePlan(value,proposals){
+ const issues=require('./analysis-contract.cjs').issuesFor(value,planSchema,'$.compositionPlan');
+ const groups=new Set(proposals.map(p=>p.relationGroup||p.layerKey));
+ if(!issues.length){
+  const seen=new Set();for(let i=0;i<value.length;i++){
+   const v=value[i],path='$.compositionPlan['+i+']';
+   if(!groups.has(v.groupId)||seen.has(v.groupId))issues.push({path:path+'.groupId',rule:'groupIdentity',expected:'unique groupId from proposals[].relationGroup'});seen.add(v.groupId);
+   if(v.chosen>=v.alternatives.length)issues.push({path:path+'.chosen',rule:'index',expected:'0..'+(v.alternatives.length-1)});
+   if(!goodText(v.reason))issues.push({path:path+'.reason',rule:'evidence',expected:'nonblank reason'});
+   if(v.alternatives.some(a=>!goodText(a.approach)||!goodText(a.consequence))||new Set(v.alternatives.map(a=>a.approach.trim())).size!==v.alternatives.length)issues.push({path:path+'.alternatives',rule:'distinctStructures',expected:'2..3 distinct approaches and consequences, with nonblank evidence'});
+  }
+  for(const group of groups)if(!seen.has(group))issues.push({path:'$.compositionPlan',rule:'missingGroup',expected:group});
+ }
+ if(issues.length){const error=Error('排版缺少关系组的不同结构方案比较与选择依据：'+issues.slice(0,12).map(i=>i.path+' '+i.rule+' '+JSON.stringify(i.expected)).join('; '));error.contractIssues=issues.slice(0,80);throw error;}
+ return value;
+}
 const policy=`设计审验必须独立于文字技术检查。可读、不重叠、未截断、左轴一致，只能证明基本可用，不能单独证明版式通过。
 groupShape：看整个阅读组的可见轮廓、长短行和宽高节奏。标题层级不同也要形成完整组合，不能把副标题单行尽量拉长，再把主标题孤立折行。对比两种适合当前图案的结构，例如适度收小主标题使两级标题各占一行形成两行组合，或副标题与主标题同时分行并按整体区域居中；不是固定只能二选一，不能以压扁、极小字或破坏层级强凑一行。先解决标题组，再联动说明的起点、行数和产品留白。
 hierarchyRhythm：比较主次字面、行间与组间距；说明应从属于标题整体，而不是挤在标题长短不一形成的残余空间。同级标签协调，但长内容可合理分行，少行数不是唯一目标。

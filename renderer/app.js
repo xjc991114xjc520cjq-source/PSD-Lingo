@@ -263,7 +263,7 @@ function finishImportRemoval(){
 }
 async function removeSource(index){try{assertCanRemoveImport();const f=state.files[index];if(!f)return;
  if(!await confirmAction('从工作区移除“'+f.name+'”？此原稿的未保存绑定和排版将移除，本机文件不会删除。'))return;
- assertCanRemoveImport();if(removeImportedFile(state,index)){finishImportRemoval();toast('已移除原稿；本机文件保留。');}
+ const remove=()=>{assertCanRemoveImport();if(removeImportedFile(state,index)){finishImportRemoval();toast('已移除原稿；本机文件保留。');}};if(workRecords)await workRecords.runAction(remove,{action:'',title:'移除原稿：'+f.name});else remove();
 }catch(e){toast(e.message,true);}}
 $('clearOriginals').onclick=task(async()=>{assertCanRemoveImport();if(!state.files.length)return;
  if(!await confirmAction('清空工作区的全部 '+state.files.length+' 份原稿？未保存的绑定和排版将移除；文档与本机文件保留。'))return;
@@ -273,7 +273,7 @@ $('clearDocument').onclick=task(async()=>{assertCanRemoveImport();if(!state.reco
  assertCanRemoveImport();clearImportedDocument(state);finishImportRemoval();toast('已清除文档和绑定，可以重新导入文案。');});
 
 $('importPsd').onclick=task(()=>runFileImport(()=>importOriginal()));
-async function importCopy(path){const d=await importTranslation(call,{splitMode:$('splitMode').value,...(path?{path}:{})});if(!d)return;state.records=d.records;state.docName=d.name;state.docFingerprint=d.fingerprint;state.sourceDocument={path:d.path,name:d.name,rawText:d.rawText,format:d.format,splitMode:d.splitMode,selection:d.selection,notices:d.notices||[],records:d.records};state.chosen=null;$('searchRecords').value='';for(const f of state.files)for(const l of f.layers){l.recordId=null;l.suggestedId=null;delete l.customText;delete l.copyAdjustment;}state.checked=false;render();toast('已导入 '+d.records.length+' 条文案。重新导入文档后，旧绑定已清除。');}
+async function importCopy(path){const d=await importTranslation(call,{splitMode:$('splitMode').value,...(path?{path}:{})});if(!d)return;state.records=d.records;state.docName=d.name;state.docFingerprint=d.fingerprint;state.sourceDocument={path:d.path,fingerprint:d.fingerprint,name:d.name,rawText:d.rawText,format:d.format,splitMode:d.splitMode,selection:d.selection,notices:d.notices||[],records:d.records};state.chosen=null;$('searchRecords').value='';for(const f of state.files)for(const l of f.layers){l.recordId=null;l.suggestedId=null;delete l.customText;delete l.copyAdjustment;}state.checked=false;render();toast('已导入 '+d.records.length+' 条文案。重新导入文档后，旧绑定已清除。');}
 $('importDoc').onclick=task(()=>runFileImport(()=>importCopy()));
 $('resplitDoc').onclick=task(async()=>{
   const mode=$('splitMode').value, source=state.sourceDocument||{name:state.docName,records:state.records};
@@ -285,11 +285,11 @@ $('resplitDoc').onclick=task(async()=>{
 });
 preventFileNavigation(document);
 let importingFiles=false;
-async function runFileImport(action){if(state.batchPreviewId)throw new Error('请先保存或放弃此语言调整，再导入文件。');if(importingFiles)throw new Error('正在导入文件，请稍候再试。');importingFiles=true;try{return await action();}finally{importingFiles=false;}}
+async function runFileImport(action,recordOptions){if(state.batchPreviewId)throw new Error('请先保存或放弃此语言调整，再导入文件。');if(importingFiles)throw new Error('正在导入文件，请稍候再试。');importingFiles=true;try{return recordOptions&&workRecords?await workRecords.runAction(action,recordOptions):await action();}finally{importingFiles=false;}}
 const dropOptions={onError:message=>toast(message,true),isBusy:()=>importingFiles};
-for(const element of [$('originalDropZone'),$('viewport'),$('importPsd')])bindFileDrop(element,{...dropOptions,extensions:['psd','psb','ai'],multiple:true,onPaths:paths=>runFileImport(()=>importOriginal(paths))});
-bindFileDrop(document.querySelector('.binding-panel'),{...dropOptions,extensions:['xlsx','docx','csv','tsv','txt'],onPaths:paths=>runFileImport(()=>importCopy(paths[0]))});
-bindFileDrop($('openProject'),{...dropOptions,extensions:['json'],onPaths:paths=>runFileImport(()=>openSavedProject(paths[0]))});
+for(const element of [$('originalDropZone'),$('viewport'),$('importPsd')])bindFileDrop(element,{...dropOptions,extensions:['psd','psb','ai'],multiple:true,onPaths:paths=>runFileImport(()=>importOriginal(paths),{action:'importPsd',title:'拖入原稿'})});
+bindFileDrop(document.querySelector('.binding-panel'),{...dropOptions,extensions:['xlsx','docx','csv','tsv','txt'],onPaths:paths=>runFileImport(()=>importCopy(paths[0]),{action:'importDoc',title:'拖入文案'})});
+bindFileDrop($('openProject'),{...dropOptions,extensions:['json'],onPaths:paths=>runFileImport(()=>openSavedProject(paths[0]),{action:'openProject',title:'拖入项目'})});
 $('searchRecords').oninput=renderRecords;
 $('confirmBinding').onclick=()=>{if(!layer()||!record(state.chosen))return;if(layer().recordId!==state.chosen){delete layer().customText;delete layer().copyAdjustment;}layer().recordId=state.chosen;layer().suggestedId=null;state.checked=false;render();focusBoundLayer();toast('已设置替换文案，可在右侧画面双击改字。');};
 $('clearBinding').onclick=()=>{if(!layer())return;layer().recordId=null;layer().suggestedId=null;state.chosen=null;state.checked=false;render();};

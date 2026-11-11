@@ -26,3 +26,14 @@ test('streamed SHA256 equals actual bytes and rejects truncation/growth/source r
  await assert.rejects(hashFile('file',{expectedStat:{...stat,size:bytes.length-1},io:{stat:async()=>stat},stream}),/发生变化/);
  await assert.rejects(hashFile('file',{expectedStat:stat,io:{stat:async()=>({...stat,ino:999})},stream}),/发生变化/);
 });
+test('Windows Electron checks compare handle snapshots even when path stat reports another device',async()=>{
+ const bytes=Buffer.from('stable source'),stat=snapshot(bytes.length);let closed=0,pathStats=0;
+ const io={open:async()=>({stat:async()=>stat,close:async()=>closed++}),stat:async()=>{pathStats++;return {...stat,dev:0};}};
+ const stream=async function*(){yield bytes;};
+ assert.equal(await hashFile('source',{expectedStat:stat,io,stream}),crypto.createHash('sha256').update(bytes).digest('hex'));assert.equal(pathStats,0);assert.equal(closed,1);
+ for(const field of ['dev','ino','mtimeMs','ctimeMs']){const changed={...stat,[field]:stat[field]+1};await assert.rejects(hashFile('source',{expectedStat:stat,io:{open:async()=>({stat:async()=>changed,close:async()=>closed++})},stream}),/发生变化/);}
+});
+test('real filesystem inspection fingerprint stays stable and catches same-size replacement',async()=>{
+ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),dir=await fs.mkdtemp(path.join(os.tmpdir(),'sparkit-hash-'));
+ try{const p=path.join(dir,'source.psb'),bytes=Buffer.concat([header(),Buffer.from('source')]);await fs.writeFile(p,bytes);const info=await inspectFile(p);assert.equal(await hashFile(p,{expectedStat:info.stat}),crypto.createHash('sha256').update(bytes).digest('hex'));await fs.rename(p,p+'.old');await fs.writeFile(p,bytes);await assert.rejects(hashFile(p,{expectedStat:info.stat}),/发生变化/);}finally{await fs.rm(dir,{recursive:true,force:true});}
+});

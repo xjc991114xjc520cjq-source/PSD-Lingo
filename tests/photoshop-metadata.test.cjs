@@ -13,10 +13,12 @@ test('JSX has no document mutation, closes only documents it opens and restores 
 test('generated JSX executes against mocked Photoshop, writes valid Unicode JSON and restores existing document',()=>{
  const vm=require('node:vm'),unit=n=>({as:()=>n});let output='',closed=false;
  const old={name:'user-work'},text='译文 "quoted" \\ path\r\nSecond line';
- const doc={saved:true,bitsPerChannel:8,mode:3,width:unit(800),height:unit(36000),resolution:72,layers:[{id:42,name:'Title 译文',visible:true,allLocked:false,typename:'ArtLayer',kind:'text',bounds:[unit(1),unit(2),unit(200),unit(40)],textItem:{contents:text,font:'ArialMT'}}],close(mode){assert.equal(mode,'discard');closed=true;}};
+ const doc={saved:true,bitsPerChannel:8,mode:3,width:unit(800),height:unit(36000),resolution:72,layers:[{id:42,name:'Title 译文',visible:true,allLocked:false,pixelsLocked:true,typename:'ArtLayer',kind:'text',bounds:[unit(1),unit(2),unit(200),unit(40)],textItem:{contents:text,font:'ArialMT'}}],close(mode){assert.equal(mode,'discard');closed=true;}};
  const app={activeDocument:old,documents:[],displayDialogs:'prior',open:()=>doc};
  function File(p){this.exists=true;this.fsName=p;this.open=()=>true;this.write=s=>{output+=s;};this.close=()=>{};}
  function ActionReference(){this.putIdentifier=()=>{};}
- vm.runInNewContext(metadataScript('C:/sample.psb','C:/result.json').replace(/^#target photoshop/,''),{app,File,ActionReference,stringIDToTypeID:s=>s,executeActionGet:()=>({count:0}),LayerKind:{TEXT:'text'},BitsPerChannelType:{EIGHT:8,SIXTEEN:16},DocumentMode:{RGB:3},DialogModes:{NO:'none'},SaveOptions:{DONOTSAVECHANGES:'discard'}});
- const data=JSON.parse(output);assert.equal(data.children[0].dom.text,text);assert.equal(data.children[0].name,'Title 译文');assert.equal(data.width,800);assert.ok(closed);assert.equal(app.activeDocument,old);assert.equal(app.displayDialogs,'prior');
+ vm.runInNewContext(metadataScript('C:/sample.psb','C:/result.json').replace(/^#target photoshop/,''),{app,File,ActionReference,stringIDToTypeID:s=>s,executeActionGet:()=>({count:0,hasKey:k=>k==='layerLocking',getObjectValue:()=>({hasKey:()=>true,getBoolean:()=>false})}),LayerKind:{TEXT:'text'},BitsPerChannelType:{EIGHT:8,SIXTEEN:16},DocumentMode:{RGB:3},DialogModes:{NO:'none'},SaveOptions:{DONOTSAVECHANGES:'discard'}});
+ const data=JSON.parse(output);assert.equal(data.children[0].locked,false,'Action Manager lock flags override non-pixel DOM pixelsLocked');assert.equal(data.children[0].dom.text,text);assert.equal(data.children[0].name,'Title 译文');assert.equal(data.width,800);assert.ok(closed);assert.equal(app.activeDocument,old);assert.equal(app.displayDialogs,'prior');
 });
+
+test('native text-shape transform is an authoritative fallback for ordinary Photoshop point text',()=>{const f=fixture(),t=f.children[0].descriptor.textKey;t.textShape[0].transform=t.transform;delete t.transform;const l=normalizeNativeMetadata(f).layers[0];assert.equal(l.supported,true);assert.equal(l.size,48);delete t.textShape[0].transform;assert.ok(normalizeNativeMetadata(f).layers[0].issues.some(i=>i.includes('缺少文字变换')));});

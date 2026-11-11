@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('desktop', {
   agentStop:()=>ipcRenderer.invoke('agent-stop'),
   agentSupplement:v=>ipcRenderer.invoke('agent-supplement',v),
   agentAnswer:v=>ipcRenderer.invoke('agent-answer',v),
+  agentArtboards:v=>ipcRenderer.invoke('agent-artboards',v),
   agentExport:v=>ipcRenderer.invoke('agent-export',v),
   agentDeliveryVisual:v=>ipcRenderer.invoke('agent-delivery-visual',v),
   agentToolProgress:v=>ipcRenderer.invoke('agent-tool-progress',v),

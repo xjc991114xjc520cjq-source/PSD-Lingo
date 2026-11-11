@@ -3,6 +3,12 @@ const {createReadStream}=require('node:fs');
 const crypto=require('node:crypto');
 const {inspectPhotoshopFile}=require('./photoshop-file.cjs');
 function sameSnapshot(a,b){return a.size===b.size&&a.mtimeMs===b.mtimeMs&&a.ctimeMs===b.ctimeMs&&a.ino===b.ino&&a.dev===b.dev;}
+// Electron/Windows path stat can return dev=0 while handle.stat reports the
+// real device (also with original-fs). Always compare handle-based snapshots.
+async function snapshotFile(filePath,io){
+ if(!io.open)return io.stat(filePath); // Small injected filesystem test adapters.
+ const handle=await io.open(filePath,'r');try{return await handle.stat();}finally{await handle.close();}
+}
 async function inspectFile(filePath,io=fs){
  const handle=await io.open(filePath,'r');
  try{
@@ -12,14 +18,14 @@ async function inspectFile(filePath,io=fs){
  }finally{await handle.close();}
 }
 async function hashFile(filePath,{expectedStat,io=fs,stream=createReadStream,createDigest=()=>crypto.createHash('sha256'),onProgress}={}){
- const before=expectedStat||await io.stat(filePath),digest=createDigest();let length=0;
+ const before=expectedStat||await snapshotFile(filePath,io),digest=createDigest();let length=0;
  // A bounded read buffer works above Node's single-Buffer allocation limit.
  for await(const chunk of stream(filePath,{highWaterMark:1024*1024})){
   length+=chunk.length;if(length>before.size)throw new Error('源文件在校验期间发生变化，请保存后重新导入。');
   digest.update(chunk);
   onProgress?.({current:length,total:before.size});
  }
- const after=await io.stat(filePath);
+ const after=await snapshotFile(filePath,io);
  if(length!==before.size||!sameSnapshot(before,after))throw new Error('源文件在校验期间发生变化，请保存后重新导入。');
  return digest.digest('hex');
 }

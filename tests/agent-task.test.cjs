@@ -103,3 +103,7 @@ test('explicit unfinished outcome and partial export both remain incomplete',asy
  const a=new AgentTask({think:async()=>({...step('blocked'),message:'尚未制作，请检查能力缺口'})});a.start({request:'制作'});await a.runPromise;assert.equal(a.current.status,'failed');assert.match(a.current.error,/尚未制作/);
  let n=0;const b=new AgentTask({think:async()=>[step('tool','export_files'),step('complete')][n++],execute:async()=>({saved:1,failed:1})});b.start({request:'导出全部'});await b.runPromise;assert.equal(b.current.status,'failed');
 });
+
+test('corrected workbook column selection resolves only the same attachment error',async()=>{
+ for(const unrelated of [false,true]){let n=0;const steps=[...(unrelated?[step('tool','import_document',{fileId:'other'})]:[]),step('tool','import_document',{fileId:'book',selection:{sourceColumns:'A',targetColumns:'A'}}),step('tool','import_document',{fileId:'book',selection:{sourceColumns:'A',targetColumns:'C:F'}}),step('complete')];const a=new AgentTask({think:async()=>steps[n++],execute:async(_t,args)=>{if(args.fileId==='other'||args.selection.targetColumns==='A')throw Error('invalid selection');return {records:[{id:'approved'}]};}});a.start({request:'Import corrected price fields'});await a.runPromise;assert.equal(a.current.status,unrelated?'failed':'completed');}
+});

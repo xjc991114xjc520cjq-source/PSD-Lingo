@@ -19,6 +19,7 @@ function auditTargets(file,records){
  if(hidden.some(h=>!h.object))throw Error('隐藏对象缺少已验证来源，无法审阅');
  for(const {object:o} of hidden)if(!targets.some(l=>l.boardNames?.length===1&&l.boardNames[0]===o.boardNames[0]))targets.push({id:'artwork:'+o.objectId,box:o.box,boardBox:o.boardBox,boardNames:o.boardNames,artworkOnly:true});
  for(const a of textActionsFor(file)){const l=file.layers.find(l=>l.id===a.layerId);if(!targets.some(t=>t.boardNames?.[0]===l.boardNames?.[0]))targets.push({...l,artworkOnly:true,boardBox:l.boardBox||[0,0,file.width,file.height],boardNames:l.boardNames?.length?l.boardNames:['画布']});}
+ for(const b of file.composedBoards||[])if(!targets.some(l=>l.boardNames?.includes(b.name)))targets.push({id:'artboard:'+b.id,box:b.box,boardBox:b.box,boardNames:[b.name],artworkOnly:true});
  return {targets,hidden};
 }
 function deliveryBoardsFor(file,records){const {targets}=auditTargets(file,records);return boardGroups(file,targets).map(g=>({name:g.name,crop:g.crop}));}

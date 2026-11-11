@@ -1,0 +1,27 @@
+// Reuse SKU's native recursive editing (including isolated shared smart objects).
+const crypto=require('node:crypto'),path=require('node:path');
+const {hashFile}=require('../photoshop-file-io.cjs');
+const {validateArtboardPlan}=require('../photoshop-artboard-plan.cjs');
+function createProductCopyEngine({engine,helperPath=engine.helperPath}){
+ const scans=new Map();
+ return {async inspect({source,mapping,metadata,regions}){
+  if(!mapping.approved)throw Error('请先确认产品对应');if(regions!==undefined&&(!regions||typeof regions!=='object'||Array.isArray(regions)||Object.entries(regions).some(([id,r])=>!mapping.approved.boards.some(b=>String(b.boardId)===id&&b.action==='use')||!Array.isArray(r)||r.length!==4||!r.every(Number.isFinite)||r[0]<0||r[1]<0||r[2]<=0||r[3]<=0||r[0]+r[2]>1||r[1]+r[3]>1)))throw Error('底部文案块范围无效');
+  const key=JSON.stringify([source.path,source.fingerprint,mapping.approved.approvalDigest,regions]);
+  for(const scan of scans.values())if(scan.key===key)return scan.metadata;
+  const boardIds=mapping.approved.boards.filter(b=>b.action==='use').map(b=>String(b.boardId)),rule={productScan:true,boardIds,regions,includeHidden:false,detectVariants:false};
+  const data=await engine.execute(source.path,{rule,operation:'analyze'});if(await hashFile(source.path)!==source.fingerprint)throw Error('原稿在底部文案解析期间发生变化');
+  const id=crypto.randomUUID(),layers=data.matches.map(e=>{const ranges=e.styles?.textStyleRange||[],size=ranges[0]?.textStyle?.size;return {id:'sku:'+e.key,name:e.name,original:e.original,box:e.box,localBox:e.localBox,nativeCanvas:e.nativeCanvas,boardBox:e.board.box,boardNames:[e.board.name],boardId:Number(e.board.id),nativePath:e.steps[0].path,visible:e.visible,font:e.fonts[0],size:size?.value||size||12,alignment:'left',issues:e.problems,supported:!e.problems.length,mixedStyleRuns:ranges.map(r=>({from:r.from,to:r.to,signature:JSON.stringify(r.textStyle)}))};});
+  const result={...metadata,layers,productCopyScanId:id,productCopyScanIssues:data.issues,productCopyScanSkipped:data.skipped};scans.set(id,{key,source,rule,data,metadata:result});if(scans.size>8)scans.delete(scans.keys().next().value);return result;
+ },async run({source,plan,directory,onProgress=()=>{}}){
+  const scan=scans.get(plan.productCopyScanId);if(!scan||scan.source.path!==source.path||scan.source.fingerprint!==source.fingerprint)throw Error('底部对象定位已失效，请重新inspect_product_copy并配置计划');
+  validateArtboardPlan(plan,scan.metadata);const format=path.extname(source.path).slice(1).toUpperCase();if(plan.outputFormat!=='auto'&&plan.outputFormat!==format)throw Error('嵌套智能对象改字保留原稿PSD/PSB格式；请选auto或原格式');
+  const matches=plan.boards.flatMap(b=>b.changes.map(c=>{const e=scan.data.matches.find(e=>'sku:'+e.key===c.layerId);if(!e||e.original!==c.original||Number(e.board.id)!==b.templateId)throw Error('底部对象路径、产品画板或原文已变化');if(e.problems.length)throw Error(e.problems.join('；'));return {...e,target:c.target,count:1,productCopyAnchor:c.anchor,productCopySpans:c.spans};}));
+  if(!matches.length)return require('../photoshop-artboards.cjs').composeArtboards({source,plan,metadata:scan.metadata,directory,helperPath,onProgress});
+  const id=crypto.randomUUID(),skuPlan={...scan.data,id,input:source.path,fingerprint:source.fingerprint,rule:scan.rule,matches,related:[],boards:plan.boards.map((b,i)=>({id:String(b.templateId),name:b.name,box:scan.metadata.artboards.find(a=>a.id===b.templateId).box,path:scan.metadata.artboards.find(a=>a.id===b.templateId).nativePath,file:'board-'+i+'.jpg'})),blockers:[]};
+  await require('node:fs/promises').mkdir(directory,{recursive:true});engine.plans.set(id,skuPlan);let r;try{onProgress({label:'定向修改底部文字与独立智能对象，保存重开并核验',indeterminate:true});r=await engine.run(id,directory,[],{enabled:true,items:{content:true,fonts:true,styles:true,geometry:true,reopen:true,jpg:true}});}finally{engine.plans.delete(id);}
+  const layers=scan.metadata.layers.map(l=>{const c=plan.boards.flatMap(b=>b.changes).find(c=>c.layerId===l.id);return c?{...l,original:c.target,customText:c.target,recordId:c.recordIds[0],nativeVerifiedText:true,issues:[]}:l;});
+  const boards=skuPlan.boards.map((b,i)=>({name:b.name,box:b.box,sourceBox:b.box,crop:b.box,image:path.join(r.jpg,b.file),checks:plan.boards[i].changes})),artifacts=[];for(const b of boards)artifacts.push({path:b.image,hash:await hashFile(b.image)});
+  return {output:r.output,format,reopened:true,boards,metadata:{...scan.metadata,layers},fingerprint:r.outputSha256,artifactFingerprints:artifacts,sourceFingerprint:source.fingerprint,delivery:{verified:true,reopened:true,boards},productCopyRecord:r.directory};
+ }};
+}
+module.exports={createProductCopyEngine};

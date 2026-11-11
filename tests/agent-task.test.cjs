@@ -6,6 +6,15 @@ const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {pro
 test('unknown native result is recorded and stops the model before a repeated write',async()=>{let calls=0;const a=new AgentTask({think:async()=>{calls++;return {kind:'tool',message:'Export',tool:'export_files',arguments:'{}',questions:[]};},execute:async()=>({uncertain:true,failed:1,message:'RPC response lost; inspect output',results:[{pendingOutput:'copy.ai'}]})});a.start({request:'Export copy'});await a.runPromise;assert.equal(calls,1);assert.equal(a.current.status,'failed');assert.match(a.current.error,/inspect output/);assert.equal(a.current.history.find(h=>h.type==='tool_result').result.results[0].pendingOutput,'copy.ai');});
 const step=(kind,tool='',args={},questions=[])=>({kind,message:kind,tool,arguments:JSON.stringify(args),questions});
 
+test('product copy clears stale visuals and cannot finish until the actual export is reviewed',async()=>{
+ for(const exported of [false,true]){
+  let n=0;const steps=[step('tool','configure_product_copy',{fileIndex:0}),...(exported?[step('tool','export_files')]:[]),step('complete')];
+  const a=new AgentTask({think:async()=>steps[n++],execute:async tool=>tool==='export_files'?{qualityPassed:true,saved:1}:{changed:true,fileIndex:0}});
+  a.start({request:'Change per-product footer copy'});a.current.visuals=['obsolete'];await a.runPromise;
+  assert.deepEqual(a.current.visuals,[]);assert.equal(a.current.status,exported?'completed':'failed');
+ }
+});
+
 test('embedded workbook references keep distinct identities and deliver actual images separately from history',async()=>{
  const ids=['xlsx-reference:poster','xlsx-reference:detail'];let n=0,delivered=[];
  const steps=ids.map(id=>step('tool','read_document',{fileId:'same-workbook',image:{sheet:id,media:'xl/media/reference.png'}}));steps.push(step('complete'));

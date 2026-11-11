@@ -3,8 +3,9 @@
 function validateArtboardPlan(plan,file){
  if(!plan||plan.version!==1||!['auto','PSD','PSB'].includes(plan.outputFormat)||!Array.isArray(plan.boards)||!plan.boards.length||plan.boards.length>100)throw Error('画板计划无效：需要1至100个画板及auto/PSD/PSB格式');
  if(!Number.isInteger(plan.columns)||plan.columns<1||plan.columns>100||!Number.isInteger(plan.rows)||plan.rows<1||plan.rows>100||plan.rows*plan.columns<plan.boards.length||!Number.isFinite(plan.gap)||plan.gap<0||plan.gap>2000)throw Error('画板网格参数无效或行数×列数不足以容纳画板');
- if(plan.operation!==undefined&&!['compose','rename','arrange'].includes(plan.operation))throw Error('画板操作无效');
+ if(plan.operation!==undefined&&!['compose','rename','arrange','edit'].includes(plan.operation))throw Error('画板操作无效');
  if(['rename','arrange'].includes(plan.operation)&&(plan.boards.length!==file.artboards?.length||new Set(plan.boards.map(b=>b.templateId)).size!==file.artboards.length||plan.boards.some(b=>b.mode!=='duplicate'||b.templateId===null||b.changes.length)))throw Error('重命名或重排必须保留全部原生画板且不夹带改字');
+ if(plan.operation==='edit'&&(plan.boards.length!==file.artboards?.length||new Set(plan.boards.map(b=>b.templateId)).size!==file.artboards.length||plan.boards.some(b=>b.mode!=='duplicate'||!file.artboards.some(a=>a.id===b.templateId&&a.name===b.name))))throw Error('原位改字必须完整保留全部原生画板及名称');
  if(plan.documentName!==undefined&&(typeof plan.documentName!=='string'||!plan.documentName.trim()||plan.documentName.length>100||/[<>:"/\\|?*\x00-\x1f]/.test(plan.documentName)||/[. ]$/.test(plan.documentName)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(plan.documentName)))throw Error('文档名称含有无效文件名字符');
  const names=new Set();let w=0,h=0;
  for(const b of plan.boards){
@@ -21,20 +22,21 @@ function validateArtboardPlan(plan,file){
    if(!Array.isArray(c.recordIds)||!c.recordIds.length||c.recordIds.some(id=>typeof id!=='string')||typeof c.reason!=='string'||!c.reason.trim())throw Error('画板改字缺少批准文案来源或依据');
   }
  }
- const width=plan.operation==='rename'?file.width:Math.min(plan.columns,plan.boards.length)*w+(Math.min(plan.columns,plan.boards.length)-1)*plan.gap,rows=Math.ceil(plan.boards.length/plan.columns),height=plan.operation==='rename'?file.height:rows*h+(rows-1)*plan.gap,max=plan.outputFormat==='PSD'?30000:300000;
+ const width=['rename','edit'].includes(plan.operation)?file.width:Math.min(plan.columns,plan.boards.length)*w+(Math.min(plan.columns,plan.boards.length)-1)*plan.gap,rows=Math.ceil(plan.boards.length/plan.columns),height=['rename','edit'].includes(plan.operation)?file.height:rows*h+(rows-1)*plan.gap,max=plan.outputFormat==='PSD'?30000:300000;
  if(width>max||height>max)throw Error(plan.outputFormat+'尺寸超限（'+width+'×'+height+'），请调整列数或选择PSB');
- return plan.boards.map((b,i)=>{const a=b.mode==='blank'?[0,0,...b.size]:b.templateId===null?[0,0,file.width,file.height]:file.artboards.find(a=>a.id===b.templateId).box;return {...b,box:plan.operation==='rename'?[...a]:[i%plan.columns*(w+plan.gap),Math.floor(i/plan.columns)*(h+plan.gap),a[2],a[3]],sourceBox:a};});
+ return plan.boards.map((b,i)=>{const a=b.mode==='blank'?[0,0,...b.size]:b.templateId===null?[0,0,file.width,file.height]:file.artboards.find(a=>a.id===b.templateId).box;return {...b,box:['rename','edit'].includes(plan.operation)?[...a]:[i%plan.columns*(w+plan.gap),Math.floor(i/plan.columns)*(h+plan.gap),a[2],a[3]],sourceBox:a};});
 }
 function makeArtboardPlan(file,args,records){
  if(!['PSD','PSB'].includes(file.format))throw Error('画板合成目前支持PSD/PSB，AI请使用对应原生流程');
  if(!Array.isArray(args.boards))throw Error('请提供boards列表');
  const columns=args.columns??Math.min(4,args.boards.length);
- const plan={version:1,outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns,rows:args.rows??Math.ceil(args.boards.length/columns),gap:args.gap??100,boards:args.boards.map(b=>({...b,mode:b.mode||'duplicate',templateId:b.templateId??null,changes:(b.changes||[]).map(c=>{
+ const plan={version:1,operation:args.operation||'compose',outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns,rows:args.rows??Math.ceil(args.boards.length/columns),gap:args.gap??100,boards:args.boards.map(b=>({...b,mode:b.mode||'duplicate',templateId:b.templateId??null,changes:(b.changes||[]).map(c=>{
   const l=file.layers.find(l=>l.id===c.layerId);if(!l)throw Error('图层ID不存在');const ids=c.recordIds;if(!Array.isArray(ids)||!ids.length||ids.some(id=>!records.some(r=>r.id===id)))throw Error('请先import_document导入批准文案，再引用recordIds');
   const separator=c.separator??'';if(!['',' ','\n'].includes(separator))throw Error('文案分隔符无效');let target=ids.map(id=>records.find(r=>r.id===id).target).join(separator);
+  if(c.recordSlice!==undefined){const sl=c.recordSlice;if(ids.length!==1||!Array.isArray(sl)||sl.length!==2||!sl.every(Number.isInteger)||sl[0]<0||sl[1]<=sl[0]||sl[1]>target.length)throw Error('字段字符段范围无效');target=target.slice(sl[0],sl[1]);}
   const prefix=c.prefix||'',suffix=c.suffix||'';if(typeof prefix!=='string'||typeof suffix!=='string'||/[\p{L}\p{N}]/u.test(prefix+suffix)||!l.original.startsWith(prefix)||!l.original.endsWith(suffix))throw Error('前后缀只能保留原文字中的货币或标点符号');target=prefix+target+suffix;
   const signatures=new Set(l.mixedStyleRuns?.map(s=>s.signature));if(signatures.size>1&&!c.spans)throw Error('混合样式文字必须指定spans，从原字符继承货币、数值等不同样式');
-  return {layerId:l.id,original:l.original,target,recordIds:[...ids],sourceRecords:ids.map(id=>{const r=records.find(r=>r.id===id);return {id,digest:r.digest,target:r.target};}),spans:c.spans||[{text:target,sourceStart:0}],anchor:c.anchor||l.alignment||'left',reason:c.reason};
+  return {layerId:l.id,original:l.original,target,recordIds:[...ids],recordSlice:c.recordSlice,sourceRecords:ids.map(id=>{const r=records.find(r=>r.id===id);return {id,digest:r.digest,target:r.target};}),spans:c.spans||[{text:target,sourceStart:0}],anchor:c.anchor||l.alignment||'left',reason:c.reason};
  })}))};validateArtboardPlan(plan,file);return plan;
 }
 function renameArtboardPlan(file,args){if(!['PSD','PSB'].includes(file.format)||!file.artboards?.length)throw Error('当前文档没有可重命名的PS原生画板');if(!Array.isArray(args.names)||!args.names.length||new Set(args.names.map(n=>n.boardId)).size!==args.names.length||args.names.some(n=>!file.artboards.some(b=>b.id===n.boardId)))throw Error('重命名画板ID无效或重复');const plan={version:1,operation:'rename',outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns:1,rows:file.artboards.length,gap:0,boards:[...file.artboards].sort((a,b)=>a.box[1]-b.box[1]||a.box[0]-b.box[0]).map(b=>({name:args.names.find(n=>n.boardId===b.id)?.name??b.name,mode:'duplicate',templateId:b.id,changes:[]}))};validateArtboardPlan(plan,file);return plan;}

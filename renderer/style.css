@@ -342,3 +342,14 @@ dialog>select:not([multiple]){width:100%;margin:6px 0 14px;font-size:12px;min-he
 .workbook-dialog{width:min(1080px,94vw);max-width:1080px}.workbook-range{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:12px;padding:14px 0;border-bottom:1px solid #414249}.workbook-range label{display:flex;flex-direction:column;gap:6px}.workbook-range input:not([type=checkbox]),.workbook-range select{width:100%;min-width:0}.workbook-preview{max-height:38vh;overflow:auto}.workbook-preview table{width:100%;border-collapse:collapse}.workbook-preview td,.workbook-preview th{padding:10px;border-bottom:1px solid #414249;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;max-width:360px}
 
 .language-reference-section{margin:16px 0;padding:16px;border:1px solid #50515a;border-radius:8px}.language-reference-section summary{cursor:pointer;font-weight:600}.language-reference-section details{margin:10px 0;padding:10px;border:1px solid #414249}.language-reference-section label{display:block;margin:10px 0}.language-reference-section textarea{display:block;width:100%;font:inherit;padding:8px}.language-reference-section input[type=number]{width:100px;margin:6px}
+#skuProductPanel{min-width:0;line-height:1.6}
+#skuProductPanel>label{display:grid;gap:6px;margin-top:12px}
+#skuProductPanel>button{margin-top:8px}
+#skuProductPanel input,#skuProductPanel select{min-width:0;max-width:100%;width:100%}
+#skuProductRows fieldset{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--line,#414249)}
+#skuProductRows legend{max-width:100%;padding:0 6px;font-weight:600;overflow-wrap:anywhere}
+#skuProductRows fieldset>input{margin:8px 0}
+#skuProductRows fieldset>label{display:flex;gap:8px;align-items:flex-start}
+#skuProductRows input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:4px 0}
+#skuProductRows p,#skuProductSummary,#skuProductHandoff{font-size:13px;overflow-wrap:anywhere}
+#skuProductHandoff{white-space:pre-wrap;font-family:inherit}

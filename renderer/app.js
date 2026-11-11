@@ -371,7 +371,7 @@ const batchUi=installBatch({recordAction:fn=>workRecords?workRecords.runAction(f
 
 const bulkUi=installBulkReplace({state,file,layer,call,toast,$,recordAction:fn=>workRecords?workRecords.runAction(fn):fn()});
 
-const skuUi=installSkuWorkflow({$,file,call,toast,recordAction:fn=>workRecords?workRecords.runAction(fn):fn()});
+const skuUi=installSkuWorkflow({$,file,call,toast,prepareAssistant:draft=>agentUi.prepareProductDraft(draft),recordAction:fn=>workRecords?workRecords.runAction(fn):fn()});
 
 import {installSparkit} from './sparkit.js';
 installSparkit({state,toast,importPaths:paths=>runFileImport(()=>importOriginal(paths))});

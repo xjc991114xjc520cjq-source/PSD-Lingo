@@ -11,7 +11,7 @@ function repairDesignProposal({layer,record,proposal,request,fitText,file,preser
  // A visual proposal must not be re-centered later using a text frame or
  // line-height estimate. Measurements may veto it, never certify aesthetics.
  if(preserveVisualPlacement){
-  const candidate={...layer,sourceBox:[...(layer.sourceBox||layer.box)],box:[...proposal.box],position:{x:proposal.box[0],y:proposal.box[1]},alignment:proposal.alignment,manual:manualStyleFor(layer,{size:proposal.size,tracking:proposal.tracking,leading:proposal.leading}),smart:{...layer.smart,allowWrap:true,allowLeading:false,trackingLimit:0}};
+  const candidate={...layer,sourceAlignment:layer.sourceAlignment||layer.alignment||'left',sourceBox:[...(layer.sourceBox||layer.box)],box:[...proposal.box],position:{x:proposal.box[0],y:proposal.box[1]},alignment:proposal.alignment,manual:manualStyleFor(layer,{size:proposal.size,tracking:proposal.tracking,leading:proposal.leading}),smart:{...layer.smart,allowWrap:true,allowLeading:false,trackingLimit:0}};
   if(proposal.paragraphs){const sourceText=typeof layer.customText==='string'?layer.customText:record.target;try{candidate.textLayout={sourceText,paragraphs:require('./design-text-layout.cjs').validateParagraphs(sourceText,proposal.paragraphs)};}catch(e){return {ok:false,reason:e.message};}}else candidate.textLayout=null;
   const invalid=manualStyleIssues(candidate.manual);if(invalid.length)return {ok:false,reason:'视觉提案样式不完整，已跳过。'};
   let fit,metricRepair=false;try{fit=fitText(candidate,record);}catch{return {ok:false,reason:'视觉提案无法完成本机字体检查，已跳过。'};}
@@ -66,7 +66,7 @@ function repairDesignProposal({layer,record,proposal,request,fitText,file,preser
  const sizes=[start];for(let n=start*.97;n>minSize+.01;n*=.97)sizes.push(n);sizes.push(minSize);
  for(const size of sizes){
   const ratio=size/proposal.size,leading=Math.max(size*1.05,Math.min(size*1.65,proposal.leading*ratio));
-  const candidate={...layer,sourceBox:[...(layer.sourceBox||layer.box)],box:[...region],position:{x:region[0],y:region[1]},alignment:shape?'center':proposal.alignment,manual:manualStyleFor(layer,{size,tracking:proposal.tracking,leading}),smart:{...layer.smart,allowWrap:true,allowLeading:false,trackingLimit:0}};
+  const candidate={...layer,sourceAlignment:layer.sourceAlignment||layer.alignment||'left',sourceBox:[...(layer.sourceBox||layer.box)],box:[...region],position:{x:region[0],y:region[1]},alignment:shape?'center':proposal.alignment,manual:manualStyleFor(layer,{size,tracking:proposal.tracking,leading}),smart:{...layer.smart,allowWrap:true,allowLeading:false,trackingLimit:0}};
   const invalid=manualStyleIssues(candidate.manual);if(invalid.length)return {ok:false,reason:'排版建议缺少有效'+invalid.join('、')+'，未应用。'};
   let fit;try{fit=fitText(candidate,record);}catch(e){return {ok:false,reason:'本机文字测量失败：'+e.message};}
   if(fit?.fontAvailable===false)return {ok:false,reason:'本机缺少文字指定字体“'+(candidate.manual?.font||candidate.font)+'”，请安装该字体或手动选择可用字体。'};

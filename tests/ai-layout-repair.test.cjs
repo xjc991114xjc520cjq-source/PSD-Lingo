@@ -13,3 +13,20 @@ test('exclusive native rectangle expands before shrinking, keeps its corners and
 });
 test('shared container is never grown automatically',()=>{const c=context();c.layer.containerId=9;c.layer.minSize=30;c.file={width:1000,height:1000,layers:[c.layer,{id:2,containerId:9,box:[40,60,20,10]}],containers:[{id:9,kind:'shape',shapeType:'rectangle',box:[20,20,240,80],radii:[20,20,20,20]}]};c.fitText=l=>({ok:l.box[2]>=400,width:400,height:30});assert.equal(repairDesignProposal(c).ok,false);});
 test('container expansion recenters after final multiline measurement',()=>{const c=context();c.layer.containerId=9;c.file={width:1000,height:1000,layers:[c.layer],containers:[{id:9,kind:'shape',shapeType:'rectangle',box:[20,20,240,80],radii:[20,20,20,20]}]};c.fitText=l=>({ok:true,width:180,height:l.position?44:30});const r=repairDesignProposal(c);assert.equal(r.ok,true);assert.equal(r.candidate.position.y,r.containerEdit.box[1]+(r.containerEdit.box[3]-44)/2);assert.deepEqual(r.containerEdit.radii,[20,20,20,20]);});
+
+test('successive visual edits retain original alignment reference for future generation without overriding legitimate redesign',()=>{
+ const {buildDesignLayoutRequest}=require('../design-layout-context.cjs');
+ for(const original of ['left','right']){
+  const layer={id:1,recordId:'r',font:'Arial',size:16,alignment:original,box:[100,100,200,24],original:'Source label'};
+  const record={id:'r',target:'Translated material label'},file={width:600,height:400,layers:[layer],containers:[]};
+  const fitText=()=>({ok:true,width:180,height:16,lines:[record.target]});
+  const request=buildDesignLayoutRequest({file,layer,records:[record],fitText});
+  const proposal={box:[100,100,240,24],size:16,tracking:0,leading:20,alignment:'center',containerEdit:null};
+  const first=repairDesignProposal({file,layer,record,proposal,request,fitText,preserveVisualPlacement:true});
+  assert.equal(first.ok,true);assert.equal(first.candidate.alignment,'center');assert.equal(first.candidate.sourceAlignment,original);
+  const nextFile={...file,layers:[first.candidate]},next=buildDesignLayoutRequest({file:nextFile,layer:first.candidate,records:[record],fitText});
+  assert.equal(next.layers[0].sourceAlignment,original);assert.equal(next.layers[0].alignment,'center');assert.deepEqual(next.layers[0].sourceBox,layer.box);
+  const second=repairDesignProposal({file:nextFile,layer:first.candidate,record,proposal:{...proposal,alignment:original},request:next,fitText,preserveVisualPlacement:true});
+  assert.equal(second.ok,true);assert.equal(second.candidate.sourceAlignment,original);assert.equal(layer.sourceAlignment,undefined);assert.equal(layer.alignment,original);
+ }
+});

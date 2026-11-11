@@ -29,3 +29,4 @@
 - 2026-11-11：用户明确授权发布桌面项目首次注册与助手对话收尾同步，准备版本0.3.66。737项回归、两个本机Codex空白对话的真实侧栏归属及正式包启动通过。收尾会打开一次对应Codex页面，同一会话追问不重复打开，不增加模型调用；不宣称完全静默。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.66，实际公开状态以 D:/PSD-Lingo/work/v66-public-verified.json 为准。
 - 2026-11-11：用户明确授权发布长分析资料完整交付、字段级纠错与失效门禁清理，准备版本0.3.67。744项回归与真实本机Codex、后台Illustrator副本保存重开/JPG、真实JPG审验链路通过；视觉审验仍有修改意见，不代表客户成稿通过。禁用computer use，未操作桌面。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.67，实际公开状态以 D:/PSD-Lingo/work/v67-public-verified.json 为准。
 - 2026-11-11：PSB句柄/路径stat设备号差异导致的源文件变化误报已修复；新增后台PS原生画板复制/新建/命名/行列排布、混合价格样式与auto PSD/PSB输出。761项回归及真实本机Codex、后台PS保存重开和全部画板JPG审验通过；详见practice-records/2026-11-11-photoshop-artboards/实施与验收.md。本地未发布，不代表客户视觉批准，未使用computer use。
+- 2026-11-11：用户明确授权发布PSB误报修复及多画板功能，准备版本0.3.68。761项回归、后台PS原生矩阵及真实本机Codex最终JPG审验通过。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.68；实际公开状态以D:/PSD-Lingo/work/v68-public-verified.json及正式latest签名为准。

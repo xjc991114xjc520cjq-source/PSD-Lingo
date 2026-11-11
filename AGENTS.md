@@ -26,3 +26,4 @@
 - 2026-11-11：独立任务已补工作区重置、附件隔离与主进程导出来源防线；AI 单行混合字符原对象改字已补齐，独立 Illustrator 预览/保存重开/JPG、共存清除另一对象及 renderer 撤销重做/项目恢复通过。728 项 Node 回归及助手/工作记录 Electron 通过。均未公开发布，不代表客户稿视觉验收；详见 practice-records/2026-11-11-task-isolation-and-mixed-text/实施与验收.md。
 - 2026-11-11：用户已明确要求发布上述工作记录、流程优化、独立任务隔离及混合改字能力，准备版本 0.3.64。本机归档路径 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.64；是否正式发布以公开 latest 和签名清单为准，证据 D:/PSD-Lingo/work/v64-local-verified.json、v64-public-verified.json。
 - 2026-11-11：已仅 cherry-pick 小问题提交 86b7375（本分支 d0171c4），引导标注生成保留连接侧/阅读轴/原始对齐；学习 rev11，不增模型调用或专项审验。729 项回归通过。用户明确授权发布 0.3.65，归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.65，实际公开状态以 latest/签名及 D:/PSD-Lingo/work/v65-public-verified.json 为准。不代表客户稿已修复或视觉通过。
+- 2026-11-11：用户明确授权发布桌面项目首次注册与助手对话收尾同步，准备版本0.3.66。737项回归、两个本机Codex空白对话的真实侧栏归属及正式包启动通过。收尾会打开一次对应Codex页面，同一会话追问不重复打开，不增加模型调用；不宣称完全静默。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.66，实际公开状态以 D:/PSD-Lingo/work/v66-public-verified.json 为准。

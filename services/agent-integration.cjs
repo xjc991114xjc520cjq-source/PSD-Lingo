@@ -16,7 +16,7 @@ function installAgent({ipcMain,dialog,window:windowFn,dataDirectory,settings,fet
   if(tool==='read_batch'){
    const allowed=['workspace','attachments','list_folder','read_document','artwork_objects'];
    if(!Array.isArray(args.queries)||!args.queries.length||args.queries.length>4||args.queries.some(q=>!q||!allowed.includes(q.tool)||!q.arguments||typeof q.arguments!=='object'||Array.isArray(q.arguments)))throw Error('批量检查只允许1至4项只读数据查询，不能包含改字、预览或导出');
-   for(const q of args.queries)if(q.tool==='read_document'&&/\.(png|jpe?g|webp)$/i.test((await file(q.arguments.fileId,task)).path))throw Error('参考图片请单独read_document，批量检查仅处理文字和结构数据');
+   for(const q of args.queries)if(q.tool==='read_document'&&(q.arguments.image||/\.(png|jpe?g|webp)$/i.test((await file(q.arguments.fileId,task)).path)))throw Error('参考图片请单独read_document，批量检查仅处理文字和结构数据');
    const items=[];for(const q of args.queries){try{items.push({tool:q.tool,arguments:q.arguments,result:await execute(q.tool,q.arguments,{task,progress})});}catch(e){items.push({tool:q.tool,arguments:q.arguments,error:String(e.message||e).slice(0,6000)});}}return {items,failed:items.filter(i=>i.error).length};
   }
   if(tool==='attachments')return task.files;
@@ -26,7 +26,10 @@ function installAgent({ipcMain,dialog,window:windowFn,dataDirectory,settings,fet
    if(tool==='import_source'){if(!/\.(ai|psd|psb)$/i.test(f.path))throw Error('请选择 AI/PSD/PSB 原稿');return renderer(tool,{path:f.path},task);}
    if(tool==='import_document')return renderer(tool,{path:f.path,selection:args.selection,attachmentIdentity:JSON.stringify([f.id,f.bytes,f.mtimeMs]),replaceExisting:args.replaceExisting===true},task);
    if(/\.(png|jpe?g|webp)$/i.test(f.path)){if(f.bytes>8*1024*1024)throw Error('参考图大于 8 MB，请提供较小预览图');const ext=path.extname(f.path).slice(1).replace('jpg','jpeg');return {name:f.name,images:['data:image/'+ext+';base64,'+(await fs.readFile(f.path)).toString('base64')]};}
-   if(/\.xlsx$/i.test(f.path))return importWorkbook(f.path,args.sheet?{page:{sheet:args.sheet,rowStart:args.rowStart,rowEnd:args.rowEnd}}:{});
+   if(/\.xlsx$/i.test(f.path)){
+    if(args.search&&args.image)throw Error('表格查找与参照图请分别读取');
+    return importWorkbook(f.path,args.image?{image:args.image}:args.search?{search:{queries:args.search,sheet:args.sheet,offset:args.offset}}:args.sheet?{page:{sheet:args.sheet,rowStart:args.rowStart,rowEnd:args.rowEnd}}:{});
+   }
    if(/\.(ai|psd|psb)$/i.test(f.path))throw Error('原稿请使用 import_source 后查看 workspace 和 preview，不能把大型源文件当文本上传');
    if(!/\.(txt|csv|tsv|docx|json)$/i.test(f.path)||f.bytes>20*1024*1024)throw Error('该文件暂不支持直接解析，请添加 TXT/DOCX/XLSX 或预览图片');
    const b=await fs.readFile(f.path),text=/\.docx$/i.test(f.path)?await require('../document-reader.cjs').readDocxText(b):b.toString('utf8');if(text.length>120000)throw Error('文档内容过长，请按任务拆分文档');return {name:f.name,text};

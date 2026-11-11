@@ -7,6 +7,28 @@ async function fixture(){const z=new JSZip();z.file('xl/workbook.xml','<workbook
  z.file('xl/worksheets/sheet1.xml','<worksheet><dimension ref="A1"/><sheetData><row>'+cell('F1','中文')+cell('G1','英文')+cell('I1','俄文')+'</row><row>'+cell('F2','原价：99.98')+cell('G2','$99.98')+cell('I2','删除')+'</row><row>'+cell('F18','轴体')+cell('G18','Switch')+cell('I18','Переключатель')+'</row><row>'+cell('F20','第一行\n第二行')+cell('G20','First\nSecond')+'</row></sheetData><mergeCells><mergeCell ref="F2:F3"/></mergeCells></worksheet>');return z.generateAsync({type:'nodebuffer'});}
 const range=(target='G',rowStart=2,rowEnd=18)=>({sheet:'海报',sourceColumns:'F',targetColumns:target,rowStart,rowEnd});
 
+test('workbook search compares matching rows across sheets and reads only an anchored reference image',async t=>{
+ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),dir=await fs.mkdtemp(path.join(os.tmpdir(),'book-search-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+ const z=await JSZip.loadAsync(await fixture()),file=path.join(dir,'copy.xlsx');
+ z.file('xl/workbook.xml','<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="海报" r:id="s"/><sheet name="商详" r:id="d"/></sheets></workbook>');
+ z.file('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="s" Target="worksheets/sheet1.xml"/><Relationship Id="d" Target="worksheets/sheet2.xml"/></Relationships>');
+ z.file('xl/worksheets/sheet1.xml','<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData><row><c r="F182" t="inlineStr"><is><t>日晕为形 光影成韵</t></is></c><c r="G182" t="inlineStr"><is><t>Solar Halo</t></is></c></row><row><c r="F184" t="inlineStr"><is><t>全透双灯位轴体，重塑光影质感与操控体验</t></is></c><c r="G184" t="inlineStr"><is><t>Full supplied translation</t></is></c></row></sheetData><drawing r:id="img"/></worksheet>');
+ z.file('xl/worksheets/sheet2.xml','<worksheet><sheetData><row><c r="D154" t="inlineStr"><is><t>日冕为形</t></is></c><c r="E154" t="inlineStr"><is><t>Other heading</t></is></c></row></sheetData></worksheet>');
+ z.file('xl/worksheets/_rels/sheet1.xml.rels','<Relationships><Relationship Id="img" Target="../drawings/drawing1.xml"/></Relationships>');
+ z.file('xl/drawings/drawing1.xml','<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><twoCellAnchor><from><row>181</row><col>0</col></from><to><row>200</row><col>3</col></to><pic><blip r:embed="ref"/></pic></twoCellAnchor></drawing>');
+ z.file('xl/drawings/_rels/drawing1.xml.rels','<Relationships><Relationship Id="ref" Target="../media/image.png"/></Relationships>');
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');z.file('xl/media/image.png',png);z.file('xl/media/unanchored.png',png);await fs.writeFile(file,await z.generateAsync({type:'nodebuffer'}));
+ const load=require('../translation-import.cjs').createWorkbookImporter();
+ const r=await load(file,{search:{queries:['日冕为形','全透双灯位轴体 重塑光影质感与操控体验']}});
+ assert.equal(r.scope,'all-sheets');assert.equal(r.totalMatches,2);const poster=r.matches.find(m=>m.sheet==='海报');assert.equal(poster.row,184);assert.equal(poster.cells.find(c=>c.address==='G184').value,'Full supplied translation');assert.equal(poster.imageAnchors[0].media,'xl/media/image.png');assert.ok(!r.images);
+ const image=await load(file,{image:{sheet:'海报',media:poster.imageAnchors[0].media}});assert.deepEqual(Buffer.from(image.images[0].split(',')[1],'base64'),png);assert.match(image.referenceFileId,/^xlsx-reference:/);assert.equal(image.fingerprint,r.fingerprint);
+ assert.equal((await load(file,{search:{queries:['日冕为形'],sheet:'海报'}})).totalMatches,0);
+ assert.equal((await load(file,{search:{queries:['日冕为形'],offset:20}})).matches.length,0);
+ for(const search of [{queries:[]},{queries:['!!!']},{queries:['a'],offset:-1},{queries:['x'],sheet:'不存在'}])await assert.rejects(load(file,{search}));
+ for(const image of [{sheet:'海报',media:'xl/media/unanchored.png'},{sheet:'商详',media:'xl/media/image.png'},{sheet:'海报',media:'../private.png'}])await assert.rejects(load(file,{image}),/实际返回/);
+ z.file('xl/media/image.png',Buffer.alloc(8*1024*1024+1));await fs.writeFile(file,await z.generateAsync({type:'nodebuffer'}));await assert.rejects(load(file,{image:{sheet:'海报',media:'xl/media/image.png'}}),/8 MB/);
+});
+
 test('shared workbook importer serves overview, bounded pages and selection with identity invalidation',async t=>{
  const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),dir=await fs.mkdtemp(path.join(os.tmpdir(),'book-pages-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));const file=path.join(dir,'copy.xlsx');await fs.writeFile(file,await fixture());const load=require('../translation-import.cjs').createWorkbookImporter();
  const overview=await load(file),page=await load(file,{page:{sheet:'海报',rowStart:18,rowEnd:20}}),selection=await load(file,{selection:range(),fingerprint:overview.fingerprint});assert.equal(page.fingerprint,overview.fingerprint);assert.equal(selection.fingerprint,page.fingerprint);assert.ok(page.cells.every(c=>c.row>=18&&c.row<=20));assert.equal(page.cells.find(c=>c.address==='G18').value,'Switch');

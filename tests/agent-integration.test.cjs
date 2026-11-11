@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const {installAgent}=require('../services/agent-integration.cjs');
-async function fixture(t,{output=true}={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'agent-integration-')),handlers={},events={};const file=path.join(directory,'copy.txt');await fs.writeFile(file,'Approved');let selected=[file],steps=[],last,exported=[],commands=[];
+async function fixture(t,{output=true,importWorkbook}={}){const directory=await fs.mkdtemp(path.join(os.tmpdir(),'agent-integration-')),handlers={},events={};const file=path.join(directory,'copy.txt');await fs.writeFile(file,'Approved');let selected=[file],steps=[],last,exported=[],commands=[];
  const settings={credentials:async()=>({mode:'api',apiModel:'test',apiKey:'fixture-secret',apiProtocol:'responses',apiBaseUrl:'https://example.invalid/v1'}),get:async()=>({mode:'api',apiModel:'test',executable:'C:/codex.exe',localModel:'local-test'})};
  const safe=fn=>async(_,v)=>{try{return {ok:true,value:await fn(v)}}catch(e){return {ok:false,error:e.message}}};
  const invoke=(name,value)=>handlers[name]({},value);
  const webContents={send:(channel,data)=>{if(channel==='agent-state')last=data;if(channel==='agent-command'){commands.push(data);queueMicrotask(async()=>{let value;if(data.tool==='export_files')value=await invoke('agent-export',{files:[]});else value={ok:true,value:{files:[]}};events['agent-command-result']({sender:webContents},{id:data.id,ok:value.ok,value:value.value,error:value.error});});}}};
- const service=installAgent({ipcMain:{handle:(n,f)=>handlers[n]=f,on:(n,f)=>events[n]=f},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:selected})},window:()=>({webContents}),dataDirectory:()=>directory,settings:()=>settings,guard:()=>{},isBusy:()=>false,localEnv:()=>process.env,safe,runPhotoshop:async(plan,dir)=>{exported.push(dir);return {saved:1,failed:0};},fetch:()=>assert.fail('Assistant cannot use API'),think:async task=>{assert.equal(task.mode,'local');return steps.shift()||{kind:'complete',message:'done',tool:'',arguments:'{}',questions:[]};}});t.after(async()=>{await service.close();await fs.rm(directory,{recursive:true,force:true,maxRetries:3,retryDelay:20});});
+ const service=installAgent({importWorkbook,ipcMain:{handle:(n,f)=>handlers[n]=f,on:(n,f)=>events[n]=f},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:selected})},window:()=>({webContents}),dataDirectory:()=>directory,settings:()=>settings,guard:()=>{},isBusy:()=>false,localEnv:()=>process.env,safe,runPhotoshop:async(plan,dir)=>{exported.push(dir);return {saved:1,failed:0};},fetch:()=>assert.fail('Assistant cannot use API'),think:async task=>{assert.equal(task.mode,'local');return steps.shift()||{kind:'complete',message:'done',tool:'',arguments:'{}',questions:[]};}});t.after(async()=>{await service.close();await fs.rm(directory,{recursive:true,force:true,maxRetries:3,retryDelay:20});});
  if(output){selected=[directory];await invoke('agent-output');selected=[file];}
  return {directory,file,invoke,exported,steps,commands,get last(){return last},select:paths=>selected=paths};}
 test('missing or vanished output directory is rejected before task creation or model execution',async t=>{
@@ -18,6 +18,16 @@ test('follow-up checks output again before appending attachments or user history
  const result=await f.invoke('agent-followup',{text:'Continue',fileIds:[]});assert.equal(result.ok,false);assert.match(result.error,/不存在或不可写/);assert.equal(JSON.stringify(f.last.history),before);
 });
 async function finished(f){for(let n=0;n<600;n++){if(f.last&&['completed','failed','stopped'].includes(f.last.status))return;await new Promise(r=>setTimeout(r,5));}throw Error('task did not finish');}
+
+test('assistant forwards cross-sheet search and workbook images while blocking image reads inside text batches',async t=>{
+ const calls=[],f=await fixture(t,{importWorkbook:async(file,options)=>{calls.push(options);return options.image?{name:'copy.xlsx',referenceFileId:'xlsx-reference:verified',images:['data:image/png;base64,YQ==']}:{matches:[]};}}),book=path.join(f.directory,'copy.xlsx');await fs.writeFile(book,'workbook fixture');
+ const picked=await f.invoke('agent-files',{paths:[book]}),fileId=picked.value[0].id;
+ const tool=args=>({kind:'tool',message:'Read workbook',tool:'read_document',arguments:JSON.stringify({fileId,...args}),questions:[]});
+ f.steps.push(tool({search:['Full original sentence']}),tool({image:{sheet:'海报',media:'xl/media/image.png'}}));
+ await f.invoke('agent-start',{request:'Locate exact poster copy',fileIds:[fileId]});await finished(f);
+ assert.equal(f.last.status,'completed');assert.deepEqual(calls,[{search:{queries:['Full original sentence'],sheet:undefined,offset:undefined}},{image:{sheet:'海报',media:'xl/media/image.png'}}]);assert.equal(f.last.referenceImages[0].fileId,'xlsx-reference:verified');assert.equal(f.commands.length,0);
+ calls.length=0;f.steps.push({kind:'tool',message:'Invalid image batch',tool:'read_batch',arguments:JSON.stringify({queries:[{tool:'read_document',arguments:{fileId,image:{sheet:'海报',media:'xl/media/image.png'}}}]}),questions:[]});await f.invoke('agent-start',{request:'read',fileIds:[fileId]});await finished(f);assert.equal(f.last.status,'failed');assert.equal(calls.length,0);
+});
 
 test('readonly batch reads allowlisted documents and returns independent results without write RPC',async t=>{
  const f=await fixture(t),picked=await f.invoke('agent-files'),id=picked.value[0].id;

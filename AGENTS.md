@@ -27,3 +27,4 @@
 - 2026-11-11：用户已明确要求发布上述工作记录、流程优化、独立任务隔离及混合改字能力，准备版本 0.3.64。本机归档路径 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.64；是否正式发布以公开 latest 和签名清单为准，证据 D:/PSD-Lingo/work/v64-local-verified.json、v64-public-verified.json。
 - 2026-11-11：已仅 cherry-pick 小问题提交 86b7375（本分支 d0171c4），引导标注生成保留连接侧/阅读轴/原始对齐；学习 rev11，不增模型调用或专项审验。729 项回归通过。用户明确授权发布 0.3.65，归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.65，实际公开状态以 latest/签名及 D:/PSD-Lingo/work/v65-public-verified.json 为准。不代表客户稿已修复或视觉通过。
 - 2026-11-11：用户明确授权发布桌面项目首次注册与助手对话收尾同步，准备版本0.3.66。737项回归、两个本机Codex空白对话的真实侧栏归属及正式包启动通过。收尾会打开一次对应Codex页面，同一会话追问不重复打开，不增加模型调用；不宣称完全静默。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.66，实际公开状态以 D:/PSD-Lingo/work/v66-public-verified.json 为准。
+- 2026-11-11：用户明确授权发布长分析资料完整交付、字段级纠错与失效门禁清理，准备版本0.3.67。744项回归与真实本机Codex、后台Illustrator副本保存重开/JPG、真实JPG审验链路通过；视觉审验仍有修改意见，不代表客户成稿通过。禁用computer use，未操作桌面。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.67，实际公开状态以 D:/PSD-Lingo/work/v67-public-verified.json 为准。

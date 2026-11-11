@@ -17,7 +17,7 @@ function collisionGroups(base,groups,buildRequest,records,fitText){
  return {groups:[],file:structuredClone(base),errors};
 }
 async function refineVisualLayout({working,targets,records,fitText,call,getVisual,buildRequest,visualCrop,focusIds,isCancelled,progress,maxRounds=3}){
- let current=working,learning,warning;const accepted=new Map(),failures=new Map(),reviews=[],seenCandidates=new Set();let feedback=[],repairPlan=[];
+ let current=working,learning,warning,cachedVisuals;const accepted=new Map(),failures=new Map(),reviews=[],seenCandidates=new Set();let feedback=[],repairPlan=[];
  const cancelled=()=>({working,accepted:[],failures:[],cancelled:true});
  progress('context',{indeterminate:true,message:'读取完整文案、画板与视觉关系，候选先渲染后复审。'});
  for(let round=1;round<=maxRounds;round++){
@@ -26,9 +26,10 @@ async function refineVisualLayout({working,targets,records,fitText,call,getVisua
   request.focusLayerKeys=live.filter(l=>focusIds?.includes(l.id)).map(l=>String(l.id));request.scope='full';request.visualPlanningVersion=2;request.designReviewVersion=1;request.phase='propose';request.selectedLayerKeys=live.map(l=>String(l.id));request.repairFeedback=feedback;request.consolidatedRepairPlan=repairPlan;request.reviewedLayerKeys=live.filter(l=>accepted.has(l.id)).map(l=>String(l.id));
   for(const row of request.layers)row.immutable=!request.selectedLayerKeys.includes(row.layerKey);
   progress('visuals',{round,indeterminate:true,message:`第 ${round}/${maxRounds} 轮：准备画板原稿与当前真实画面。`});
-  const visuals=await getVisual({file:current,layer:live[0],scope:'full',crop:visualCrop});
+  const visuals=cachedVisuals?.file===current?cachedVisuals.visuals:await getVisual({file:current,layer:live[0],scope:'full',crop:visualCrop});
   if(isCancelled())return cancelled();
   if(!visuals?.some(v=>v.stage==='current'))throw Error('视觉闭环缺少当前真实预览，未提交提案');
+  cachedVisuals={file:current,visuals};
   request.visuals=visuals.filter(v=>['source','current'].includes(v.stage)).slice(0,2);
   progress('request',{round,indeterminate:true,message:`第 ${round}/${maxRounds} 轮：按画板、完整段落和视觉关系组规划。服务未提供中间进度。`});
   let result;try{result=await call('suggestLayout',request);}catch(e){if(isCancelled())return cancelled();throw e;}learning=result.learning;warning=result.warning;
@@ -54,7 +55,12 @@ async function refineVisualLayout({working,targets,records,fitText,call,getVisua
    let reviewed;try{reviewed=await call('suggestLayout',reviewRequest);}catch(e){if(isCancelled())return cancelled();throw e;}if(isCancelled())return cancelled();
    const review=validateReview(reviewed.review,{...reviewRequest,repairGuidanceVersion:reviewed.repairGuidanceVersion,designReviewSources:reviewed.designReviewSources||reviewRequest.designReviewSources});repairPlan=review.repairPlan||[];reviews.push({round,groups:review.groups,skillReviews:review.skillReviews,repairPlan,reviewSources:reviewed.designReviewSources,reviewTransport:reviewed.reviewTransport});
    for(const g of staged.groups){const decision=review.groups.find(v=>v.id===g.id);if(decision.verdict!=='accept')for(const key of g.keys)feedback.push({layerKey:key,stage:'visual-review',reason:decision.reason});}
-   const approved=collisionGroups(current,staged.groups.filter(g=>review.groups.find(v=>v.id===g.id).verdict==='accept'),buildRequest,records,fitText);feedback.push(...approved.errors);current=approved.file;
+   const approved=collisionGroups(current,staged.groups.filter(g=>review.groups.find(v=>v.id===g.id).verdict==='accept'),buildRequest,records,fitText);feedback.push(...approved.errors);
+   // Only the exact complete candidate is the image we just reviewed. Partial
+   // rollbacks form a different composition and must be rendered afresh.
+   if(approved.groups.length===staged.groups.length)cachedVisuals={file:approved.file,visuals:[...visuals.filter(v=>v.stage==='source'),...after.filter(v=>v.stage==='current')]};
+   else if(!approved.groups.length)cachedVisuals={file:approved.file,visuals};
+   current=approved.file;
    for(const g of approved.groups)for(const item of g.items){accepted.set(item.id,item);failures.delete(String(item.id));}
   }
   for(const row of feedback)if(!accepted.has(current.layers.find(l=>String(l.id)===row.layerKey)?.id))failures.set(row.layerKey,row.reason);

@@ -58,3 +58,24 @@ test('visual review uses its own actual schema in the configured API transport',
  const result=await suggestLayout(r,{mode:'api',apiKey:'fixture',apiModel:'configured-model'},{fetch:async(_url,o)=>{body=JSON.parse(o.body);return {ok:true,json:async()=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({repairPlan:[{id:'spacing',sourceChecks:['group:lockup'],layerKeys:['17'],problem:'Visible overlap',cause:'Title and description treated independently',action:'Move title and description as one group',acceptance:'Complete group has distinct hierarchy and balanced whitespace',dependsOn:[]}],skillReviews:pluginReviews(),groups:[{id:'lockup',verdict:'revise',designChecks:fixtureChecks(),reason:'Visible overlap remains'}]})}]}]})};}});
  assert.equal(body.text.format.name,'design_visual_review');assert.deepEqual(body.text.format.schema.required,['groups','skillReviews','repairPlan']);assert.match(body.input[0].content[0].text,/输出JSON Schema/);assert.equal(result.review.groups[0].verdict,'revise');assert.equal(result.proposals,undefined);
 });
+
+test('local layout delivers complete reusable skills separately and does not duplicate instructions inside data',async()=>{
+ const f=fixture(),r=buildDesignLayoutRequest({...f,layer:f.file.layers[0]});let captured;
+ const result=await suggestLayout(r,{mode:'local'},{localAnalysis:async q=>{captured=q;return '{"proposals":[]}';}});
+ assert.equal(result.proposals.length,0);assert.match(captured.sharedInstructions,/graphic-judgment/);assert.match(captured.sharedInstructions,/groupShape/);
+ const skill=require('../services/design-skill.cjs').loadDesignSkill();assert.ok(captured.sharedInstructions.includes(skill.instructions));assert.ok(!captured.prompt.includes(skill.instructions));assert.ok(!captured.prompt.includes('"instructions":'));assert.equal(typeof captured.validateAnswer,'function');
+});
+
+test('rejected candidates reuse only the unchanged baseline image across repair rounds',async()=>{
+ const f=fixture();let renders=0,plans=0;
+ const result=await planAiFile({...f,getVisual:async()=>{renders++;return visual();},call:async(_n,r)=>r.phase==='review'?{review:{groups:[{id:'lockup',verdict:'revise',designChecks:fixtureChecks(),reason:'Actual visible title remains too wide'}]}}:{proposals:[proposal(f.file.layers[0],[60,30+(++plans),250,35])]}});
+ assert.equal(plans,3);assert.equal(renders,4);assert.equal(result.accepted.length,0);assert.deepEqual(result.working,f.file);
+});
+
+test('partial group rollback creates a new composition and invalidates cached current rendering',async()=>{
+ const f=fixture();let renders=0,plans=0;
+ await planAiFile({...f,getVisual:async()=>{renders++;return visual();},call:async(_n,r)=>{
+  if(r.phase==='review')return {review:{groups:r.pendingGroups.map(g=>({id:g.id,verdict:g.id==='a'?'accept':'revise',designChecks:fixtureChecks(),reason:'Inspected actual group'}))}};
+  plans++;return {proposals:[proposal(f.file.layers[0],[60,30+plans,250,35],'a'),proposal(f.file.layers[1],[60,100+plans,250,25],'b')]};
+ }});assert.equal(plans,3);assert.equal(renders,6);
+});

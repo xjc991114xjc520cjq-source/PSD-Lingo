@@ -43,7 +43,7 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  }
  return {inspect,validate,async configure({source,mapping,template,metadata,args,records=mappingRecords(mapping)}){
   const scan=await inspect({source,mapping,template,metadata});if(args.scanId!==scan.id)throw Error('模板扫描已失效，请重新inspect_product_template');
-  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','removeObjectIds','layout','boards'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
+  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
   return {plan:buildTemplatePlan(scan,mapping,decisions,records),artboards:scan.sourceBoards};
  },async run(args){const {scan,plan}=await validate(args);return compose({...args,plan,metadata:{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]},helperPath});}};
 }

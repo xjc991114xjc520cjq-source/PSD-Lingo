@@ -5,7 +5,12 @@ function validateArtboardPlan(plan,file){
  if(!Number.isInteger(plan.columns)||plan.columns<1||plan.columns>100||!Number.isInteger(plan.rows)||plan.rows<1||plan.rows>100||plan.rows*plan.columns<plan.boards.length||!Number.isFinite(plan.gap)||plan.gap<0||plan.gap>2000)throw Error('画板网格参数无效或行数×列数不足以容纳画板');
  if(plan.operation!==undefined&&!['compose','rename','arrange','edit'].includes(plan.operation))throw Error('画板操作无效');
  if(['rename','arrange'].includes(plan.operation)&&(plan.boards.length!==file.artboards?.length||new Set(plan.boards.map(b=>b.templateId)).size!==file.artboards.length||plan.boards.some(b=>b.mode!=='duplicate'||b.templateId===null||b.changes.length)))throw Error('重命名或重排必须保留全部原生画板且不夹带改字');
- if(plan.operation==='edit'&&(plan.boards.length!==file.artboards?.length||new Set(plan.boards.map(b=>b.templateId)).size!==file.artboards.length||plan.boards.some(b=>b.mode!=='duplicate'||!file.artboards.some(a=>a.id===b.templateId&&a.name===b.name))))throw Error('原位改字必须完整保留全部原生画板及名称');
+ const deleted=plan.deleteBoardIds??[];
+ if(!Array.isArray(deleted)||new Set(deleted).size!==deleted.length)throw Error('删除画板列表无效或重复');
+ if(deleted.length&&(plan.operation!=='edit'||!plan.productTemplate||!plan.productMapping||!Array.isArray(plan.productTemplate.deletedBoards)||plan.productTemplate.deletedBoards.length!==deleted.length||deleted.some(id=>{const a=file.artboards?.find(a=>a.id===id),d=plan.productTemplate.deletedBoards.find(d=>d.boardId===id);return !a||a.nativePath?.length!==1||!d||d.name!==a.name||JSON.stringify(d.box)!==JSON.stringify(a.box)||JSON.stringify(d.nativePath)!==JSON.stringify(a.nativePath)||!d.reason?.trim()||plan.boards.some(b=>b.templateId===id);})))throw Error('删除画板必须属于已批准模板计划，来源、名称、坐标与保留项不能冲突');
+ if(!deleted.length&&plan.productTemplate?.deletedBoards?.length)throw Error('删除画板记录与清单不一致');
+ const retained=file.artboards?.filter(a=>!deleted.includes(a.id));
+ if(plan.operation==='edit'&&(plan.boards.length!==retained?.length||new Set(plan.boards.map(b=>b.templateId)).size!==retained.length||plan.boards.some(b=>b.mode!=='duplicate'||!retained.some(a=>a.id===b.templateId&&a.name===b.name))))throw Error('原位改字必须完整保留全部未批准删除的原生画板及名称');
  if(plan.documentName!==undefined&&(typeof plan.documentName!=='string'||!plan.documentName.trim()||plan.documentName.length>100||/[<>:"/\\|?*\x00-\x1f]/.test(plan.documentName)||/[. ]$/.test(plan.documentName)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(plan.documentName)))throw Error('文档名称含有无效文件名字符');
  const names=new Set();let w=0,h=0;
  for(const b of plan.boards){

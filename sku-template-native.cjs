@@ -31,16 +31,20 @@ function tplVerify(d,checks,container){container=container||d;for(var i=0;i<chec
 // to their own containers, including independently edited embedded documents.
 const placementNative=String.raw`
 function tplCapture(d,c,depth){if(depth>6)throw Error('模板验证嵌套超过6级');var out=[];for(var i=0;i<c.layers.length;i++){var l=c.layers[i],e={path:[i],name:l.name,target:null,box:bounds(l)};if(l.typename==='LayerSet')e.group=tplCapture(d,l,depth);else if(tplIsText(l)){e.target=l.textItem.contents;e.styles=objectData(desc(l).getObjectValue(sid('textKey')));}else if(l.kind===LayerKind.SMARTOBJECT){var child=null,childDocs=tplDocs();try{d.activeLayer=l;executeAction(sid('placedLayerEditContents'),undefined,DialogModes.NO);child=app.activeDocument;if(child===d)throw Error('模板验证无法打开嵌入对象');if(tplKnown(child,childDocs)&&!child.saved)throw Error('已有子文档有未保存修改');e.children=tplCapture(child,child,depth+1);}finally{if(child&&child!==d&&!tplKnown(child,childDocs))child.close(SaveOptions.DONOTSAVECHANGES);app.activeDocument=d;}}out.push(e);}return out;}
+function tplHolder(copy,root,artboard){var children=[],i; if(artboard){for(i=0;i<root.layers.length;i++)children.push(root.layers[i]);}else children.push(root);
+ var holder=copy.layerSets.add();holder.name='Sparkit footer';holder.move(root,ElementPlacement.PLACEBEFORE);
+ if(holder.parent.typename!=='Document'||holder.id===root.id)throw Error('模板容器必须位于文档顶层');
+ for(i=0;i<children.length;i++){if(typeof checkpoint==='function')checkpoint('复制模板子层 '+(i+1)+'/'+children.length);if(children[i].id===holder.id)throw Error('模板容器不能复制自身');children[i].duplicate(holder,ElementPlacement.PLACEATEND);}return holder;}
 function tplReplace(d,ab,request,template){var copy=null,ancestors=[],old=[],holder=null;try{
  // Resolve every source reference before deleting any siblings.
  for(var i=0;i<request.oldObjects.length;i++){var o=request.oldObjects[i],l=tplLocate(d,o.nativePath);if(l.name!==o.name||!tplPath(ab,l))throw Error('旧底部块定位失效');old.push(l);var parent=l.parent;while(parent&&parent.typename!=='Document'){var seen=false;for(var j=0;j<ancestors.length;j++)if(ancestors[j].l.id===parent.id)seen=true;if(!seen){ancestors.push({l:parent,lock:tplLock(parent)});tplUnlock(parent);}parent=parent.parent;}}
- copy=template.duplicate('Sparkit independent footer',false);app.activeDocument=copy;
- tplEdit(copy,request.actions,0);var root=tplLocate(copy,request.root.nativePath);
+ if(typeof checkpoint==='function')checkpoint('建立独立模板副本');copy=template.duplicate('Sparkit independent footer',false);app.activeDocument=copy;
+ if(typeof checkpoint==='function')checkpoint('编辑模板字段');tplEdit(copy,request.actions,0);var root=tplLocate(copy,request.root.nativePath);
  // Native artboards must become ordinary groups before crossing documents.
- if(request.root.artboard){holder=copy.layerSets.add();holder.name='Sparkit footer';for(var i=0;i<root.layers.length;i++)root.layers[i].duplicate(holder,ElementPlacement.PLACEATEND);}
- else if(request.root.kind==='smart'){holder=copy.layerSets.add();holder.name='Sparkit footer';root.duplicate(holder,ElementPlacement.PLACEATEND);}else{holder=root;}
- var before=bounds(holder);var imported=holder.duplicate(d,ElementPlacement.PLACEATBEGINNING);copy.close(SaveOptions.DONOTSAVECHANGES);copy=null;app.activeDocument=d;tplUnlock(imported);imported.move(ab,ElementPlacement.INSIDE);
- var movementLocks=unlock({layers:[imported]});var scale=request.placement[2]/request.frame[2];if(Math.abs(scale-1)>.000001)imported.resize(scale*100,scale*100,AnchorPosition.TOPLEFT);
+ if(request.root.artboard){holder=tplHolder(copy,root,true);}
+ else if(request.root.kind==='smart'){holder=tplHolder(copy,root,false);}else{holder=root;}
+ if(typeof checkpoint==='function')checkpoint('导入独立模板组');var before=bounds(holder);var imported=holder.duplicate(d,ElementPlacement.PLACEATBEGINNING);copy.close(SaveOptions.DONOTSAVECHANGES);copy=null;app.activeDocument=d;tplUnlock(imported);imported.move(ab,ElementPlacement.INSIDE);
+ if(typeof checkpoint==='function')checkpoint('放置模板及清理旧块');var movementLocks=unlock({layers:[imported]});var scale=request.placement[2]/request.frame[2];if(Math.abs(scale-1)>.000001)imported.resize(scale*100,scale*100,AnchorPosition.TOPLEFT);
  var now=bounds(imported);imported.translate(UnitValue(request.placement[0]+(before[0]-request.frame[0])*scale-now[0],'px'),UnitValue(request.placement[1]+(before[1]-request.frame[1])*scale-now[1],'px'));
  relock(movementLocks);for(var i=0;i<old.length;i++){tplUnlock(old[i]);old[i].remove();}
  return {path:tplPath(ab,imported),name:imported.name,target:null,box:bounds(imported),group:imported.typename==='LayerSet'?tplCapture(d,imported,0):null,children:null};

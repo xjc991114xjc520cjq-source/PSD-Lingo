@@ -25,7 +25,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    const m=args.mapping,key=m.id+':'+m.approved.approvalDigest;
    if(state.sourceDocument?.productMappingKey===key)return {records:state.records,reused:true};
    if(state.files.some(f=>f.artboardPlan||f.layers.some(l=>l.recordId||l.nativeCreation||l.nativeDisposition)||f.mixedTextEdits?.length))throw Error('已有修改，不能用产品表覆盖；先恢复或新建独立任务');
-   const records=mappingRecords(m);history.transaction(()=>{state.records=records;state.docName='已确认产品表';state.docFingerprint=m.workbook.sha256;state.sourceDocument={name:state.docName,records,productMappingKey:key,productMappingId:m.id};state.checked=false;},'product-mapping-import');render();return {records,mappingId:m.id,skippedBoards:m.approved.boards.filter(b=>b.action==='skip')};
+   const records=mappingRecords(m);history.transaction(()=>{state.records=records;state.docName='已确认产品表';state.docFingerprint=m.workbook.sha256;state.sourceDocument={name:state.docName,records,productMappingKey:key,productMappingId:m.id};state.checked=false;},'product-mapping-import');render();return {records,mappingId:m.id,skippedBoards:m.approved.boards.filter(b=>b.action==='skip'),deletedBoards:m.approved.boards.filter(b=>b.action==='delete')};
   }
   if(['inspect_product_template','configure_product_template'].includes(tool)){
    const f=current(args.fileIndex),m=args.mapping;if(pathKey(f.path)!==pathKey(m.source.path)||state.sourceDocument?.productMappingKey!==m.id+':'+m.approved.approvalDigest)throw Error('请先导入同一原稿与已确认产品表');

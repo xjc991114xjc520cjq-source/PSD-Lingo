@@ -14,6 +14,20 @@ function fixture(){
 }
 const plan=f=>buildTemplatePlan(f.scan,f.mapping,f.args,f.records);
 test('template plan replaces only adopted footer and keeps native names positions and exact price provenance',()=>{const f=fixture(),p=plan(f);assert.equal(p.operation,'edit');assert.equal(p.boards[1].name,'Skip');assert.equal(p.productTemplate.requests.length,1);assert.deepEqual(p.productTemplate.requests[0].actions.filter(a=>a.mode==='text').map(a=>a.target),['$199.50','$159']);assert.equal(p.productSourceRecords.length,2);assert.equal(p.productTemplate.requests[0].oldObjects[0].name,'old-footer');});
+test('approved board deletion is explicit, preserves skipped exceptions and exports only retained boards at original coordinates',()=>{
+ const f=fixture();f.scan.sourceBoards.push({id:12,name:'No table row',box:[240,0,100,100],nativePath:[2]});f.mapping.approved.boards.push({boardId:12,boardName:'No table row',action:'delete',deleteConfirmed:true,reason:'User requested deletion of unmatched board'});f.args.deleteBoardIds=[12];
+ const p=plan(f),kept=require('../photoshop-artboard-plan.cjs').validateArtboardPlan(p,{...f.scan.sourceInventory,artboards:f.scan.sourceBoards,layers:[]});assert.deepEqual(kept.map(b=>b.templateId),[10,11]);assert.deepEqual(kept.map(b=>b.box),[[0,0,100,100],[120,0,100,100]]);assert.equal(p.productTemplate.deletedBoards[0].name,'No table row');assert.equal(p.boards[1].name,'Skip');
+ for(const ids of [undefined,[],[11],[12,12],[10,12],[999]]){f.args.deleteBoardIds=ids;assert.throws(()=>plan(f),/deleteBoardIds/);}f.args.deleteBoardIds=[12];delete f.mapping.approved.boards[2].deleteConfirmed;assert.throws(()=>plan(f),/明确批准/);
+});
+test('artboard contract cannot hide a retained board or smuggle deleted boards back into output',()=>{
+ const f=fixture();f.mapping.approved.boards[1]={boardId:11,boardName:'Skip',action:'delete',deleteConfirmed:true,reason:'User deletion'};f.args.deleteBoardIds=[11];const p=plan(f),file={...f.scan.sourceInventory,artboards:f.scan.sourceBoards,layers:[]},validate=require('../photoshop-artboard-plan.cjs').validateArtboardPlan;
+ for(const mutate of [v=>v.deleteBoardIds=[],v=>v.productTemplate.deletedBoards[0].box=[0,0,1,1],v=>v.productTemplate.deletedBoards[0].name='changed',v=>v.boards.push({name:'Skip',templateId:11,mode:'duplicate',changes:[]}),v=>delete v.productMapping,v=>v.operation='compose']){const copy=structuredClone(p);mutate(copy);assert.throws(()=>validate(copy,file));}
+});
+test('native board deletion resolves all references before sibling removal and leaves retained coordinates intact',()=>{
+ const {boardDeletionNative}=require('../photoshop-artboards.cjs');const layers=[0,1,2,3].map(i=>({id:i,name:'Board '+i,typename:'LayerSet',box:[i*100,0,100,100]})),d={layers};for(const l of layers)l.remove=()=>{layers.splice(layers.indexOf(l),1);};
+ const ctx=vm.createContext({locate:(doc,p)=>doc.layers[p[0]],desc:()=>({hasKey:()=>true}),sid:s=>s,rect:l=>l.box,near:(a,b)=>JSON.stringify(a)===JSON.stringify(b),unlock:()=>{}});vm.runInContext(boardDeletionNative,ctx);
+ const approvals=[0,2].map(i=>({boardId:i,name:'Board '+i,box:[i*100,0,100,100],nativePath:[i],reason:'Explicit deletion'})),refs=ctx.resolveBoardDeletes(d,approvals),kept=[layers[1],layers[3]].map(l=>({id:l.id,name:l.name,box:l.box})),deleted=ctx.applyBoardDeletes(d,refs,kept);assert.deepEqual(layers.map(l=>l.id),[1,3]);assert.equal(deleted.length,2);layers[0].box[0]=0;assert.throws(()=>ctx.applyBoardDeletes(d,[{layer:layers[1],approval:approvals[1]}],kept),/保留画板/);
+});
 test('template plan rejects foreign or skipped boards, product deletion, old source approval, stale records and root removal',()=>{
  for(const mutate of [f=>f.args.boards[0].boardId=11,f=>f.args.boards[0].oldObjectIds=['0'],f=>f.args.boards[0].oldObjectIds=['0.1'],f=>f.scan.approvalDigest='stale',f=>f.records[0].target='999',f=>f.args.removeObjectIds.push('0'),f=>f.args.boards.push({...f.args.boards[0],boardId:11}),f=>f.args.boards[0].changes[0].recordId='foreign',f=>f.args.boards[0].changes[0].original='stale']){const f=fixture();mutate(f);assert.throws(()=>plan(f));}
 });
@@ -52,6 +66,16 @@ test('assistant template configuration is undoable and stale or ordinary-edit st
  const args={...f.args,fileIndex:0,mapping:f.mapping,templateFileId:'attachment'};await run('configure_product_template',args);assert.equal(file.artboardPlan.productTemplate.requests.length,1);assert.deepEqual(transactions,['product-template-plan']);assert.equal(calls,1);const before=JSON.stringify(file);
  await assert.rejects(run('configure_product_template',args,null,()=>false),/过期/);assert.equal(JSON.stringify(file),before);assert.equal(calls,1);
  file.layers.push({recordId:'ordinary'});await assert.rejects(run('configure_product_template',args),/普通修改/);assert.equal(calls,1);
+});
+test('template holder snapshots original children and escapes active artboard before copying',()=>{
+ const {placementNative}=require('../sku-template-native.cjs');
+ const c=vm.createContext({ElementPlacement:{PLACEBEFORE:'before',PLACEATEND:'end'}});vm.runInContext(placementNative,c);
+ const doc={typename:'Document'},root={id:1,layers:[],parent:doc};let duplicates=0;
+ const original={id:2,duplicate(holder){assert.equal(holder.parent,doc);duplicates++;root.layers.push({id:90});}};root.layers.push(original);
+ const holder={id:3,parent:root,move(target,placement){assert.equal(target,root);assert.equal(placement,'before');root.layers.splice(root.layers.indexOf(this),1);this.parent=doc;}};
+ const copy={layerSets:{add(){root.layers.push(holder);return holder;}}};
+ assert.equal(c.tplHolder(copy,root,true),holder);assert.equal(duplicates,1);
+ holder.move=()=>{};holder.parent=root;assert.throws(()=>c.tplHolder(copy,root,true),/文档顶层/);
 });
 test('final design audit receives board-specific template prices, exclusions and cleanup requirements',async()=>{
  const {auditDesignFile}=require('../design-document-audit.cjs'),f=fixture(),records=f.records;

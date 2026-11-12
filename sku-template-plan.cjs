@@ -5,6 +5,10 @@ function rect(r){return Array.isArray(r)&&r.length===4&&r.every(Number.isFinite)
 function buildTemplatePlan(scan,mapping,args,records){
  if(!mapping?.approved||mapping.id!==scan.mappingId||mapping.approved.approvalDigest!==scan.approvalDigest)throw Error('模板扫描与当前产品批准不一致');
  if(!args||!Array.isArray(args.boards)||args.boards.length!==mapping.approved.boards.filter(b=>b.action==='use').length||new Set(args.boards.map(b=>b.boardId)).size!==args.boards.length)throw Error('模板替换必须恰好覆盖全部采用画板');
+ const deleteBoardIds=args.deleteBoardIds||[],approvedDeletes=mapping.approved.boards.filter(b=>b.action==='delete');
+ if(!Array.isArray(deleteBoardIds)||new Set(deleteBoardIds).size!==deleteBoardIds.length||deleteBoardIds.some(id=>!Number.isInteger(id))||deleteBoardIds.length!==approvedDeletes.length||approvedDeletes.some(b=>!b.deleteConfirmed||!deleteBoardIds.includes(b.boardId)))throw Error('deleteBoardIds必须恰好对应用户明确批准删除的画板，skip不能当作删除');
+ const deletedBoards=approvedDeletes.map(b=>{const a=scan.sourceBoards.find(a=>a.id===b.boardId&&a.name===b.boardName);if(!a||a.nativePath?.length!==1||!b.reason?.trim())throw Error('删除画板的来源或批准失效');return {boardId:a.id,name:a.name,box:a.box,nativePath:a.nativePath,reason:b.reason};});
+ const retained=scan.sourceBoards.filter(b=>!deleteBoardIds.includes(b.id));if(!retained.length)throw Error('至少保留一个画板');
  const root=scan.templateInventory.objects.find(o=>o.id===args.templateRootId);if(!root||root.steps.length!==1||!['group','smart'].includes(root.kind)||!root.visible)throw Error('请选择可见的模板顶层分组/智能对象');
  if(scan.templateInventory.issues?.some(i=>{const o=scan.templateInventory.objects.find(o=>o.id===i.objectId);return o&&ancestor(root,o);}))throw Error('选定模板内有无法安全处理的智能对象，请先整理为嵌入PSD/PSB');
  const fieldObjects=args.templateFields;if(!Array.isArray(fieldObjects)||!fieldObjects.length||new Set(fieldObjects.map(f=>f.field)).size!==fieldObjects.length)throw Error('请明确模板价格字段与对象角色');
@@ -14,7 +18,7 @@ function buildTemplatePlan(scan,mapping,args,records){
  const available=mappingRecords(mapping);if(available.some(r=>!records.some(v=>v.id===r.id&&v.target===r.target&&v.digest===r.digest)))throw Error('请先导入当前确认清单的全部文案字段');
  const keys=new Set(mapping.approved.boards.filter(b=>b.action==='use').flatMap(b=>b.fields.map(f=>f.key)));if(fieldObjects.some(f=>!keys.has(f.field)))throw Error('模板字段角色没有对应表格字段');
  const used=new Set(),requests=[];
- for(const approved of mapping.approved.boards){if(approved.action==='skip')continue;const b=args.boards.find(b=>b.boardId===approved.boardId);if(!b)throw Error('缺少采用画板');const board=scan.sourceBoards.find(a=>a.id===b.boardId);if(!board)throw Error('画板来源失效');
+ for(const approved of mapping.approved.boards){if(approved.action!=='use')continue;const b=args.boards.find(b=>b.boardId===approved.boardId);if(!b)throw Error('缺少采用画板');const board=scan.sourceBoards.find(a=>a.id===b.boardId);if(!board)throw Error('画板来源失效');
   if(!rect(b.replaceRegion)||b.replaceRegion[0]<0||b.replaceRegion[1]<0||b.replaceRegion[0]+b.replaceRegion[2]>1||b.replaceRegion[1]+b.replaceRegion[3]>1)throw Error('旧块区域需相对画板明确指定');
   const region=[board.box[0]+b.replaceRegion[0]*board.box[2],board.box[1]+b.replaceRegion[1]*board.box[3],b.replaceRegion[2]*board.box[2],b.replaceRegion[3]*board.box[3]];
   if(!Array.isArray(b.oldObjectIds)||!b.oldObjectIds.length||new Set(b.oldObjectIds).size!==b.oldObjectIds.length||!b.reason?.trim())throw Error('请明确旧块对象与核实依据');
@@ -41,7 +45,7 @@ function buildTemplatePlan(scan,mapping,args,records){
   const p=b.placement;if(p[0]<board.box[0]-.5||p[1]<board.box[1]-.5||p[0]+p[2]>board.box[0]+board.box[2]+.5||p[1]+p[3]>board.box[1]+board.box[3]+.5)throw Error('模板参照框放置超出产品画板');
   requests.push({boardId:b.boardId,oldObjects:old,actions,root,frame:args.templateFrame,placement:p});
  }
- const plan={version:1,operation:'edit',outputFormat:args.outputFormat||'PSB',documentName:args.documentName||'SKU-template',columns:1,rows:scan.sourceBoards.length,gap:0,boards:scan.sourceBoards.map(b=>({name:b.name,templateId:b.id,mode:'duplicate',changes:[]})),productSourceRecords:available.map(({id,target,digest})=>({id,target,digest})),productMapping:{id:mapping.id,approvalDigest:mapping.approved.approvalDigest},productTemplate:{scanId:scan.id,template:scan.template,decisions:structuredClone(args),requests}};
+ const plan={version:1,operation:'edit',outputFormat:args.outputFormat||'PSB',documentName:args.documentName||'SKU-template',columns:1,rows:retained.length,gap:0,boards:retained.map(b=>({name:b.name,templateId:b.id,mode:'duplicate',changes:[]})),productSourceRecords:available.map(({id,target,digest})=>({id,target,digest})),productMapping:{id:mapping.id,approvalDigest:mapping.approved.approvalDigest},productTemplate:{scanId:scan.id,template:scan.template,decisions:structuredClone(args),requests,...(deletedBoards.length?{deletedBoards}:{})},...(deletedBoards.length?{deleteBoardIds:[...deleteBoardIds]}:{})};
  require('./photoshop-artboard-plan.cjs').validateArtboardPlan(plan,{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]});return plan;
 }
 module.exports={buildTemplatePlan,ancestor};

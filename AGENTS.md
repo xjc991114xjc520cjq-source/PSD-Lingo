@@ -33,3 +33,5 @@
 - 2026-11-12：用户明确授权发布产品表对应画板及原位文案块修改，并交接“灵搭 Sparkit · 实机测试与设计审验”（01a1c671-e732-7bb1-84a3-316bd6d509df）开展客户副本测试。准备0.3.69，775项回归、隐藏Electron及后台PS独立智能对象小样通过；客户原稿未改，真实客户任务和设计验收另行记录。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.69，实际发布以D:/PSD-Lingo/work/v69-public-verified.json及正式latest签名为准。
 
 - 2026-11-12：用户明确授权发布 SKU 外部底部模板替换并启动独立实机测试。功能提交4571d21，786项自动回归通过，准备0.3.70。当前发布前客户整稿及Adobe实机未验收；发布核对完成后交接“灵搭 Sparkit · 实机测试与设计审验”从本轮I盘键盘稿断点后台续测，禁止computer-use及旧RS6V2串任务。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.70，实际公开以签名latest及work/releases/0.3.70/public-verified.json为准。
+
+- 2026-11-12：用户明确授权发布赠品模板及后续模板导入／价格结构修复，准备0.3.71。赠品功能8dd410f，813项回归与实际Electron、后台PS单／双／无赠品及组合居中保存重开/JPG通过。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.71；正式状态以work/releases/0.3.71/public-verified.json及公开签名latest为准。不代表客户整稿或用户视觉批准。

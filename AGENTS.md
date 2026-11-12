@@ -35,3 +35,5 @@
 - 2026-11-12：用户明确授权发布 SKU 外部底部模板替换并启动独立实机测试。功能提交4571d21，786项自动回归通过，准备0.3.70。当前发布前客户整稿及Adobe实机未验收；发布核对完成后交接“灵搭 Sparkit · 实机测试与设计审验”从本轮I盘键盘稿断点后台续测，禁止computer-use及旧RS6V2串任务。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.70，实际公开以签名latest及work/releases/0.3.70/public-verified.json为准。
 
 - 2026-11-12：用户明确授权发布赠品模板及后续模板导入／价格结构修复，准备0.3.71。赠品功能8dd410f，813项回归与实际Electron、后台PS单／双／无赠品及组合居中保存重开/JPG通过。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.71；正式状态以work/releases/0.3.71/public-verified.json及公开签名latest为准。不代表客户整稿或用户视觉批准。
+
+- 2026-11-12：用户明确授权发布0.3.72。修复XLSX价格浮点尾数，接入原始数值/格式/公式来源及批准失效校验；818项回归、客户活动表5处只读核对及正式包启动通过。未调用Adobe，客户整稿与视觉验收另行记录。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.72，实际公开以work/releases/0.3.72/public-verified.json与正式latest签名为准。

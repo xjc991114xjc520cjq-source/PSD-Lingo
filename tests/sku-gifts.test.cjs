@@ -21,7 +21,7 @@ function fixture(value='蓝键帽 价值99元'){
  return {config,objects,catalog:{assets:[{name:'蓝键帽',path:'/blue.png',fingerprint:'blue'},{name:'鼠标垫',path:'/mat.png',fingerprint:'mat'}]},approved:{fields:[{key:'赠品',role:'gift',state:value?'value':'missing',value,cell:'E2'}]},priceFields:[{field:'price',objectIds:['0.2']}]};
 }
 test('gift actions create per-product slots and copy truthful names/value styles, empty products clear badge instead of carrying old gifts',()=>{
- const a=giftAction(fixture()),b=giftAction(fixture('蓝键帽 价值99元+鼠标垫 价值69元'));assert.equal(a.gifts.length,1);assert.equal(b.gifts.length,2);assert.equal(a.gifts[0].spans.map(s=>s.text).join(''),'价值99元\n蓝键帽');assert.equal(b.gifts[1].asset.fingerprint,'mat');assert.equal(a.reference.cell,'E2');
+ const a=giftAction(fixture()),b=giftAction(fixture('蓝键帽 价值99元+鼠标垫 价值69元'));assert.equal(a.gifts.length,1);assert.equal(b.gifts.length,2);assert.equal(a.gifts[0].spans.map(s=>s.text).join(''),'蓝键帽\n价值99元');assert.equal(b.gifts[1].asset.fingerprint,'mat');assert.equal(a.reference.cell,'E2');
  const empty=giftAction(fixture(''));assert.equal(empty.gifts.length,0);assert.equal(empty.emptyRemoves[0].objectId,'0.1');assert.equal(a.emptyRemoves.length,0);
 });
 test('gift contract rejects price overlap, unknown assets, omitted name/value, invented claims and unsafe frames',()=>{
@@ -46,6 +46,15 @@ test('gift directory scanner detects actual PNG bytes, hashes, empty alpha, dupl
 test('native gift region math supports single and multiple horizontal/vertical items without stretching shapes',()=>{
  const c=vm.createContext({});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);assert.deepEqual(Array.from(c.giftBox([.5,0,.5,1],[100,20,200,100])),[200,20,100,100]);assert.deepEqual(Array.from(c.giftBox([0,.5,1,.5],[100,20,200,100])),[100,70,200,50]);
  assert.doesNotThrow(()=>new vm.Script(require('../photoshop-artboards.cjs').compositionScript('C:/input.psb',[],'PSB','C:/out',{productTemplate:{}}).replace(/^#target photoshop/,'')));
+});
+test('single gift compacts visible text and image instead of retaining large slot gaps across sizes',()=>{
+ const c=vm.createContext({});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);
+ for(const size of [1,2,4]){const cell=[100*size,20*size,400*size,100*size],text=[0,0,80*size,40*size],image=[900,0,110*size,80*size],p=c.giftCompact(cell,text,image);assert.equal(p.scale,1);assert.ok(p.gap<=12*size);assert.ok(Math.abs(p.image[0]-(p.text[0]+text[2])-p.gap)<1e-8);assert.equal((p.text[0]+p.image[0]+image[2])/2,cell[0]+cell[2]/2);assert.equal(p.text[1]+text[3]/2,p.image[1]+image[3]/2);}
+ const long=c.giftCompact([0,0,200,100],[0,0,150,40],[0,0,100,50]);assert.ok(long.scale<1);assert.equal(long.text[0],0);assert.throws(()=>c.giftCompact([0,0,100,50],[0,0,100,40],[0,0,20,20]),/放不下/);
+});
+test('gift supporting copy keeps explicit source identity and cannot capture price or duplicate main text',()=>{
+ const f=fixture();f.objects.push({...f.objects[2],id:'0.0.1',nativePath:[0,0,1],steps:[{path:[0,0,1]}],original:'原有说明'});f.config.supportingTextObjectIds=['0.0.1'];assert.deepEqual(giftAction(f).supportingPaths,[[0,0,1]]);
+ for(const ids of [['0.2'],['0.0.0'],['0.0.1','0.0.1']]){f.config.supportingTextObjectIds=ids;assert.throws(()=>giftAction(f),/附属说明/);}
 });
 
 test('reordered gift paragraphs keep line breaks inside their actual paragraph and inherit the matching source style',()=>{

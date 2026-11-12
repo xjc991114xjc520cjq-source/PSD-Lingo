@@ -137,9 +137,9 @@ test('native JPG proof cache tracks document IDs without retaining closed source
 
 test('prepared template remaps only outer paths for price reflow and gift prototypes without mutating approved decisions',()=>{
  const vm=require('node:vm'),c=vm.createContext({});vm.runInContext(require('../sku-template-native.cjs').placementNative,c);
- const actions=[{mode:'gift-replace',steps:[{path:[3,1],name:'gift'}],prototypePath:[3,1,0]},{mode:'price-reflow',steps:[{path:[3,2],name:'price'}],items:[{paths:[[3,2,0],[3,2,1]]}],separators:[{path:[3,2,2]}]},{mode:'gift-replace',steps:[{path:[3,4],name:'embedded'},{path:[2],name:'gift'}],prototypePath:[2,0]}];
+ const actions=[{mode:'gift-replace',steps:[{path:[3,1],name:'gift'}],prototypePath:[3,1,0],supportingPaths:[[3,1,2]]},{mode:'price-reflow',steps:[{path:[3,2],name:'price'}],items:[{paths:[[3,2,0],[3,2,1]]}],separators:[{path:[3,2,2]}]},{mode:'gift-replace',steps:[{path:[3,4],name:'embedded'},{path:[2],name:'gift'}],prototypePath:[2,0]}];
  c.input=JSON.stringify(actions);const actual=vm.runInContext('tplRemapActions(JSON.parse(input),[3])',c),plain=JSON.parse(JSON.stringify(actual));
- assert.deepEqual(plain[0].steps[0].path,[0,1]);assert.deepEqual(plain[0].prototypePath,[0,1,0]);assert.deepEqual(plain[1].items[0].paths,[[0,2,0],[0,2,1]]);assert.deepEqual(plain[1].separators[0].path,[0,2,2]);assert.deepEqual(plain[2].prototypePath,[2,0]);assert.deepEqual(actions[0].steps[0].path,[3,1]);
+ assert.deepEqual(plain[0].steps[0].path,[0,1]);assert.deepEqual(plain[0].prototypePath,[0,1,0]);assert.deepEqual(plain[0].supportingPaths,[[0,1,2]]);assert.deepEqual(actions[0].supportingPaths,[[3,1,2]]);assert.deepEqual(plain[1].items[0].paths,[[0,2,0],[0,2,1]]);assert.deepEqual(plain[1].separators[0].path,[0,2,2]);assert.deepEqual(plain[2].prototypePath,[2,0]);assert.deepEqual(actions[0].steps[0].path,[3,1]);
  assert.throws(()=>vm.runInContext('tplRemapActions(JSON.parse(input),[8])',c),/超出选定根/);
 });
 

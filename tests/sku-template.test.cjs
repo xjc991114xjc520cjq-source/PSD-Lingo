@@ -86,6 +86,21 @@ test('template assembly uses a separate document, preserves copied layer names/o
 test('template assembly closes only its staging document after grouping failure and restores active document',()=>{
  const f=assemblyFixture(true);assert.throws(()=>f.c.tplHolder(f.doc,f.root,true),/native grouping failed/);assert.equal(f.closed(),true);assert.equal(f.c.app.activeDocument,f.doc);assert.equal(f.root.layers.length,3);
 });
+test('template native attachment targets the specified artboard index and restores both parent locks on failure',()=>{
+ const {placementNative}=require('../sku-template-native.cjs');let restored=[],actions=[];
+ function Descriptor(){}for(const key of ['putReference','putBoolean','putInteger'])Descriptor.prototype[key]=function(){};
+ function Reference(){}Reference.prototype.putIdentifier=function(_,id){actions.push(['source',id]);};Reference.prototype.putIndex=function(_,index){actions.push(['index',index]);};
+ const c=vm.createContext({ActionDescriptor:Descriptor,ActionReference:Reference,DialogModes:{NO:0},sid:s=>s,desc:()=>({getInteger:()=>50}),tplParents:()=>['old-parent'],tplLock:()=> 'target-lock',tplUnlock:()=>{},tplRelock:(_,v)=>restored.push(v),tplRestoreParents:v=>restored.push(v[0]),executeAction:()=>{},enc:JSON.stringify});vm.runInContext(placementNative,c);
+ c.tplAttach({}, {id:7}, {id:83});assert.deepEqual(actions,[['source',7],['index',49]]);assert.deepEqual(restored,['target-lock','old-parent']);
+ restored=[];c.executeAction=()=>{throw Error('native move rejected');};assert.throws(()=>c.tplAttach({}, {id:7}, {id:83}),/native move rejected/);assert.deepEqual(restored,['target-lock','old-parent']);
+});
+test('template verification accepts recomputed percentage click points but rejects font or absolute ink changes',()=>{
+ const {templateNative,placementNative}=require('../sku-template-native.cjs');const c=vm.createContext({LayerKind:{TEXT:'text'}});vm.runInContext(templateNative+placementNative,c);
+ let actual={fontPostScriptName:'A',size:12,textClickPoint:{horizontal:{value:88}}},box=[10,20,100,30];
+ c.tplLocate=()=>({name:'Title',kind:'text',textItem:{contents:'hello'}});c.desc=()=>({getObjectValue:()=>actual});c.objectData=v=>v;c.bounds=()=>box;c.sid=s=>s;
+ const check={path:[0],name:'Title',target:'hello',styles:{fontPostScriptName:'A',size:12,textClickPoint:{horizontal:{value:77}}},box:[10,20,100,30]};
+ assert.doesNotThrow(()=>c.tplVerify({},[check]));actual.fontPostScriptName='B';assert.throws(()=>c.tplVerify({},[check]),/字符样式/);actual.fontPostScriptName='A';box=[20,20,100,30];assert.throws(()=>c.tplVerify({},[check]),/位置/);
+});
 test('final design audit receives board-specific template prices, exclusions and cleanup requirements',async()=>{
  const {auditDesignFile}=require('../design-document-audit.cjs'),f=fixture(),records=f.records;
  const file={width:220,height:100,layers:[],artboards:f.scan.sourceBoards,composedBoards:f.scan.sourceBoards.map(b=>({...b,templateVerified:b.id===10,templateChanges:b.id===10?[{recordId:records[0].id,target:'$199.50'}]:[],templateRemoved:b.id===10?[{name:'sale-label',original:'Sale'}]:[]})),templateCopy:{records,decisions:{boards:[{boardId:10,fieldExclusions:[{recordId:records[1].id,reason:'User excluded final'}]}]}}};

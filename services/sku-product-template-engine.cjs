@@ -43,7 +43,7 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  }
  return {inspect,validate,async configure({source,mapping,template,metadata,args,records=mappingRecords(mapping)}){
   const scan=await inspect({source,mapping,template,metadata});if(args.scanId!==scan.id)throw Error('模板扫描已失效，请重新inspect_product_template');
-  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
+  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','priceGroups','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
   return {plan:buildTemplatePlan(scan,mapping,decisions,records),artboards:scan.sourceBoards};
  },async run(args){const {scan,plan}=await validate(args);return compose({...args,plan,metadata:{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]},helperPath});}};
 }
@@ -51,6 +51,6 @@ function templateReport(scan,{offset=0,limit=100,boardId}={}){
  if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>100)throw Error('模板对象分页参数无效');
  const compact=({styles,fonts,steps,...o})=>({...o,fonts,mixedStyleRuns:styles?.textStyleRange?.map(r=>({from:r.from,to:r.to,style:Object.fromEntries(['fontPostScriptName','fontName','fontStyleName','size','impliedFontSize','tracking','baselineShift','horizontalScale','verticalScale','fauxBold','fauxItalic','autoLeading','leading','color','strikethrough'].filter(k=>r.textStyle?.[k]!==undefined).map(k=>[k,r.textStyle[k]]))}))});
  const source=scan.sourceInventory.objects.filter(o=>boardId===undefined||o.boardId===boardId),template=scan.templateInventory.objects;
- return {scanId:scan.id,boards:scan.sourceBoards,sourceObjects:source.slice(offset,offset+limit).map(compact),templateObjects:template.slice(offset,offset+limit).map(compact),sourceTotal:source.length,templateTotal:template.length,offset,nextOffset:offset+limit<Math.max(source.length,template.length)?offset+limit:null,templateCanvas:[0,0,scan.templateInventory.width,scan.templateInventory.height],issues:scan.templateInventory.issues};
+ return {defaultPricePolicy:'价格项减少默认删除完整标签/金额/失效符号并回收空槽。配置priceGroups声明完整阅读组和运算关系，主价独立容器；有效0保留，用户完整布局优先，最终JPG仍须审验。',scanId:scan.id,boards:scan.sourceBoards,sourceObjects:source.slice(offset,offset+limit).map(compact),templateObjects:template.slice(offset,offset+limit).map(compact),sourceTotal:source.length,templateTotal:template.length,offset,nextOffset:offset+limit<Math.max(source.length,template.length)?offset+limit:null,templateCanvas:[0,0,scan.templateInventory.width,scan.templateInventory.height],issues:scan.templateInventory.issues};
 }
 module.exports={createProductTemplateEngine,templateReport};

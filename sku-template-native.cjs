@@ -1,7 +1,7 @@
 // Declarative Photoshop block operations. No model-supplied executable code.
 const {native}=require('./photoshop-bulk.cjs');
 const {skuNative}=require('./sku-workflow.cjs');
-const templateNative=native+skuNative+String.raw`
+const templateNative=native+skuNative+require('./sku-price-reflow-native.cjs').priceReflowNative+String.raw`
 function tplHasBoard(a,id){for(var i=0;i<a.length;i++)if(Number(a[i])===Number(id))return true;return false;}
 function tplDocs(){var a=[];for(var i=0;i<app.documents.length;i++)a.push(app.documents[i]);return a;}
 function tplKnown(d,a){for(var i=0;i<a.length;i++)if(a[i]===d||a[i].id===d.id)return true;return false;}
@@ -17,14 +17,14 @@ function tplNewCrop(before,after,w,h){return after[0]<Math.min(0,before[0])-.5||
 function tplParents(l){var a=[],p=l.parent;while(p&&p.typename!=='Document'){a.push({l:p,lock:tplLock(p)});tplUnlock(p);p=p.parent;}return a;}
 function tplRestoreParents(a){for(var i=a.length-1;i>=0;i--)tplRelock(a[i].l,a[i].lock);}
 function tplUnlock(l){l.allLocked=false;if(l.typename!=='LayerSet')try{l.positionLocked=false;l.pixelsLocked=false;l.transparentPixelsLocked=false;}catch(_){} }
-function tplEdit(d,actions,depth){var groups={},order=[],checks=[];for(var i=0;i<actions.length;i++){var a=actions[i],k=a.steps[depth].path.join('.');if(!groups[k]){groups[k]={l:tplLocate(d,a.steps[depth].path),actions:[]};order.push(k);}groups[k].actions.push(a);}
+function tplEdit(d,actions,depth){var groups={},order=[],checks=[],reflows=[];for(var i=0;i<actions.length;i++){var a=actions[i];if(a.mode==='price-reflow'&&a.steps.length===depth+1){reflows.push(pricePrepare(d,a));continue;}var k=a.steps[depth].path.join('.');if(!groups[k]){groups[k]={l:tplLocate(d,a.steps[depth].path),actions:[]};order.push(k);}groups[k].actions.push(a);}
  for(var i=0;i<order.length;i++){var group=groups[order[i]],l=group.l,batch=group.actions,direct=[],nested=[];for(var j=0;j<batch.length;j++){var a=batch[j];if(a.steps[depth].name!==l.name)throw Error('模板对象名称失效');if(depth===a.steps.length-1)direct.push(a);else nested.push(a);}var access=tplParents(l),before=bounds(l),lock=tplLock(l);tplUnlock(l);
  if(nested.length){if(l.kind!==LayerKind.SMARTOBJECT)throw Error('模板嵌套路径不是智能对象');l=independent(l);var child=null,childDocs=tplDocs();try{d.activeLayer=l;executeAction(sid('placedLayerEditContents'),undefined,DialogModes.NO);child=app.activeDocument;if(child===d||tplKnown(child,childDocs))throw Error('无法隔离模板子文档，保留已有文档');var sub=tplEdit(child,nested,depth+1);child.close(SaveOptions.SAVECHANGES);child=null;checks.push({layer:l,children:sub});}finally{if(child&&child!==d&&!tplKnown(child,childDocs))child.close(SaveOptions.DONOTSAVECHANGES);app.activeDocument=d;}}
  for(var j=0;j<direct.length;j++){var a=direct[j];if(a.mode==='remove'){l.remove();l=null;break;}if(a.mode==='text'){if(!tplIsText(l)||l.textItem.contents!==a.original)throw Error('模板原文失效');var old=bounds(l),td=remapTextDescriptor(desc(l).getObjectValue(sid('textKey')),a.original,a.target,true,a.spans),expected=objectData(td);for(var fi=0;fi<a.fonts.length;fi++)app.fonts.getByName(a.fonts[fi]);var set=new ActionDescriptor(),r=new ActionReference();r.putIdentifier(sid('textLayer'),l.id);set.putReference(sid('null'),r);set.putObject(sid('to'),sid('textLayer'),td);executeAction(sid('set'),set,DialogModes.NO);if(l.textItem.contents!==a.target||!compatible(expected,objectData(desc(l).getObjectValue(sid('textKey'))),''))throw Error('模板文字样式写入不一致');var f=0;if(a.anchor==='center')f=0.5;else if(a.anchor==='right')f=1;var now=bounds(l);l.translate(UnitValue(old[0]+f*old[2]-now[0]-f*now[2],'px'),UnitValue(0,'px'));}
  if(a.mode==='layout'){var now=bounds(l);l.translate(UnitValue(a.x-now[0]-a.anchorX*now[2],'px'),UnitValue(a.y-now[1]-a.anchorY*now[3],'px'));}
  }
  if(l){var actual=bounds(l);if(depth>0&&tplNewCrop(before,actual,d.width.as('px'),d.height.as('px')))throw Error('模板修改新增智能对象裁切：'+l.name);tplRelock(l,lock);checks.push({layer:l,target:tplIsText(l)?l.textItem.contents:null,styles:tplIsText(l)?objectData(desc(l).getObjectValue(sid('textKey'))):null,box:actual});}tplRestoreParents(access);}
- var out=[];for(var i=0;i<checks.length;i++){var c=checks[i];out.push({path:tplPath(d,c.layer),name:c.layer.name,children:c.children,target:c.target,styles:c.styles,box:c.box});}return out;}
+ for(var ri=0;ri<reflows.length;ri++)priceReflow(reflows[ri]);var out=[];for(var i=0;i<checks.length;i++){var c=checks[i];c.box=bounds(c.layer);out.push({path:tplPath(d,c.layer),name:c.layer.name,children:c.children,target:c.target,styles:c.styles,box:c.box});}return out;}
 // Photoshop recomputes percentage click points when a multi-artboard canvas is saved.
 // Absolute visible positions are checked separately against c.box below.
 function tplStableText(t){var out={};for(var k in t)if(t.hasOwnProperty(k)&&k!=='textClickPoint')out[k]=t[k];return out;}

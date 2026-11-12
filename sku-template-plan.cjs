@@ -2,7 +2,7 @@ const {mappingRecords}=require('./sku-product-copy.cjs');
 const pathPrefix=(a,b)=>a.length<=b.length&&a.every((v,i)=>v===b[i]);
 function ancestor(a,b){return a.steps.length<=b.steps.length&&a.steps.every((s,i)=>i<a.steps.length-1?JSON.stringify(s.path)===JSON.stringify(b.steps[i].path):pathPrefix(s.path,b.steps[i].path));}
 function rect(r){return Array.isArray(r)&&r.length===4&&r.every(Number.isFinite)&&r[2]>0&&r[3]>0;}
-function buildTemplatePlan(scan,mapping,args,records,giftCatalog){
+function buildSingleTemplatePlan(scan,mapping,args,records,giftCatalog){
  if(!mapping?.approved||mapping.id!==scan.mappingId||mapping.approved.approvalDigest!==scan.approvalDigest)throw Error('模板扫描与当前产品批准不一致');
  if(!args||!Array.isArray(args.boards)||args.boards.length!==mapping.approved.boards.filter(b=>b.action==='use').length||new Set(args.boards.map(b=>b.boardId)).size!==args.boards.length)throw Error('模板替换必须恰好覆盖全部采用画板');
  const deleteBoardIds=args.deleteBoardIds||[],approvedDeletes=mapping.approved.boards.filter(b=>b.action==='delete');
@@ -44,9 +44,31 @@ function buildTemplatePlan(scan,mapping,args,records,giftCatalog){
   const layout=b.layout||args.layout||[];if(!Array.isArray(layout)||new Set(layout.map(l=>l.objectId)).size!==layout.length)throw Error('布局对象重复');for(const l of layout){const o=get(l.objectId);if(o.steps.length>1&&l.coordinateSpace!=='object-document')throw Error('嵌套模板布局需明确object-document坐标，使用localBox而非全局框');if(removed(o)||!Number.isFinite(l.x)||!Number.isFinite(l.y)||![0,.5,1].includes(l.anchorX)||![0,.5,1].includes(l.anchorY))throw Error('布局坐标/锚点无效或对象已移除');if(layout.some(p=>p!==l&&ancestor(get(p.objectId),o)))throw Error('布局不能同时移动父子对象');actions.push({mode:'layout',steps:o.steps,objectId:o.id,x:l.x,y:l.y,anchorX:l.anchorX,anchorY:l.anchorY});}
   if(!rect(b.placement)||!rect(args.templateFrame)||Math.abs(b.placement[2]/args.templateFrame[2]-b.placement[3]/args.templateFrame[3])>.001)throw Error('模板需明确参照框及等比放置框，不能拉伸字形');
   const p=b.placement;if(p[0]<board.box[0]-.5||p[1]<board.box[1]-.5||p[0]+p[2]>board.box[0]+board.box[2]+.5||p[1]+p[3]>board.box[1]+board.box[3]+.5)throw Error('模板参照框放置超出产品画板');
-  const gift=require('./sku-gifts.cjs').giftAction({config:args.gifts,approved,catalog:giftCatalog,objects:templateObjects,priceFields:fieldObjects});if(gift){const container=get(gift.objectId);if([...actions,...structure.reflows].some(a=>a.steps&&(ancestor(get(a.objectId),container)||ancestor(container,get(a.objectId)))))throw Error('赠品区域不能与价格、删除或布局重复操作');const cleanup=gift.emptyRemoves.filter(a=>!actions.some(p=>p.mode==='remove'&&ancestor(get(p.objectId),get(a.objectId))));actions.push(gift,...cleanup);}actions.push(...structure.reflows);requests.push({boardId:b.boardId,oldObjects:old,actions,priceStructure:structure.summary,...(gift?{giftReference:gift.reference}:{}),root,frame:args.templateFrame,placement:p});
+  if(args.giftMode!==undefined&&!['none','replace'].includes(args.giftMode))throw Error('模板giftMode无效');if(args.giftMode==='none'&&(args.gifts||approved.fields.some(f=>f.role==='gift'&&require('./sku-gifts.cjs').parseGifts(f.value).length)))throw Error('无赠品模板不能用于有赠品产品，也不能配置赠品替换');const gift=args.giftMode==='none'?null:require('./sku-gifts.cjs').giftAction({config:args.gifts,approved,catalog:giftCatalog,objects:templateObjects,priceFields:fieldObjects});if(gift){const container=get(gift.objectId);if([...actions,...structure.reflows].some(a=>a.steps&&(ancestor(get(a.objectId),container)||ancestor(container,get(a.objectId)))))throw Error('赠品区域不能与价格、删除或布局重复操作');const cleanup=gift.emptyRemoves.filter(a=>!actions.some(p=>p.mode==='remove'&&ancestor(get(p.objectId),get(a.objectId))));actions.push(gift,...cleanup);}actions.push(...structure.reflows);requests.push({boardId:b.boardId,oldObjects:old,actions,priceStructure:structure.summary,...(gift?{giftReference:gift.reference}:{}),root,frame:args.templateFrame,placement:p});
  }
  const plan={version:1,operation:'edit',outputFormat:args.outputFormat||'PSB',documentName:args.documentName||'SKU-template',columns:1,rows:retained.length,gap:0,boards:retained.map(b=>({name:b.name,templateId:b.id,mode:'duplicate',changes:[]})),productSourceRecords:available.map(({id,target,digest})=>({id,target,digest})),productMapping:{id:mapping.id,approvalDigest:mapping.approved.approvalDigest},productTemplate:{scanId:scan.id,template:scan.template,...(giftCatalog?{giftCatalog}:{}),decisions:structuredClone(args),requests,...(deletedBoards.length?{deletedBoards}:{})},...(deletedBoards.length?{deleteBoardIds:[...deleteBoardIds]}:{})};
  require('./photoshop-artboard-plan.cjs').validateArtboardPlan(plan,{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]});return plan;
+}
+function buildTemplatePlan(scan,mapping,args,records,giftCatalog){
+ if(args?.templates===undefined)return buildSingleTemplatePlan(scan,mapping,args,records,giftCatalog);
+ const scans=Array.isArray(scan)?scan:[scan],configs=args.templates;
+ if(!Array.isArray(configs)||!configs.length||configs.length>12||configs.some(t=>!t||typeof t.templateFileId!=='string'||!t.templateFileId||!t.scanId)||new Set(configs.map(t=>t.templateFileId)).size!==configs.length||new Set(configs.map(t=>t.scanId)).size!==configs.length)throw Error('多模板配置需唯一templateFileId与scanId');
+ if(['templateFileId','scanId','templateRootId','templateFrame','templateFields','priceGroups','gifts','giftMode','layout','removeObjectIds'].some(k=>args[k]!==undefined))throw Error('多模板角色与布局须放入templates，不允许混用单模板默认值');
+ const adopted=mapping?.approved?.boards.filter(b=>b.action==='use')||[];
+ if(!Array.isArray(args.boards)||args.boards.length!==adopted.length||new Set(args.boards.map(b=>b.boardId)).size!==args.boards.length||args.boards.some(b=>!adopted.some(a=>a.boardId===b.boardId)||!configs.some(t=>t.templateFileId===b.templateFileId&&t.scanId===b.scanId)))throw Error('多模板路由必须恰好覆盖全部use画板并明确templateFileId/scanId');
+ const available=mappingRecords(mapping);if(available.some(r=>!records.some(v=>v.id===r.id&&v.target===r.target&&v.digest===r.digest)))throw Error('请导入全部当前批准字段');
+ const first=scans[0],entries=[],requests=[];let shell;
+ if(scans.length!==configs.length)throw Error('多模板扫描数量不一致');
+ for(const config of configs){
+  const current=scans.find(s=>s.id===config.scanId);if(!current||current.mappingId!==mapping.id||current.approvalDigest!==mapping.approved.approvalDigest||JSON.stringify(current.source)!==JSON.stringify(first.source)||JSON.stringify(current.sourceBoards)!==JSON.stringify(first.sourceBoards)||JSON.stringify(current.sourceInventory)!==JSON.stringify(first.sourceInventory))throw Error('多模板扫描不属于同一原稿、结构与批准');
+  const boards=args.boards.filter(b=>b.templateFileId===config.templateFileId);if(!boards.length)throw Error('多模板配置含未使用的模板');
+  const subset={...mapping,approved:{...mapping.approved,boards:mapping.approved.boards.filter(a=>a.action!=='use'||boards.some(b=>b.boardId===a.boardId))}};
+  const catalog=giftCatalog?.[config.templateFileId];
+  const part=buildSingleTemplatePlan(current,subset,{...config,boards,deleteBoardIds:args.deleteBoardIds,outputFormat:args.outputFormat,documentName:args.documentName},records,catalog);
+  shell=shell||part;entries.push({templateFileId:config.templateFileId,scanId:current.id,template:current.template,...(catalog?{giftCatalog:catalog}:{})});requests.push(...part.productTemplate.requests.map(r=>({...r,templateFileId:config.templateFileId,scanId:current.id})));
+ }
+ const productTemplate={version:2,scanId:first.id,templates:entries,decisions:structuredClone(args),requests:adopted.map(b=>requests.find(r=>r.boardId===b.boardId)),...(shell.productTemplate.deletedBoards?{deletedBoards:shell.productTemplate.deletedBoards}:{})};
+ const plan={...shell,productSourceRecords:available.map(({id,target,digest})=>({id,target,digest})),productTemplate};
+ require('./photoshop-artboard-plan.cjs').validateArtboardPlan(plan,{...first.sourceInventory,artboards:first.sourceBoards,layers:[]});return plan;
 }
 module.exports={buildTemplatePlan,ancestor};

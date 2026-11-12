@@ -1,6 +1,6 @@
 # SKU 底部模板替换（本地开发功能）
 
-状态：软件执行链已接入；本次客户稿和 Adobe 实机验收暂停。没有发布更新。不能将自动回归或成功构建当作客户成稿通过。
+状态：单模板赠品能力已随0.3.71发布，价格读取修复已随0.3.72发布。以下新增多模板路由与终止字符样式修复为本地补丁，独立原生小样通过，客户整稿验收仍由实机聊天续做。后文早期故障保留为历史，不代表当前状态。
 
 ## 使用入口
 
@@ -106,3 +106,44 @@ Windows桥接JSON输入输出明确采用UTF-8，中文输出目录与英文目�
 `configure_product_template`将价格、赠品、旧块清除一次编成同一可撤销计划。赠品区与价格／删除／布局发生父子重叠则拒绝；无赠品清理去重。预览和导出前后均校验目录内容哈希，保存／恢复后重新编译；输入变化需重新配置，不能沿用旧赠品。已有手动／助手历史记录保存该计划及目录引用，不复制PSD或PNG进学习库。
 
 最终JPG审验同一次请求附带本产品预期PNG的小型透明裁切参考图、完整名称及价值，检查数量、款式颜色、等比形状、文案及间距；小图不作为当前完成画面。此处不新建额外模型会话。原生保存重开检查和设计审验仍是两项不同证据，不能用框值或哈希冒充美感通过。
+
+## 同一原稿混用多个模板（2026-11-12 本地补丁）
+
+仍是一个原稿、一份完整批准、一次统一 configure/run；不把第一轮输出再当成新原稿。最多12套模板，每套单独 inspect 获得 scanId。一个配置中的全部use画板必须恰好各出现一次；skip保留，deleteBoardIds仍完整对应明确批准清单。
+
+助手 configure_product_template 的多模板形式：
+
+```json
+{
+  "fileIndex": 0,
+  "mappingId": "当前批准记录",
+  "sourceFileId": "当前原稿附件",
+  "workbookFileId": "当前表格附件",
+  "outputFormat": "PSB",
+  "documentName": "本次输出名",
+  "templates": [
+    {"templateFileId": "gift-template", "scanId": "该模板inspect返回值", "templateRootId": "该扫描根对象", "templateFrame": [0,0,1000,1000], "templateFields": [], "priceGroups": [], "gifts": {}},
+    {"templateFileId": "plain-template", "scanId": "另一模板inspect返回值", "templateRootId": "另一扫描根对象", "templateFrame": [0,0,1000,1000], "templateFields": [], "priceGroups": [], "giftMode": "none"}
+  ],
+  "boards": [
+    {"boardId": 101, "templateFileId": "gift-template", "scanId": "该模板inspect返回值", "replaceRegion": [0,0.7,1,0.3], "oldObjectIds": ["实际原稿对象"], "reason": "核对依据", "placement": [0,0,1000,1000], "changes": []},
+    {"boardId": 102, "templateFileId": "plain-template", "scanId": "另一模板inspect返回值", "replaceRegion": [0,0.7,1,0.3], "oldObjectIds": ["实际原稿对象"], "reason": "核对依据", "placement": [1200,0,1000,1000], "changes": []}
+  ]
+}
+```
+
+这是合同结构示意，空数组、gifts空对象和示例坐标不可直接执行，须按实际扫描和批准字段填写。多模板时不传顶层templateFileId/scanId/根/字段/布局默认值；模板配置放进templates，逐板允许的清理/布局覆盖仍属于本板所选模板。相同对象ID只能在本模板scan内解释。无赠品模板使用giftMode:none，批准赠品字段解析后确为空才接受；有赠品不能通过该模式漏配置。使用赠品模板清空空赠品的旧方式仍兼容。
+
+正式后台 services/sku-template-background.cjs：
+
+- inspect保持单个templatePath，其余公共字段不变；分别检查各模板，可复用同一sourcePath/mappingId/cacheDirectory。
+- configure多模板job用 `templates:[{templateFileId:"gift-template",templatePath:"绝对PSD/PSB路径"},{templateFileId:"plain-template",templatePath:"另一绝对路径"}]` 代替顶层templatePath。args就是上述多模板替换配置，后台无需助手fileIndex/sourceFileId/workbookFileId。gifts在后台传已核对的绝对directory；助手仍只传本任务directoryFileId，由主进程解析路径。
+- run传同一完整templates清单及configure返回的plan、新outputDirectory。每个文件身份与哈希都核对，不只校验第一套模板；映射、扫描、赠品目录或计划有变则停止。
+
+程序内调用：`engine.inspect({source,mapping,template,metadata})` 每模板一次；`engine.configure({source,mapping,metadata,templates:[{templateFileId,template:{path,fingerprint}}],args,records})` 返回一个plan；`engine.run({source,plan,directory})` 可在新建backend后从持久计划重编译执行。返回每板templateSource，最终设计审验也接收该路由来源。
+
+相同原稿与批准下复用源对象扫描，模板各自扫描一次；执行文档池只打开需要的模板，每板复制独立模板实例，不关闭用户已有文档。所有价格、赠品及旧块移除在同一副本完成，保存重开后导出全部保留画板。
+
+### 隐式终止字符范围
+
+Photoshop可能把最后可见整数样式延伸到隐式终止字符，而请求描述符还保留旧小数样式的终止范围。仅对模板价格/赠品与重开校验，将样式范围投影到实际字符串 `[0,length)` 后比较，允许的原生上限仍是length+1。可见字符的字款、字号、样式、段落、位置仍严格核对，不补零、不改货币、不全局放松compatible。

@@ -134,3 +134,46 @@ test('native JPG proof cache tracks document IDs without retaining closed source
  const c=vm.createContext({proofDocs,proofSources,app:{},UnitValue,File,JPEGSaveOptions,Extension:{LOWERCASE:'lower'},SaveOptions:{DONOTSAVECHANGES:'no'},ResampleMethod:{BICUBIC:'bicubic'}});vm.runInContext(script.slice(start,end),c);
  c.jpg(doc(1),{box:[0,0,100,100]},'first.jpg');c.jpg(doc(1),{box:[0,0,100,100]},'same.jpg');c.jpg(doc(2),{box:[0,0,100,100]},'second.jpg');assert.equal(copies,2);assert.deepEqual(proofSources,[1,2]);assert.equal(saved.length,3);
 });
+
+function multiFixture(){
+ const f=fixture(),second={...f.scan.sourceBoards[1]},fields=structuredClone(f.mapping.approved.boards[0].fields);f.mapping.approved.boards[1]={boardId:second.id,boardName:second.name,action:'use',fields};
+ f.scan.sourceInventory.objects.push({...structuredClone(f.scan.sourceInventory.objects[1]),id:'1.0',boardId:11,nativePath:[1,0],steps:[{path:[1,0],name:'old-footer'}],box:[120,70,100,30]});
+ f.scan.sourceBoards.push({id:12,name:'Retained',box:[240,0,100,100],nativePath:[2]});f.mapping.approved.boards.push({boardId:12,boardName:'Retained',action:'skip'});
+ const scan2=structuredClone(f.scan);scan2.id='b'.repeat(64);scan2.template={path:'template-B.psb',fingerprint:'template-B'};scan2.templateInventory.objects[1].original='$88.50';
+ const {boards,scanId,...config}=f.args,records=mappingRecords(f.mapping),b=structuredClone(boards[0]);b.boardId=11;b.oldObjectIds=['1.0'];b.placement=[120,0,100,100];b.changes=b.changes.map(c=>({...c,recordId:records.find(r=>r.context.boardId===11&&r.context.field===records.find(r=>r.id===c.recordId).context.field).id}));b.changes[0].original='$88.50';
+ f.scans=[f.scan,scan2];f.records=records;f.args={templates:[{...config,templateFileId:'A',scanId:f.scan.id},{...structuredClone(config),templateFileId:'B',scanId:scan2.id}],boards:[{...boards[0],templateFileId:'A',scanId:f.scan.id},{...b,templateFileId:'B',scanId:scan2.id}]};return f;
+}
+const multiPlan=f=>buildTemplatePlan(f.scans,f.mapping,f.args,f.records,f.catalogs);
+test('multi-template plan routes colliding object IDs through independent scans in one full source plan',()=>{
+ const f=multiFixture(),p=multiPlan(f);assert.equal(p.productTemplate.version,2);assert.equal(p.productTemplate.templates.length,2);assert.equal(p.productTemplate.requests[0].actions.find(a=>a.mode==='text').original,'$99.50');assert.equal(p.productTemplate.requests[1].actions.find(a=>a.mode==='text').original,'$88.50');assert.deepEqual(p.productTemplate.requests.map(r=>r.templateFileId),['A','B']);assert.equal(p.boards.length,3);assert.equal(p.boards[2].name,'Retained');assert.equal(p.productSourceRecords.length,4);assert.deepEqual(multiPlan(f),JSON.parse(JSON.stringify(p)));new vm.Script(compositionScript('source.psb',[],'PSB','out',{productTemplate:p.productTemplate}).replace(/^#target photoshop\s*/,''));
+});
+test('multi-template refuses partial routes, swapped scans, extra templates, stale approvals and cross-product changes',()=>{
+ for(const mutate of [f=>f.args.boards.pop(),f=>f.args.boards[1].templateFileId='A',f=>f.args.templates[1].scanId=f.args.templates[0].scanId,f=>f.scans[1].approvalDigest='old',f=>f.scans[1].source.fingerprint='other',f=>f.scans[1].sourceInventory.objects[0].name='changed',f=>f.args.boards[1].changes[0].recordId=f.records[0].id,f=>f.args.templateRootId='0',f=>f.args.boards[0].oldObjectIds=['1.0']]){const f=multiFixture();mutate(f);assert.throws(()=>multiPlan(f));}
+});
+test('empty approved gift field supports a genuine no-gift template and never drops actual gifts',()=>{
+ const f=multiFixture();for(const b of f.mapping.approved.boards.filter(b=>b.action==='use'))b.fields.push({key:'gift',role:'gift',value:'  ',state:'value',cell:'F'+b.boardId});for(const t of f.args.templates)t.giftMode='none';assert.doesNotThrow(()=>multiPlan(f));f.mapping.approved.boards[1].fields.at(-1).value='蓝键帽 价值99元';assert.throws(()=>multiPlan(f),/无赠品模板/);
+});
+test('terminal range normalization accepts only implicit suffix and rejects visible glyph style changes',()=>{
+ const c=vm.createContext({});vm.runInContext(templateNative,c);
+ const a={textKey:'¥688',textStyleRange:[{from:0,to:1,textStyle:{fontPostScriptName:'A',size:12}},{from:1,to:4,textStyle:{fontPostScriptName:'A',size:24}},{from:4,to:5,textStyle:{fontPostScriptName:'A',size:12}}],paragraphStyleRange:[{from:0,to:5,paragraphStyle:{justification:'center'}}]},b=structuredClone(a);b.textStyleRange[1].to=5;b.textStyleRange.pop();
+ const same=(x,y)=>c.tplTextSame(vm.runInContext('('+JSON.stringify(x)+')',c),vm.runInContext('('+JSON.stringify(y)+')',c),'¥688');assert.equal(same(a,b),true);
+ for(const change of [v=>v.textStyleRange[1].textStyle.size=12,v=>v.textStyleRange[1].textStyle.fontPostScriptName='B',v=>v.textStyleRange[1].from=2,v=>v.textStyleRange[1].to=6,v=>v.paragraphStyleRange[0].paragraphStyle.justification='left']){const bad=structuredClone(b);change(bad);assert.equal(same(a,bad),false);}assert.equal(a.textStyleRange[1].to,4);
+});
+test('native template pool selects exact file and scan and closes only documents it opened',()=>{
+ const pool=[],existing={saved:true,fullName:{fsName:'A.psd'},close(){assert.fail('closed user document');}},closed=[],app={documents:[existing],open:f=>({saved:true,fullName:f,close(){closed.push(f.fsName);}})};
+ function File(p){this.fsName=p;this.exists=true;}const c=vm.createContext({app,File,SaveOptions:{DONOTSAVECHANGES:'no'}});vm.runInContext(require('../sku-template-native.cjs').templatePoolNative,c);c.tplOpenTemplates([{templateFileId:'A',scanId:'a',template:{path:'A.psd'}},{templateFileId:'B',scanId:'b',template:{path:'B.psb'}}],pool);assert.equal(c.tplPoolDoc(pool,{templateFileId:'A',scanId:'a'}),existing);assert.equal(c.tplPoolDoc(pool,{templateFileId:'B',scanId:'b'}).fullName.fsName,'B.psb');assert.throws(()=>c.tplPoolDoc(pool,{templateFileId:'B',scanId:'a'}),/路由/);c.tplCloseTemplates(pool);assert.deepEqual(closed,['B.psb']);
+});
+
+test('multi-template backend persists one plan, reuses source inspection and rejects second-template tampering after restart',async t=>{
+ const f=multiFixture(),dir=await fs.mkdtemp(path.join(os.tmpdir(),'multi-template-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let sourceReads=0,templateReads=0,changed=false,composed=0;
+ const config={directory:dir,readMapping:async()=>f.mapping,prepare:async()=>{},hash:async p=>p==='source.psb'?'source':p.endsWith('template.jpg')?'image':p==='template-B.psb'?(changed?'changed':'template-B'):'template',execute:async(d,script)=>{const name=path.basename(d);if(name==='source')sourceReads++;else{templateReads++;await fs.writeFile(path.join(path.dirname(d),'template.jpg'),'image');}const inventory=name==='source'?f.scan.sourceInventory:script.includes('template-B.psb')?f.scans[1].templateInventory:f.scan.templateInventory;await fs.writeFile(path.join(path.dirname(d),name+'.json'),JSON.stringify(inventory));},compose:async input=>{composed++;assert.equal(input.plan.productTemplate.templates.length,2);return {output:'one.psb'};}};
+ const input={source:f.scan.source,mapping:f.mapping,metadata:{artboards:f.scan.sourceBoards}},engine=createProductTemplateEngine(config),templates=[];
+ for(const [i,s]of f.scans.entries()){const scan=await engine.inspect({...input,template:s.template});f.args.templates[i].scanId=scan.id;f.args.boards[i].scanId=scan.id;templates.push({templateFileId:f.args.templates[i].templateFileId,template:s.template});}
+ const configured=await engine.configure({...input,templates,args:f.args,records:f.records});assert.equal(sourceReads,1);assert.equal(templateReads,2);
+ const restored=JSON.parse(JSON.stringify(configured.plan));await createProductTemplateEngine(config).run({source:input.source,plan:restored});assert.equal(composed,1);assert.equal(sourceReads,1);
+ const bad=structuredClone(restored);bad.productTemplate.requests[1].templateFileId='A';await assert.rejects(engine.validate({source:input.source,plan:bad}),/不一致/);changed=true;await assert.rejects(engine.validate({source:input.source,plan:restored}),/已变化/);assert.equal(composed,1);
+});
+
+test('mixed template routing applies approved deletion once and keeps skipped boards in place',()=>{
+ const f=multiFixture(),deleted={id:13,name:'Delete approved',box:[360,0,100,100],nativePath:[3]};for(const s of f.scans)s.sourceBoards.push(structuredClone(deleted));f.mapping.approved.boards.push({boardId:13,boardName:deleted.name,action:'delete',deleteConfirmed:true,reason:'Explicit deletion'});f.args.deleteBoardIds=[13];const p=multiPlan(f);assert.equal(p.boards.length,3);assert.deepEqual(p.productTemplate.deletedBoards.map(b=>b.boardId),[13]);assert.deepEqual(p.productTemplate.requests.map(r=>r.boardId),[10,11]);f.args.deleteBoardIds=[12];assert.throws(()=>multiPlan(f),/deleteBoardIds/);
+});

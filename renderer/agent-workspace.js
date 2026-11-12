@@ -31,10 +31,10 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    const f=current(args.fileIndex),m=args.mapping;if(pathKey(f.path)!==pathKey(m.source.path)||state.sourceDocument?.productMappingKey!==m.id+':'+m.approved.approvalDigest)throw Error('请先导入同一原稿与已确认产品表');
    if(f.layers.some(l=>l.recordId||l.nativeCreation||l.nativeDisposition||l.manual||l.position||l.copyAdjustment)||f.containerEdits?.length||f.mixedTextEdits?.length||f.artworkHides?.length)throw Error('已有普通修改，不能叠加产品模板替换');
    if(mappingRecords(m).some(r=>!state.records.some(x=>x.id===r.id&&x.target===r.target&&x.digest===r.digest)))throw Error('批准产品文案已变化，请重新导入');
-   const {mapping,templateInput,...templateArgs}=args;
+   const {mapping,templateInput,templateInputs,...templateArgs}=args;
    const result=await agentCall('agentArtboards',{action:'metadata',source:{path:f.path,fingerprint:f.fingerprint},productMapping:m.id,templateFileId:args.templateFileId,templateArgs});if(!isCurrent())throw Error('任务已变化');
    if(tool==='inspect_product_template')return {...result,fileIndex:args.fileIndex};
-   history.transaction(()=>{f.artboardPlan=result.plan;f.artboards=result.artboards;state.checked=false;},'product-template-plan');render();return {changed:true,fileIndex:args.fileIndex,scanId:result.plan.productTemplate.scanId,adoptedBoards:result.plan.productTemplate.requests.length,message:'模板替换与逐产品价格计划已保存，可Ctrl+Z；preview及export_files生成副本与最终图片审验'};
+   history.transaction(()=>{f.artboardPlan=result.plan;f.artboards=result.artboards;state.checked=false;},'product-template-plan');render();return {changed:true,fileIndex:args.fileIndex,scanId:result.plan.productTemplate.scanId,templateCount:result.plan.productTemplate.templates?.length||1,adoptedBoards:result.plan.productTemplate.requests.length,message:'模板替换与逐产品价格计划已保存，可Ctrl+Z；preview及export_files生成副本与最终图片审验'};
   }
   if(tool==='inspect_product_copy'){const f=current(args.fileIndex),m=args.mapping;if(pathKey(f.path)!==pathKey(m.source.path))throw Error('请先导入同一产品原稿');const meta=await agentCall('agentArtboards',{action:'metadata',source:{path:f.path,fingerprint:f.fingerprint},productMapping:m.id,regions:args.regions});if(!isCurrent())throw Error('任务已变化');return {fileIndex:args.fileIndex,scanId:meta.productCopyScanId,boards:meta.artboards,layers:meta.layers,issues:meta.productCopyScanIssues,skipped:meta.productCopyScanSkipped,note:'只深入已采用产品底部文案块的智能对象；整数、小数、货币符号可能是不同对象，不能把整个金额重复写入每段。'};}
   if(tool==='configure_product_copy'){

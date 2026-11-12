@@ -37,3 +37,5 @@
 - 2026-11-12：用户明确授权发布赠品模板及后续模板导入／价格结构修复，准备0.3.71。赠品功能8dd410f，813项回归与实际Electron、后台PS单／双／无赠品及组合居中保存重开/JPG通过。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.71；正式状态以work/releases/0.3.71/public-verified.json及公开签名latest为准。不代表客户整稿或用户视觉批准。
 
 - 2026-11-12：用户明确授权发布0.3.72。修复XLSX价格浮点尾数，接入原始数值/格式/公式来源及批准失效校验；818项回归、客户活动表5处只读核对及正式包启动通过。未调用Adobe，客户整稿与视觉验收另行记录。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.72，实际公开以work/releases/0.3.72/public-verified.json与正式latest签名为准。
+
+- 2026-11-12：同原稿多模板逐板路由及空赠品模板能力已接入助手/正式后台计划，整数隐式终止样式误报已局部修复。828项回归、独立后台PS两模板同稿保存重开/JPG通过；未改客户原稿，Adobe已归还独立实机聊天。见practice-records/2026-11-12-multi-template/实施与验收.md。本地补丁尚未发布，客户完整稿与视觉验收待实机聊天续做。

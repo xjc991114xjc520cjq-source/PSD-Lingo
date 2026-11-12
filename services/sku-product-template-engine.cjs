@@ -5,7 +5,7 @@ const {inspectScript}=require('../sku-template-native.cjs');
 const {buildTemplatePlan}=require('../sku-template-plan.cjs');
 const {mappingRecords}=require('../sku-product-copy.cjs');
 function createProductTemplateEngine({directory,helperPath,readMapping,execute=require('../photoshop-preview.cjs').executeScript,prepare=require('../photoshop-preview.cjs').preparePhotoshop,compose=require('../photoshop-artboards.cjs').composeArtboards,hash=hashFile}){
- const pending=new Map();
+ const pending=new Map(),sourceCache=new Map();
  const base=()=>typeof directory==='function'?directory():directory;
  const equal=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -17,15 +17,17 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  }
  async function inspect({source,mapping,template,metadata}){
   await inputs(source,mapping,template);
+  const sourceKey=digest([source,mapping.id,mapping.approved.approvalDigest]);
   const id=digest([3,source,template,mapping.id,mapping.approved.approvalDigest]);
   if(pending.has(id))return pending.get(id);
   const job=(async()=>{
    const dir=location(id),file=path.join(dir,'scan.json');
-   try{const envelope=JSON.parse(await fs.readFile(file,'utf8'));if(envelope.digest!==digest(envelope.scan)||envelope.scan.id!==id)throw Error('模板扫描记录损坏');return envelope.scan;}catch(e){if(e.code!=='ENOENT')throw e;}
+   try{const envelope=JSON.parse(await fs.readFile(file,'utf8'));if(envelope.digest!==digest(envelope.scan)||envelope.scan.id!==id)throw Error('模板扫描记录损坏');sourceCache.set(sourceKey,envelope.scan.sourceInventory);return envelope.scan;}catch(e){if(e.code!=='ENOENT')throw e;}
    if(!metadata?.artboards?.length||mapping.source.boards.length!==metadata.artboards.length||mapping.source.boards.some(b=>!metadata.artboards.some(a=>a.id===b.id&&a.name===b.name&&JSON.stringify(a.box)===JSON.stringify(b.box))))throw Error('原生画板与当前产品批准不一致');
    await fs.mkdir(dir,{recursive:true});await prepare(helperPath);
    const read=async(input,name,deep)=>{const output=path.join(dir,name+'.json');await execute(path.join(dir,name),inspectScript(input,output,{deep,image:deep?path.join(dir,'template.jpg'):undefined,boardIds:deep?undefined:mapping.approved.boards.filter(b=>b.action==='use').map(b=>b.boardId)}));return JSON.parse((await fs.readFile(output,'utf8')).replace(/^\uFEFF/,''));};
-   const sourceInventory=await read(source.path,'source',false),templateInventory=await read(template.path,'template',true);
+   const sourceInventory=sourceCache.get(sourceKey)||await read(source.path,'source',false),templateInventory=await read(template.path,'template',true);
+   sourceCache.set(sourceKey,sourceInventory);if(sourceCache.size>8)sourceCache.delete(sourceCache.keys().next().value);
    await inputs(source,mapping,template);
    const templateImage=path.join(dir,'template.jpg');
    templateInventory.objects.unshift({id:'@document',name:path.basename(template.path),kind:'group',document:true,visible:true,nativePath:[],steps:[{path:[],name:path.basename(template.path)}],box:[0,0,templateInventory.width,templateInventory.height],localBox:[0,0,templateInventory.width,templateInventory.height]});
@@ -33,18 +35,31 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
    await fs.writeFile(file+'.tmp',JSON.stringify({scan,digest:digest(scan)}));await fs.rename(file+'.tmp',file);return scan;
   })();pending.set(id,job);try{return await job;}finally{pending.delete(id);}
  }
+ async function catalogs(configs){const result={},byDirectory=new Map();for(const c of configs){if(!c.gifts)continue;const dir=c.gifts.directory;if(!byDirectory.has(dir))byDirectory.set(dir,await require('../sku-gifts.cjs').scanGiftAssets(dir));result[c.templateFileId]=byDirectory.get(dir);}return result;}
  async function validate({source,plan}){
   const p=plan.productTemplate;if(!p)throw Error('缺少模板计划');
-  const envelope=JSON.parse(await fs.readFile(path.join(location(p.scanId),'scan.json'),'utf8')),scan=envelope.scan;
-  if(envelope.digest!==digest(scan)||scan.id!==p.scanId||!equal(scan.source.path,source.path)||scan.source.fingerprint!==source.fingerprint)throw Error('模板扫描损坏或不属于本原稿');
-  const mapping=await readMapping(scan.mappingId);await inputs(source,mapping,scan.template);
-  const giftCatalog=p.decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(p.decisions.gifts.directory):undefined;const rebuilt=buildTemplatePlan(scan,mapping,p.decisions,mappingRecords(mapping),giftCatalog);
+  const entries=require('../sku-template-routing.cjs').templateSources(p),scans=[];let mapping;
+  for(const entry of entries){
+   const envelope=JSON.parse(await fs.readFile(path.join(location(entry.scanId),'scan.json'),'utf8')),scan=envelope.scan;
+   if(envelope.digest!==digest(scan)||scan.id!==entry.scanId||!equal(scan.source.path,source.path)||scan.source.fingerprint!==source.fingerprint||JSON.stringify(entry.template)!==JSON.stringify(scan.template))throw Error('模板扫描损坏或不属于本原稿');
+   const current=await readMapping(scan.mappingId);if(mapping&&(current.id!==mapping.id||current.approved?.approvalDigest!==mapping.approved?.approvalDigest))throw Error('多模板扫描批准不一致');mapping=current;await inputs(source,mapping,scan.template);scans.push(scan);
+  }
+  const giftCatalog=p.templates?await catalogs(p.decisions.templates):p.decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(p.decisions.gifts.directory):undefined;
+  const rebuilt=buildTemplatePlan(p.templates?scans:scans[0],mapping,p.decisions,mappingRecords(mapping),giftCatalog);
   if(JSON.stringify(rebuilt)!==JSON.stringify(plan))throw Error('模板计划与批准字段或扫描记录不一致，请重新配置');
-  return {scan,plan:rebuilt};
+  return {scan:scans[0],scans,plan:rebuilt};
  }
- return {inspect,validate,async configure({source,mapping,template,metadata,args,records=mappingRecords(mapping)}){
+ return {inspect,validate,async configure({source,mapping,template,templates,metadata,args,records=mappingRecords(mapping)}){
+  if(args.templates!==undefined){
+   if(!Array.isArray(args.templates)||!args.templates.length||args.templates.length>12||!Array.isArray(templates)||templates.length!==args.templates.length||new Set(templates.map(t=>t.templateFileId)).size!==templates.length)throw Error('请提供本任务的全部模板附件与配置');
+   const scans=[];for(const c of args.templates){const input=templates.find(t=>t.templateFileId===c.templateFileId);if(!input)throw Error('模板附件不属于本次配置');const scan=await inspect({source,mapping,metadata,template:input.template});if(scan.id!==c.scanId)throw Error('多模板扫描已失效，请重新inspect_product_template');scans.push(scan);}
+   const allowed=['templateFileId','scanId','templateRootId','templateFrame','templateFields','priceGroups','gifts','giftMode','removeObjectIds','layout'];
+   const decisions={...Object.fromEntries(['outputFormat','documentName','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]])),templates:args.templates.map(c=>Object.fromEntries(allowed.filter(k=>c[k]!==undefined).map(k=>[k,c[k]])))};
+   if(['templateFileId','scanId','templateRootId','templateFrame','templateFields','priceGroups','gifts','giftMode','removeObjectIds','layout'].some(k=>args[k]!==undefined))throw Error('多模板不能混用单模板默认值');
+   return {plan:buildTemplatePlan(scans,mapping,decisions,records,await catalogs(decisions.templates)),artboards:scans[0].sourceBoards};
+  }
   const scan=await inspect({source,mapping,template,metadata});if(args.scanId!==scan.id)throw Error('模板扫描已失效，请重新inspect_product_template');
-  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','priceGroups','gifts','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
+  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','priceGroups','gifts','giftMode','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
   const giftCatalog=decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(decisions.gifts.directory):undefined;return {plan:buildTemplatePlan(scan,mapping,decisions,records,giftCatalog),artboards:scan.sourceBoards};
  },async run(args){const {scan,plan}=await validate(args);return compose({...args,plan,metadata:{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]},helperPath});}};
 }

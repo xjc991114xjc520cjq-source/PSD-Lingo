@@ -1,0 +1,18 @@
+const giftNative=String.raw`
+function giftPrepare(d,a){return {action:a,container:tplLocate(d,a.steps[a.steps.length-1].path),prototype:tplLocate(d,a.prototypePath)};}
+function giftBox(frame,cell){return [cell[0]+frame[0]*cell[2],cell[1]+frame[1]*cell[3],frame[2]*cell[2],frame[3]*cell[3]];}
+function giftPlaceIn(d,l,parent){if(l.parent.id!==parent.id)tplAttach(d,l,parent);if(l.parent.id!==parent.id)throw Error('赠品对象未进入独立阅读组');}
+function giftApply(d,p){var a=p.action,c=p.container,old=[],prototype=p.prototype;for(var i=0;i<c.layers.length;i++)old.push(c.layers[i]);if(!a.gifts.length){tplUnlock(c);c.remove();return;}
+ var access=tplParents(c),lock=tplLock(c);tplUnlock(c);try{for(var i=0;i<a.gifts.length;i++){var gift=a.gifts[i],cell=a.frame.slice(),n=a.gifts.length;if(a.axis==='vertical'){cell[1]+=i*cell[3]/n;cell[3]/=n;}else{cell[0]+=i*cell[2]/n;cell[2]/=n;}if(typeof checkpoint==='function')checkpoint('替换赠品 '+(i+1)+'/'+n,{name:gift.name,asset:gift.asset.name});
+  app.activeDocument=d;d.activeLayer=c;var group=d.layerSets.add();group.name='Gift '+(i+1)+' '+gift.name;giftPlaceIn(d,group,c);
+  var imageDoc=null,beforeDocs=tplDocs(),image=null;try{imageDoc=app.open(new File(gift.asset.path));if(tplKnown(imageDoc,beforeDocs)&&!imageDoc.saved)throw Error('赠品PNG正在编辑，请先保存');image=imageDoc.layers[0].duplicate(d,ElementPlacement.PLACEATBEGINNING);}finally{if(imageDoc&&!tplKnown(imageDoc,beforeDocs))imageDoc.close(SaveOptions.DONOTSAVECHANGES);app.activeDocument=d;}
+  giftPlaceIn(d,image,group);d.activeLayer=image;executeAction(sid('newPlacedLayer'),undefined,DialogModes.NO);image=d.activeLayer;giftPlaceIn(d,image,group);image.name=gift.asset.name;
+  var locks=unlock({layers:[image]}),ib=giftBox(a.imageFrame,cell),b=bounds(image),scale=Math.min(ib[2]/b[2],ib[3]/b[3]);if(!isFinite(scale)||scale<=0)throw Error('赠品图像没有可见内容');image.resize(scale*100,scale*100,AnchorPosition.TOPLEFT);b=bounds(image);image.translate(UnitValue(ib[0]+ib[2]/2-b[0]-b[2]/2,'px'),UnitValue(ib[1]+ib[3]/2-b[1]-b[3]/2,'px'));relock(locks);
+  var t=prototype.duplicate(d,ElementPlacement.PLACEATBEGINNING);giftPlaceIn(d,t,group);tplUnlock(t);t.name=gift.name+' value '+gift.value;var target='';for(var si=0;si<gift.spans.length;si++)target+=gift.spans[si].text;var td=remapTextDescriptor(desc(t).getObjectValue(sid('textKey')),a.original,target,true,gift.spans),expected=objectData(td),set=new ActionDescriptor(),ref=new ActionReference();ref.putIdentifier(sid('textLayer'),t.id);set.putReference(sid('null'),ref);set.putObject(sid('to'),sid('textLayer'),td);executeAction(sid('set'),set,DialogModes.NO);if(t.textItem.contents!==target||!compatible(expected,objectData(desc(t).getObjectValue(sid('textKey'))),''))throw Error('赠品名称/价值/字符样式不一致');
+  var tb=giftBox(a.textFrame,cell),b=bounds(t);if(b[2]>tb[2]+.5||b[3]>tb[3]+.5)throw Error('赠品名称或价值放不下，请调整赠品单元，不缩小或截断文案');var anchor=0.5;if(a.textAnchor==='left')anchor=0;else if(a.textAnchor==='right')anchor=1;t.translate(UnitValue(tb[0]+tb[2]*anchor-b[0]-b[2]*anchor,'px'),UnitValue(tb[1]+tb[3]/2-b[1]-b[3]/2,'px'));
+  if(typeof checkpoint==='function')checkpoint('赠品图文组合居中',{name:gift.name});var gb=bounds(group);if(a.unitAlignment!=='slots'){group.translate(UnitValue(cell[0]+cell[2]/2-gb[0]-gb[2]/2,'px'),UnitValue(cell[1]+cell[3]/2-gb[1]-gb[3]/2,'px'));gb=bounds(group);}if(gb[0]<cell[0]-.5||gb[1]<cell[1]-.5||gb[0]+gb[2]>cell[0]+cell[2]+.5||gb[1]+gb[3]>cell[1]+cell[3]+.5)throw Error('赠品图文越出单元区域');
+ }
+ for(var i=0;i<old.length;i++){if(typeof checkpoint==='function')checkpoint('清除模板示例赠品 '+(i+1)+'/'+old.length);tplUnlock(old[i]);old[i].remove();}if(typeof checkpoint==='function')checkpoint('赠品替换完成');
+ }finally{tplRelock(c,lock);tplRestoreParents(access);}}
+`;
+module.exports={giftNative};

@@ -17,7 +17,7 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  }
  async function inspect({source,mapping,template,metadata}){
   await inputs(source,mapping,template);
-  const id=digest([2,source,template,mapping.id,mapping.approved.approvalDigest]);
+  const id=digest([3,source,template,mapping.id,mapping.approved.approvalDigest]);
   if(pending.has(id))return pending.get(id);
   const job=(async()=>{
    const dir=location(id),file=path.join(dir,'scan.json');
@@ -28,7 +28,8 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
    const sourceInventory=await read(source.path,'source',false),templateInventory=await read(template.path,'template',true);
    await inputs(source,mapping,template);
    const templateImage=path.join(dir,'template.jpg');
-   const scan={version:2,id,source,template,templateImage,templateImageHash:await hash(templateImage),mappingId:mapping.id,approvalDigest:mapping.approved.approvalDigest,sourceInventory,templateInventory,sourceBoards:metadata.artboards};
+   templateInventory.objects.unshift({id:'@document',name:path.basename(template.path),kind:'group',document:true,visible:true,nativePath:[],steps:[{path:[],name:path.basename(template.path)}],box:[0,0,templateInventory.width,templateInventory.height],localBox:[0,0,templateInventory.width,templateInventory.height]});
+   const scan={version:3,id,source,template,templateImage,templateImageHash:await hash(templateImage),mappingId:mapping.id,approvalDigest:mapping.approved.approvalDigest,sourceInventory,templateInventory,sourceBoards:metadata.artboards};
    await fs.writeFile(file+'.tmp',JSON.stringify({scan,digest:digest(scan)}));await fs.rename(file+'.tmp',file);return scan;
   })();pending.set(id,job);try{return await job;}finally{pending.delete(id);}
  }
@@ -37,14 +38,14 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
   const envelope=JSON.parse(await fs.readFile(path.join(location(p.scanId),'scan.json'),'utf8')),scan=envelope.scan;
   if(envelope.digest!==digest(scan)||scan.id!==p.scanId||!equal(scan.source.path,source.path)||scan.source.fingerprint!==source.fingerprint)throw Error('模板扫描损坏或不属于本原稿');
   const mapping=await readMapping(scan.mappingId);await inputs(source,mapping,scan.template);
-  const rebuilt=buildTemplatePlan(scan,mapping,p.decisions,mappingRecords(mapping));
+  const giftCatalog=p.decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(p.decisions.gifts.directory):undefined;const rebuilt=buildTemplatePlan(scan,mapping,p.decisions,mappingRecords(mapping),giftCatalog);
   if(JSON.stringify(rebuilt)!==JSON.stringify(plan))throw Error('模板计划与批准字段或扫描记录不一致，请重新配置');
   return {scan,plan:rebuilt};
  }
  return {inspect,validate,async configure({source,mapping,template,metadata,args,records=mappingRecords(mapping)}){
   const scan=await inspect({source,mapping,template,metadata});if(args.scanId!==scan.id)throw Error('模板扫描已失效，请重新inspect_product_template');
-  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','priceGroups','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
-  return {plan:buildTemplatePlan(scan,mapping,decisions,records),artboards:scan.sourceBoards};
+  const decisions=Object.fromEntries(['scanId','templateFileId','templateRootId','templateFrame','outputFormat','documentName','templateFields','priceGroups','gifts','removeObjectIds','layout','boards','deleteBoardIds'].filter(k=>args[k]!==undefined).map(k=>[k,args[k]]));
+  const giftCatalog=decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(decisions.gifts.directory):undefined;return {plan:buildTemplatePlan(scan,mapping,decisions,records,giftCatalog),artboards:scan.sourceBoards};
  },async run(args){const {scan,plan}=await validate(args);return compose({...args,plan,metadata:{...scan.sourceInventory,artboards:scan.sourceBoards,layers:[]},helperPath});}};
 }
 function templateReport(scan,{offset=0,limit=100,boardId}={}){

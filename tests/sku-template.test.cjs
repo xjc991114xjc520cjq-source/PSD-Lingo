@@ -112,3 +112,25 @@ test('final design audit receives board-specific template prices, exclusions and
  const requests=[];const r=await auditDesignFile({file,records,requireDelivery:true,buildRequest:()=>assert.fail('No native layers in this fixture'),getVisual:async({crop})=>[{stage:'current',origin:'exported-jpeg',deliveryEvidence:{reopened:true},crop,dataURL:'mock-jpeg'}],call:async(method,request)=>{requests.push(request);return {audit:{checks:require('../services/design-page-audit.cjs').checks.map(id=>({id,verdict:'pass',evidence:'Mock audit of contract',layerKeys:[]})),designChecks:require('../services/design-composition.cjs').dimensions.map(id=>({id,verdict:'accept',evidence:'Mock contract'})),skillReviews:require('../services/design-plugins/manifest.json').skills.map(s=>({id:s.id,verdict:['design-critique','graphic-judgment'].includes(s.id)?'accept':'not-applicable',evidence:'Mock contract'}))}};}});
  assert.equal(r.passed,true);assert.equal(requests.length,2);assert.equal(requests[0].nativeTemplateReplacement.verified,true);assert.equal(requests[0].nativeTemplateReplacement.removedObjects[0].original,'Sale');assert.equal(requests[0].copyReferences[1].boundInThisBoard,false);assert.equal(requests[1].copyReferences.length,0);assert.equal(requests[1].nativeTemplateReplacement.verified,false);
 });
+
+test('gift-aware template plans persist full provenance and reject overlapping edits while allowing whole-document templates',()=>{
+ const f=fixture(),obj=(id,name,kind,extra={})=>({id,name,kind,box:[50,70,40,20],localBox:[50,70,40,20],visible:true,nativePath:id.split('.').map(Number),steps:[{path:id.split('.').map(Number),name}],...extra});
+ f.scan.templateInventory.objects.push(obj('0.5','gifts','group'),obj('0.5.0','gift text','text',{original:'价值79元\r键帽'}));
+ f.mapping.approved.boards[0].fields[1]={key:'sale',cell:'D1',state:'value',value:'30',digest:'30'};f.args.removeObjectIds=[];f.args.boards[0].changes.push({objectId:'0.1',original:'$30',recordId:mappingRecords(f.mapping).find(r=>r.context.field==='sale').id,prefix:'$',anchor:'center'});
+ f.mapping.approved.boards[0].fields.push({key:'赠品',role:'gift',state:'value',cell:'F1',value:'蓝键帽 价值99元'});
+ f.args.gifts={field:'赠品',containerId:'0.5',textObjectId:'0.5.0',textParts:[{text:'价值',sourceStart:0},{token:'value',sourceStart:2},{text:'元\r',sourceStart:4},{token:'name',sourceStart:6}],frame:[50,70,40,20],imageFrame:[.5,0,.5,1],textFrame:[0,0,.5,1]};
+ const catalog={directory:'C:/gifts',digest:'catalog',assets:[{name:'蓝键帽',path:'C:/gifts/blue.png',fingerprint:'blue'}]};
+ const compile=()=>buildTemplatePlan(f.scan,f.mapping,f.args,mappingRecords(f.mapping),catalog);
+ const p=compile();assert.equal(p.productTemplate.requests[0].giftReference.cell,'F1');assert.equal(p.productTemplate.giftCatalog.digest,'catalog');assert.equal(p.productSourceRecords.length,3);assert.equal(JSON.stringify(compile()),JSON.stringify(p));
+ for(const id of ['0.5','0.5.0']){f.args.removeObjectIds.push(id);assert.throws(compile,/赠品区域/);f.args.removeObjectIds.pop();}
+ f.args.layout.push({objectId:'0.5',x:50,y:70,anchorX:0,anchorY:0});assert.throws(compile,/赠品区域/);f.args.layout.pop();
+ f.scan.templateInventory.objects.unshift({id:'@document',kind:'group',document:true,visible:true,nativePath:[],steps:[{path:[],name:'document'}],box:[0,0,100,100]});f.args.templateRootId='@document';assert.equal(compile().productTemplate.requests[0].root.document,true);
+});
+
+test('native JPG proof cache tracks document IDs without retaining closed source handles',()=>{
+ const script=compositionScript('source.psb',[],'PSB','output',{productTemplate:{}}),start=script.indexOf('function jpg('),end=script.indexOf('\n',start),proofDocs=[],proofSources=[],saved=[];let copies=0;
+ const doc=id=>({id,duplicate(){copies++;return {flatten(){},duplicate(){return {crop(){},width:{as:()=>100},height:{as:()=>100},saveAs(file){saved.push(file);},close(){}};}};}});
+ function UnitValue(v){return v;}function File(v){return v;}function JPEGSaveOptions(){}
+ const c=vm.createContext({proofDocs,proofSources,app:{},UnitValue,File,JPEGSaveOptions,Extension:{LOWERCASE:'lower'},SaveOptions:{DONOTSAVECHANGES:'no'},ResampleMethod:{BICUBIC:'bicubic'}});vm.runInContext(script.slice(start,end),c);
+ c.jpg(doc(1),{box:[0,0,100,100]},'first.jpg');c.jpg(doc(1),{box:[0,0,100,100]},'same.jpg');c.jpg(doc(2),{box:[0,0,100,100]},'second.jpg');assert.equal(copies,2);assert.deepEqual(proofSources,[1,2]);assert.equal(saved.length,3);
+});

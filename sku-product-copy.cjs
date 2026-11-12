@@ -2,10 +2,11 @@
 const {makeArtboardPlan}=require('./photoshop-artboard-plan.cjs');
 function mappingRecords(mapping){
  if(!mapping?.approved)throw Error('产品对应尚未确认');
- return mapping.approved.boards.filter(b=>b.action==='use').flatMap(b=>b.fields.filter(f=>f.state==='value').map(f=>({id:`product:${mapping.id}:${b.boardId}:${f.cell}`,key:`${b.boardName} · ${f.key}`,original:f.key,target:f.value,digest:f.digest,context:{productMappingId:mapping.id,approvalDigest:mapping.approved.approvalDigest,boardId:b.boardId,boardName:b.boardName,productName:b.productName,productCode:b.code,rowId:b.rowId,field:f.key,cell:f.cell}})));
+ return mapping.approved.boards.filter(b=>b.action==='use').flatMap(b=>b.fields.filter(f=>f.state==='value'&&f.role!=='gift').map(f=>({id:`product:${mapping.id}:${b.boardId}:${f.cell}`,key:`${b.boardName} · ${f.key}`,original:f.key,target:f.value,digest:f.digest,context:{productMappingId:mapping.id,approvalDigest:mapping.approved.approvalDigest,boardId:b.boardId,boardName:b.boardName,productName:b.productName,productCode:b.code,rowId:b.rowId,field:f.key,cell:f.cell}})));
 }
 function productCopyPlan(file,mapping,args,records){
  if(!mapping?.approved||!file.artboards?.length)throw Error('请先确认产品对应并读取原生画板');
+ if(mapping.approved.boards.some(b=>b.action==='use'&&b.fields.some(f=>f.role==='gift')))throw Error('赠品必须使用模板流程，不能只改价格并遗漏图片');
  if(mapping.approved.boards.some(b=>b.action==='delete'))throw Error('产品确认含删除画板，请使用configure_product_template的deleteBoardIds；原位文字流程不支持删板');
  const expected=mapping.source.boards;
  if(file.artboards.length!==expected.length||expected.some(b=>!file.artboards.some(a=>a.id===b.id&&a.name===b.name&&JSON.stringify(a.box)===JSON.stringify(b.box))))throw Error('当前原生画板与产品对应记录不一致');

@@ -135,6 +135,20 @@ test('native JPG proof cache tracks document IDs without retaining closed source
  c.jpg(doc(1),{box:[0,0,100,100]},'first.jpg');c.jpg(doc(1),{box:[0,0,100,100]},'same.jpg');c.jpg(doc(2),{box:[0,0,100,100]},'second.jpg');assert.equal(copies,2);assert.deepEqual(proofSources,[1,2]);assert.equal(saved.length,3);
 });
 
+test('prepared template remaps only outer paths for price reflow and gift prototypes without mutating approved decisions',()=>{
+ const vm=require('node:vm'),c=vm.createContext({});vm.runInContext(require('../sku-template-native.cjs').placementNative,c);
+ const actions=[{mode:'gift-replace',steps:[{path:[3,1],name:'gift'}],prototypePath:[3,1,0]},{mode:'price-reflow',steps:[{path:[3,2],name:'price'}],items:[{paths:[[3,2,0],[3,2,1]]}],separators:[{path:[3,2,2]}]},{mode:'gift-replace',steps:[{path:[3,4],name:'embedded'},{path:[2],name:'gift'}],prototypePath:[2,0]}];
+ c.input=JSON.stringify(actions);const actual=vm.runInContext('tplRemapActions(JSON.parse(input),[3])',c),plain=JSON.parse(JSON.stringify(actual));
+ assert.deepEqual(plain[0].steps[0].path,[0,1]);assert.deepEqual(plain[0].prototypePath,[0,1,0]);assert.deepEqual(plain[1].items[0].paths,[[0,2,0],[0,2,1]]);assert.deepEqual(plain[1].separators[0].path,[0,2,2]);assert.deepEqual(plain[2].prototypePath,[2,0]);assert.deepEqual(actions[0].steps[0].path,[3,1]);
+ assert.throws(()=>vm.runInContext('tplRemapActions(JSON.parse(input),[8])',c),/超出选定根/);
+});
+
+test('cross-document duplicate selects destination container first and moves only on a failed parent postcondition',()=>{
+ const vm=require('node:vm'),events=[],parent={id:7},d={id:1},source={id:2},app={set activeDocument(v){events.push(v.id);}},c=vm.createContext({app,ElementPlacement:{INSIDE:0}});vm.runInContext(require('../sku-template-native.cjs').placementNative,c);let moves=0;c.tplAttach=(doc,l,target)=>{moves++;l.parent=target;};
+ const l={duplicate(doc){assert.equal(doc,parent);assert.equal(d.activeLayer,parent);return {parent};}};assert.equal(c.tplDuplicateInto(source,l,d,parent).parent,parent);assert.deepEqual(events,[1,2,1]);assert.equal(moves,0);
+ l.duplicate=()=>({parent:{id:99}});c.tplDuplicateInto(source,l,d,parent);assert.equal(moves,1);c.tplAttach=()=>{};assert.throws(()=>c.tplDuplicateInto(source,l,d,parent),/未进入目标容器/);
+});
+
 function multiFixture(){
  const f=fixture(),second={...f.scan.sourceBoards[1]},fields=structuredClone(f.mapping.approved.boards[0].fields);f.mapping.approved.boards[1]={boardId:second.id,boardName:second.name,action:'use',fields};
  f.scan.sourceInventory.objects.push({...structuredClone(f.scan.sourceInventory.objects[1]),id:'1.0',boardId:11,nativePath:[1,0],steps:[{path:[1,0],name:'old-footer'}],box:[120,70,100,30]});

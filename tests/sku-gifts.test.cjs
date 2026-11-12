@@ -27,6 +27,17 @@ test('gift actions create per-product slots and copy truthful names/value styles
 test('gift contract rejects price overlap, unknown assets, omitted name/value, invented claims and unsafe frames',()=>{
  for(const edit of [f=>f.config.containerId='0',f=>f.config.textParts=[{token:'value',sourceStart:0}],f=>f.config.textParts=[{token:'name',sourceStart:0}],f=>f.config.textParts.push({text:'Guaranteed best!',sourceStart:0}),f=>f.config.imageFrame=[0,0,1,1],f=>f.config.emptyRemoveObjectIds=['0'],f=>f.catalog.assets=[],f=>f.config.frame=[0,0,-1,100]]){const f=fixture();edit(f);assert.throws(()=>giftAction(f));}
 });
+
+test('single gift reading band uses independent slots and reordered truthful text; multiple and empty routes remain independent',()=>{
+ const config=fixture().config;
+ config.singleLayout={frame:[100,20,500,80],imageFrame:[.65,.1,.35,.8],textFrame:[0,0,.6,1],unitAlignment:'slots',textParts:[{token:'name',sourceStart:6},{text:'\n',sourceStart:5},{text:'价值',sourceStart:0},{token:'value',sourceStart:2},{text:'元',sourceStart:4}]};
+ config.multipleLayout={axis:'vertical',textAnchor:'left'};
+ const compile=value=>giftAction({...fixture(value),config:JSON.parse(JSON.stringify(config))});
+ const a=compile('蓝键帽 价值99元'),b=compile('蓝键帽 价值99元+鼠标垫 价值69元'),empty=compile('');
+ assert.deepEqual(a.frame,[100,20,500,80]);assert.equal(a.unitAlignment,'slots');assert.equal(a.reference.layoutVariant,'singleLayout');assert.equal(a.gifts[0].spans.map(s=>s.text).join(''),'蓝键帽\n价值99元');
+ assert.equal(b.axis,'vertical');assert.deepEqual(b.frame,config.frame);assert.equal(b.reference.layoutVariant,'multipleLayout');assert.equal(b.gifts.length,2);assert.equal(empty.emptyRemoves.length,1);assert.equal(empty.reference.layoutVariant,undefined);
+ for(const override of [{containerId:'0.2'},{directory:'/other'},null,[],{imageFrame:[0,0,1,1]},{textParts:[{token:'name',sourceStart:6},{text:'新营销文案',sourceStart:0}]}]){const f=fixture();f.config.singleLayout=override;assert.throws(()=>giftAction(f));}
+});
 test('gift directory scanner detects actual PNG bytes, hashes, empty alpha, duplicates and changed files without copying originals',async t=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sparkit-gifts-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
  await fs.writeFile(path.join(dir,'蓝键帽.png'),png);const a=await scanGiftAssets(dir,{imageInfo:()=>[0,0,1,1]});assert.equal(a.assets[0].name,'蓝键帽');assert.equal(a.assets[0].width,1);assert.equal((await fs.readdir(dir)).length,1);
@@ -35,6 +46,28 @@ test('gift directory scanner detects actual PNG bytes, hashes, empty alpha, dupl
 test('native gift region math supports single and multiple horizontal/vertical items without stretching shapes',()=>{
  const c=vm.createContext({});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);assert.deepEqual(Array.from(c.giftBox([.5,0,.5,1],[100,20,200,100])),[200,20,100,100]);assert.deepEqual(Array.from(c.giftBox([0,.5,1,.5],[100,20,200,100])),[100,70,200,50]);
  assert.doesNotThrow(()=>new vm.Script(require('../photoshop-artboards.cjs').compositionScript('C:/input.psb',[],'PSB','C:/out',{productTemplate:{}}).replace(/^#target photoshop/,'')));
+});
+
+test('reordered gift paragraphs keep line breaks inside their actual paragraph and inherit the matching source style',()=>{
+ class Descriptor{constructor(v){this.v={...v};}getInteger(k){return this.v[k];}putInteger(k,v){this.v[k]=v;}}
+ class List{constructor(items=[]){this.items=items;this.count=items.length;}getObjectValue(i){return new Descriptor(this.items[i].v);}getObjectType(){return 'paragraph';}putObject(k,v){this.items.push(v);this.count++;}}
+ const c=vm.createContext({sid:k=>k,ActionList:List});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);
+ const old=new List([new Descriptor({from:0,to:6,style:'value'}),new Descriptor({from:6,to:12,style:'name'})]);let actual;
+ const td={putList(k,v){actual=v.items.map(x=>x.v);}},spans=[{text:'New',sourceStart:6},{text:'\r',sourceStart:5},{text:'价值',sourceStart:0},{text:'9',sourceStart:2},{text:'元',sourceStart:4}];
+ c.giftParagraphs(td,old,'New\r价值9元',spans);assert.deepEqual(actual,[{from:0,to:4,style:'name'},{from:4,to:9,style:'value'}]);
+ assert.equal(old.items[0].v.to,6);assert.equal(old.items[1].v.from,6);
+});
+
+test('gift PNG pool is bounded by size and count, reuses immutable inputs, and never closes user documents',()=>{
+ const docs=[],closed=[];let opened=0;
+ const user={path:'user.png',saved:true,close(){assert.fail('user document closed');}};docs.push(user);
+ const c=vm.createContext({File:function(p){this.path=p;},SaveOptions:{DONOTSAVECHANGES:0},tplDocs:()=>docs.slice(),tplKnown:(d,a)=>a.includes(d),app:{open(f){const existing=docs.find(d=>d.path===f.path);if(existing)return existing;opened++;const d={path:f.path,saved:true,close(){closed.push(this.path);docs.splice(docs.indexOf(this),1);}};docs.push(d);return d;}}});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);
+ const asset=name=>({path:name,fingerprint:name,width:100,height:100});
+ const a=c.giftImageSource(asset('one.png'));assert.equal(c.giftImageSource(asset('one.png')).doc,a.doc);assert.equal(opened,1);
+ c.giftImageSource(asset('two.png'));c.giftImageSource(asset('three.png'));assert.deepEqual(closed,['one.png']);assert.equal(c.giftImagePool.length,2);
+ assert.equal(c.giftImageSource(asset('user.png')).close,false);assert.equal(c.giftImagePool.length,2);
+ const big=c.giftImageSource({...asset('big.png'),width:2048,height:2048});assert.equal(big.close,true);big.doc.close();
+ c.giftImagePool[0].doc.saved=false;assert.throws(()=>c.giftImageSource(asset('two.png')),/未保存修改/);c.giftCloseImages();assert.equal(c.giftImagePool.length,0);assert.ok(docs.includes(user));
 });
 
 test('empty gift fields explicitly mean no gifts and do not inherit the price placeholder policy',()=>{

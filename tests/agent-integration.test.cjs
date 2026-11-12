@@ -82,3 +82,14 @@ test('independent workspace reset failure blocks all model execution',async t=>{
   record.approved={approvalDigest:'approved',boards:[]};f.steps.push(op('import_product_mapping'));await f.invoke('agent-start',{request:'Import confirmed products',fileIds:[a.id,b.id]});await finished(f);assert.equal(f.last.status,'completed');assert.equal(f.commands.at(-1).tool,'import_product_mapping');assert.equal(f.commands.at(-1).args.mapping.approved.approvalDigest,'approved');
   record.workbook.path=path.join(f.directory,'different.xlsx');f.steps.push(op('configure_product_copy'));await f.invoke('agent-start',{request:'Prevent foreign mapping',fileIds:[a.id,b.id]});await finished(f);assert.equal(f.last.status,'failed');assert.match(f.last.error,/本任务附件/);assert.equal(reads,3);
  });
+
+test('template tools accept only current attachments and forward trusted template identity through the software RPC',async t=>{
+ let mapping,calls=0;const f=await fixture(t,{productMappings:{read:async()=>mapping},runArtboards:async input=>{calls++;assert.equal(input.templateAction,'inspect_product_template');assert.equal(input.templateInput.path,template);assert.match(input.templateInput.fingerprint,/^[a-f0-9]{64}$/);return {scanId:'verified'};},onCommand:async(data,invoke)=>{
+  assert.equal(data.tool,'inspect_product_template');assert.equal(data.args.templateInput.path,template);
+  return invoke('agent-artboards',{action:'metadata',source:{path:source,fingerprint:'source'},productMapping:'mapping',templateFileId:data.args.templateFileId,templateArgs:{}});
+ }});const source=path.join(f.directory,'source.psb'),book=path.join(f.directory,'products.xlsx'),template=path.join(f.directory,'footer.psb');await fs.writeFile(source,'source');await fs.writeFile(book,'workbook');await fs.writeFile(template,'template');
+ const picked=(await f.invoke('agent-files',{paths:[source,book,template]})).value;mapping={id:'mapping',source:{path:source},workbook:{path:book},approved:{approvalDigest:'approved'}};
+ const op=id=>({kind:'tool',message:'inspect',tool:'inspect_product_template',arguments:JSON.stringify({sourceFileId:picked[0].id,workbookFileId:picked[1].id,mappingId:'mapping',templateFileId:id}),questions:[]});
+ f.steps.push(op(picked[2].id));await f.invoke('agent-start',{request:'Inspect footer',fileIds:picked.map(x=>x.id)});await finished(f);assert.equal(f.last.status,'completed',f.last.error);assert.equal(calls,1);
+ f.steps.push(op(picked[2].id));await f.invoke('agent-start',{request:'No foreign attachments',fileIds:picked.slice(0,2).map(x=>x.id)});await finished(f);assert.equal(f.last.status,'failed');assert.match(f.last.error,/不属于本任务/);assert.equal(calls,1);
+});

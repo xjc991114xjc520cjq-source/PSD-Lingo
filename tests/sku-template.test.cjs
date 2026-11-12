@@ -71,12 +71,20 @@ test('template holder stages group copies through Document and preserves order d
  const {placementNative}=require('../sku-template-native.cjs');
  const c=vm.createContext({ElementPlacement:{PLACEBEFORE:'before',PLACEATEND:'end',PLACEATBEGINNING:'first',INSIDE:'inside'}});vm.runInContext(placementNative,c);
  const doc={typename:'Document'},root={id:1,layers:[],parent:doc};let duplicates=0;const moved=[];
- function original(id){return {id,duplicate(target,placement){assert.equal(target,doc,'Photoshop forbids direct group-to-group duplicate');assert.equal(placement,'first');duplicates++;root.layers.push({id:90});return {parent:doc,move(group,p){assert.equal(p,'inside');this.parent=group;moved.unshift(id);}};}};}
+ function original(id){return {id,duplicate(target,placement){assert.equal(target,doc,'Photoshop forbids direct group-to-group duplicate');assert.equal(placement,'first');duplicates++;root.layers.push({id:90});return {id:id+100,parent:root,move(group,p){if(group===root){assert.equal(p,'before');this.parent=doc;}else{assert.equal(this.parent,doc);assert.equal(p,'inside');this.parent=group;moved.unshift(id);}}};}};}
  root.layers.push(original(2),original(4));
  const holder={id:3,parent:root,move(target,placement){assert.equal(target,root);assert.equal(placement,'before');root.layers.splice(root.layers.indexOf(this),1);this.parent=doc;}};
  doc.layerSets={add(){root.layers.push(holder);return holder;}};
  assert.equal(c.tplHolder(doc,root,true),holder);assert.equal(duplicates,2);assert.deepEqual(moved,[2,4]);
  holder.move=()=>{};holder.parent=root;assert.throws(()=>c.tplHolder(doc,root,true),/文档顶层/);
+});
+test('staged template copy rejects failed escape and reused original before inserting into holder',()=>{
+ const {placementNative}=require('../sku-template-native.cjs'),doc={typename:'Document'},root={id:1,layers:[],parent:doc};let inserted=false;
+ const holder={id:3,parent:doc,move(){}};doc.layerSets={add:()=>holder};
+ const original={id:2,duplicate:()=>({id:20,parent:root,move(target){if(target===holder)inserted=true;}})};root.layers=[original];
+ const c=vm.createContext({ElementPlacement:{PLACEBEFORE:'before',PLACEATBEGINNING:'first',INSIDE:'inside'}});vm.runInContext(placementNative,c);
+ assert.throws(()=>c.tplHolder(doc,root,true),/文档顶层/);assert.equal(inserted,false);
+ original.duplicate=()=>original;assert.throws(()=>c.tplHolder(doc,root,true),/独立对象/);assert.equal(inserted,false);
 });
 test('final design audit receives board-specific template prices, exclusions and cleanup requirements',async()=>{
  const {auditDesignFile}=require('../design-document-audit.cjs'),f=fixture(),records=f.records;

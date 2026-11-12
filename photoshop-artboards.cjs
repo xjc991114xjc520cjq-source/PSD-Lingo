@@ -23,8 +23,8 @@ ${options.productTemplate?require('./sku-template-native.cjs').templateNative+re
 ${require('./native-json.cjs').jsonNative}
 ${boardDeletionNative}
 ${boardEditsNative}
-var options=${JSON.stringify(options)},boards=${JSON.stringify(boards)},format=${JSON.stringify(format)},folder=${JSON.stringify(directory.replace(/\\/g,'/'))};
-function checkpoint(s){stage=s;write(folder+'/native-progress.json',{stage:s,at:String(new Date())});if(new File(folder+'/cancel.request').exists)throw Error('用户请求取消，正在清理工作副本');}
+var startedAt=(new Date()).getTime();var options=${JSON.stringify(options)},boards=${JSON.stringify(boards)},format=${JSON.stringify(format)},folder=${JSON.stringify(directory.replace(/\\/g,'/'))};
+function checkpoint(s,details){stage=s;var event={stage:s,at:String(new Date()),elapsedMs:(new Date()).getTime()-startedAt,details:details||null};write(folder+'/native-progress.json',event);var trace=new File(folder+'/native-progress.jsonl');trace.encoding='UTF8';if(!trace.open('a'))throw Error('无法写入进度历史');try{trace.writeln(enc(event));}finally{trace.close();}if(new File(folder+'/cancel.request').exists)throw Error('用户请求取消，正在清理工作副本');}
 function sid(s){return stringIDToTypeID(s);}function desc(l){var r=new ActionReference();r.putIdentifier(sid('layer'),l.id);return executeActionGet(r);}
 function locate(d,p){for(var i=0;i<p.length;i++){if(!d.layers||!d.layers[p[i]])throw Error('模板路径已变化');d=d.layers[p[i]];}return d;}
 function walk(c,fn){for(var i=0;i<c.layers.length;i++){var l=c.layers[i];fn(l);if(l.typename==='LayerSet')walk(l,fn);}}

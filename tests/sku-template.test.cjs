@@ -67,24 +67,24 @@ test('assistant template configuration is undoable and stale or ordinary-edit st
  await assert.rejects(run('configure_product_template',args,null,()=>false),/过期/);assert.equal(JSON.stringify(file),before);assert.equal(calls,1);
  file.layers.push({recordId:'ordinary'});await assert.rejects(run('configure_product_template',args),/普通修改/);assert.equal(calls,1);
 });
-test('template holder stages group copies through Document and preserves order despite active-artboard collection mutation',()=>{
- const {placementNative}=require('../sku-template-native.cjs');
- const c=vm.createContext({ElementPlacement:{PLACEBEFORE:'before',PLACEATEND:'end',PLACEATBEGINNING:'first',INSIDE:'inside'}});vm.runInContext(placementNative,c);
- const doc={typename:'Document'},root={id:1,layers:[],parent:doc};let duplicates=0;const moved=[];
- function original(id){return {id,duplicate(target,placement){assert.equal(target,doc,'Photoshop forbids direct group-to-group duplicate');assert.equal(placement,'first');duplicates++;root.layers.push({id:90});return {id:id+100,parent:root,move(group,p){if(group===root){assert.equal(p,'before');this.parent=doc;}else{assert.equal(this.parent,doc);assert.equal(p,'inside');this.parent=group;moved.unshift(id);}}};}};}
- root.layers.push(original(2),original(4));
- const holder={id:3,parent:root,move(target,placement){assert.equal(target,root);assert.equal(placement,'before');root.layers.splice(root.layers.indexOf(this),1);this.parent=doc;}};
- doc.layerSets={add(){root.layers.push(holder);return holder;}};
- assert.equal(c.tplHolder(doc,root,true),holder);assert.equal(duplicates,2);assert.deepEqual(moved,[2,4]);
- holder.move=()=>{};holder.parent=root;assert.throws(()=>c.tplHolder(doc,root,true),/文档顶层/);
+function assemblyFixture(fail=false){
+ const doc={id:1,typename:'Document'},box=[10,20,100,30],root={layers:[]};let closed=false,unlocked=0;
+ const staging={id:2,typename:'Document',layers:[],flatten(){assert.equal(this,staging);},close(){closed=true;}};
+ const raster={parent:staging,remove(){staging.layers.splice(staging.layers.indexOf(this),1);}};staging.layers=[raster];
+ for(let i=0;i<3;i++)root.layers.push({name:'Layer '+i,box,duplicate(target){assert.equal(target,staging);const child={id:100+i,name:'auto renamed',parent:staging,box:box.slice()};staging.layers.unshift(child);return child;}});
+ doc.duplicate=()=>staging;
+ function Descriptor(){}Descriptor.prototype.putReference=Descriptor.prototype.putEnumerated=Descriptor.prototype.putBoolean=function(){};
+ function Reference(){}Reference.prototype.putIdentifier=Reference.prototype.putClass=Reference.prototype.putEnumerated=function(){};
+ const c=vm.createContext({app:{activeDocument:doc},ElementPlacement:{PLACEATBEGINNING:'first'},SaveOptions:{DONOTSAVECHANGES:'no'},DialogModes:{NO:'no'},bounds:l=>l.box,unlock:()=>{unlocked++;return [];},relock:()=>{},sid:s=>s,ActionDescriptor:Descriptor,ActionReference:Reference,enc:JSON.stringify,executeAction(op){if(op==='make'){if(fail)throw Error('native grouping failed');const group={id:500,typename:'LayerSet',parent:staging,layers:staging.layers.slice()};for(const l of group.layers)l.parent=group;staging.layers=[group];staging.activeLayer=group;}}});
+ vm.runInContext(require('../sku-template-native.cjs').placementNative,c);c.tplCapture=()=>[];c.tplVerify=()=>{};
+ return {c,doc,root,staging,closed:()=>closed,unlocked:()=>unlocked};
+}
+test('template assembly uses a separate document, preserves copied layer names/order/bounds and leaves source intact',()=>{
+ const f=assemblyFixture(),before=f.root.layers.slice();const holder=f.c.tplHolder(f.doc,f.root,true);
+ assert.equal(holder.parent,f.staging);assert.deepEqual(holder.layers.map(l=>l.name),['Layer 0','Layer 1','Layer 2']);assert.deepEqual(f.root.layers,before);assert.equal(f.c.app.activeDocument,f.doc);assert.equal(f.unlocked(),1);assert.equal(f.closed(),false);
 });
-test('staged template copy rejects failed escape and reused original before inserting into holder',()=>{
- const {placementNative}=require('../sku-template-native.cjs'),doc={typename:'Document'},root={id:1,layers:[],parent:doc};let inserted=false;
- const holder={id:3,parent:doc,move(){}};doc.layerSets={add:()=>holder};
- const original={id:2,duplicate:()=>({id:20,parent:root,move(target){if(target===holder)inserted=true;}})};root.layers=[original];
- const c=vm.createContext({ElementPlacement:{PLACEBEFORE:'before',PLACEATBEGINNING:'first',INSIDE:'inside'}});vm.runInContext(placementNative,c);
- assert.throws(()=>c.tplHolder(doc,root,true),/文档顶层/);assert.equal(inserted,false);
- original.duplicate=()=>original;assert.throws(()=>c.tplHolder(doc,root,true),/独立对象/);assert.equal(inserted,false);
+test('template assembly closes only its staging document after grouping failure and restores active document',()=>{
+ const f=assemblyFixture(true);assert.throws(()=>f.c.tplHolder(f.doc,f.root,true),/native grouping failed/);assert.equal(f.closed(),true);assert.equal(f.c.app.activeDocument,f.doc);assert.equal(f.root.layers.length,3);
 });
 test('final design audit receives board-specific template prices, exclusions and cleanup requirements',async()=>{
  const {auditDesignFile}=require('../design-document-audit.cjs'),f=fixture(),records=f.records;

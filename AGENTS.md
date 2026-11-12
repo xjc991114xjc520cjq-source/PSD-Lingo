@@ -31,3 +31,5 @@
 - 2026-11-11：PSB句柄/路径stat设备号差异导致的源文件变化误报已修复；新增后台PS原生画板复制/新建/命名/行列排布、混合价格样式与auto PSD/PSB输出。761项回归及真实本机Codex、后台PS保存重开和全部画板JPG审验通过；详见practice-records/2026-11-11-photoshop-artboards/实施与验收.md。本地未发布，不代表客户视觉批准，未使用computer use。
 - 2026-11-11：用户明确授权发布PSB误报修复及多画板功能，准备版本0.3.68。761项回归、后台PS原生矩阵及真实本机Codex最终JPG审验通过。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.68；实际公开状态以D:/PSD-Lingo/work/v68-public-verified.json及正式latest签名为准。
 - 2026-11-12：用户明确授权发布产品表对应画板及原位文案块修改，并交接“灵搭 Sparkit · 实机测试与设计审验”（01a1c671-e732-7bb1-84a3-316bd6d509df）开展客户副本测试。准备0.3.69，775项回归、隐藏Electron及后台PS独立智能对象小样通过；客户原稿未改，真实客户任务和设计验收另行记录。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.69，实际发布以D:/PSD-Lingo/work/v69-public-verified.json及正式latest签名为准。
+
+- 2026-11-12：用户明确授权发布 SKU 外部底部模板替换并启动独立实机测试。功能提交4571d21，786项自动回归通过，准备0.3.70。当前发布前客户整稿及Adobe实机未验收；发布核对完成后交接“灵搭 Sparkit · 实机测试与设计审验”从本轮I盘键盘稿断点后台续测，禁止computer-use及旧RS6V2串任务。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.70，实际公开以签名latest及work/releases/0.3.70/public-verified.json为准。

@@ -1,6 +1,16 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const {makeArtboardPlan,validateArtboardPlan,renameArtboardPlan,arrangeArtboardPlan,renamePlannedArtboards}=require('../photoshop-artboard-plan.cjs');
 const {compositionScript}=require('../photoshop-artboards.cjs');
+test('retained boards avoid all unlock and geometry writes; actual edits and moves retain lock cleanup',()=>{
+ const {boardEditsNative}=require('../photoshop-artboards.cjs');let writes=[],box=[0,0,100,100];
+ const c=vm.createContext({checkpoint:s=>writes.push(s),rect:()=>box.slice(),unlock:()=>{writes.push('unlock');return [];},relock:()=>writes.push('relock'),locate:()=>({}),applyText:()=>{writes.push('text');return [];},setBoardRect:(_,b)=>{writes.push('rect');box=b.slice();}});vm.runInContext(boardEditsNative,c);
+ const ab={translate(x,y){writes.push('move');box[0]+=x;box[1]+=y;}},b={name:'keep',box:[0,0,100,100],changes:[]};
+ c.applyBoardEdits(ab,b,0,58);assert.equal(writes.length,1);assert.match(writes[0],/1\/58/);
+ writes=[];c.applyBoardEdits(ab,{...b,changes:[{relativePath:[0],target:'approved',recordIds:['r']}]},1,58);assert.ok(writes.includes('text'));assert.ok(writes.includes('relock'));assert.ok(!writes.includes('move'));assert.ok(!writes.includes('rect'));
+ writes=[];c.applyBoardEdits(ab,{...b,box:[100,0,100,100]},2,58);assert.ok(writes.includes('move'));assert.ok(!writes.includes('rect'));assert.equal(writes.at(-1),'relock');
+ writes=[];c.applyBoardEdits(ab,{...b,box:[100,0,200,100]},3,58);assert.ok(writes.includes('rect'));assert.ok(!writes.includes('move'));
+ c.applyText=()=>{throw Error('native failure');};writes=[];assert.throws(()=>c.applyBoardEdits(ab,{...b,box:box.slice(),changes:[{}]},4,58),/native failure/);assert.equal(writes.at(-1),'relock');
+});
 function fixture(){return {file:{format:'PSB',width:800,height:600,artboards:[{id:10,name:'Source',box:[0,0,800,600],nativePath:[0]}],layers:[{id:20,boardId:10,original:'$12.34',nativePath:[0,0],alignment:'center',issues:['文字层或分组已锁定','混合文字样式暂不支持'],mixedStyleRuns:[{signature:'symbol'},{signature:'integer'},{signature:'decimal'}]}]},records:[{id:'r',target:'56.78',digest:'approved'}]};}
 function args(){return {columns:2,rows:1,boards:[{name:'One',templateId:10,changes:[{layerId:20,recordIds:['r'],prefix:'$',reason:'Approved table value',spans:[{text:'$',sourceStart:0},{text:'56',sourceStart:1},{text:'.78',sourceStart:3}]}]},{name:'Two',templateId:10}]};}
 test('composition references approved copy, preserves explicit mixed styles and defaults to automatic format',()=>{const {file,records}=fixture(),p=makeArtboardPlan(file,args(),records);assert.equal(p.outputFormat,'auto');assert.equal(p.boards[0].changes[0].target,'$56.78');assert.equal(p.boards[0].changes[0].sourceRecords[0].digest,'approved');assert.deepEqual(validateArtboardPlan(p,file).map(b=>b.box),[[0,0,800,600],[900,0,800,600]]);});

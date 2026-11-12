@@ -34,7 +34,7 @@ function tplCapture(d,c,depth){if(depth>6)throw Error('模板验证嵌套超过6
 function tplHolder(copy,root,artboard){var children=[],i; if(artboard){for(i=0;i<root.layers.length;i++)children.push(root.layers[i]);}else children.push(root);
  var holder=copy.layerSets.add();holder.name='Sparkit footer';holder.move(root,ElementPlacement.PLACEBEFORE);
  if(holder.parent.typename!=='Document'||holder.id===root.id)throw Error('模板容器必须位于文档顶层');
- for(i=0;i<children.length;i++){if(typeof checkpoint==='function')checkpoint('复制模板子层 '+(i+1)+'/'+children.length);if(children[i].id===holder.id)throw Error('模板容器不能复制自身');children[i].duplicate(holder,ElementPlacement.PLACEATEND);}return holder;}
+ for(i=children.length-1;i>=0;i--){if(typeof checkpoint==='function')checkpoint('复制模板子层 '+(children.length-i)+'/'+children.length);if(children[i].id===holder.id)throw Error('模板容器不能复制自身');var child=children[i].duplicate(copy,ElementPlacement.PLACEATBEGINNING);if(!child||child.parent.typename!=='Document')throw Error('模板子层必须先复制到文档顶层');child.move(holder,ElementPlacement.INSIDE);if(child.parent.id!==holder.id)throw Error('模板子层移入容器失败');}return holder;}
 function tplReplace(d,ab,request,template){var copy=null,ancestors=[],old=[],holder=null;try{
  // Resolve every source reference before deleting any siblings.
  for(var i=0;i<request.oldObjects.length;i++){var o=request.oldObjects[i],l=tplLocate(d,o.nativePath);if(l.name!==o.name||!tplPath(ab,l))throw Error('旧底部块定位失效');old.push(l);var parent=l.parent;while(parent&&parent.typename!=='Document'){var seen=false;for(var j=0;j<ancestors.length;j++)if(ancestors[j].l.id===parent.id)seen=true;if(!seen){ancestors.push({l:parent,lock:tplLock(parent)});tplUnlock(parent);}parent=parent.parent;}}

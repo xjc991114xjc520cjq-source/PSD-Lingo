@@ -1,0 +1,8 @@
+// Explicit opt-in. Creates and closes only its own deeply nested document.
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+if(process.env.SPARKIT_ADOBE_TEST!=='1')throw Error('Requires current Adobe background permission');
+(async()=>{const out=process.env.SPARKIT_NATIVE_OUTPUT;await fs.mkdir(out,{recursive:true});
+ let jsx=require('../photoshop-artboards.cjs').compositionScript('unused.psb',[],'PSB',out,{});jsx=jsx.slice(0,jsx.indexOf('try{var file='));
+ jsx+=`try{work=app.documents.add(40,40,72,'Sparkit save notice isolated',NewDocumentMode.RGB,DocumentFill.TRANSPARENT);var parent=work;for(var i=0;i<8;i++){parent=parent.layerSets.add();parent.name='Level '+i;}var l=parent.artLayers.add();l.kind=LayerKind.TEXT;l.textItem.contents='Fixture';l.textItem.size=8;checkpoint('保存可编辑副本');save(work,folder+'/nested.psb',true);write(folder+'/verified.json',{passed:true,createdOnlyIndependentDocument:true});}finally{if(work)work.close(SaveOptions.DONOTSAVECHANGES);if(previous)app.activeDocument=previous;app.displayDialogs=dialogs;app.preferences.rulerUnits=units;}})();`;
+ const output=out+'/nested-'+Date.now()+'.psb';jsx=jsx.replace("folder+'/nested.psb'",JSON.stringify(output));const start=Date.now();await require('../photoshop-preview.cjs').executeScript(out,jsx);assert.ok((await fs.stat(output)).size>100);const notices=await fs.readFile(out+'/native-notices.log','utf8').catch(()=>null);await fs.writeFile(out+'/verified.json',JSON.stringify({passed:true,seconds:(Date.now()-start)/1000,noticeAcknowledged:!!notices,onlyIndependentDocument:true},null,2));console.log('PASS native nested save',notices||'notice did not appear');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -4,13 +4,21 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const {AgentTask}=require('../services/agent-task.cjs'),{thinkNative,closeNativeTask}=require('../services/agent-native-provider.cjs'),{runStructuredTask}=require('../services/ai-match.cjs');
 if(process.env.SPARKIT_PERFORMANCE_LIVE!=='1')throw Error('Set SPARKIT_PERFORMANCE_LIVE=1 for local Codex acceptance');
 (async()=>{
- const directory='D:/PSD-Lingo/work/assistant-performance-live',executable=(await require('../services/codex-discovery.cjs').discoverCodex()).path;
+ const directory=process.env.SPARKIT_PERFORMANCE_OUTPUT||'D:/PSD-Lingo/work/assistant-performance-live',executable=(await require('../services/codex-discovery.cjs').discoverCodex()).path;
  await fs.mkdir(directory,{recursive:true});const settings={get:async()=>({mode:'local',executable,localModel:'gpt-6.1-sol'})};
  const skills=require('../services/design-review-plugins.cjs').loadReviewPlugins(),skill=require('../services/design-skill.cjs').loadDesignSkill();
  const shared=require('../services/design-skill.cjs').skillPrompt({designSkill:skill})+require('../services/design-review-plugins.cjs').reviewPluginPrompt(skills)+'\n仅用于协议验收的共同规范识别码：joint-review-7319。';
  const image='data:image/png;base64,'+(await fs.readFile(path.join(__dirname,'../renderer/assets/demo-preview.png'))).toString('base64');
  let operations=0,analyses=0,validations=0;const calls=[],answers=[];
- const a=new AgentTask({directory,think:(task,deps)=>thinkNative(task,deps,{settings,env:process.env,directory:directory+'/context'}),execute:async(tool,args,{task})=>{
+ // Conservative no-cache estimate. Stop well below $25 to reserve room for
+ // usage events that arrive after inference. Caller controls opt-in runs.
+ const stopUSD=Math.min(5,Math.max(.1,Number(process.env.SPARKIT_TEST_STOP_USD)||2));let budgetUsage={},budgetSession,toolCalls=0;
+ const saveBudget=()=>fs.writeFile(directory+'/budget.json',JSON.stringify({limitUSD:25,stopAtEstimatedUSD:stopUSD,ratesPerMillion:{input:15,output:75},usage:budgetUsage,estimatedUSD:((budgetUsage.inputTokens||0)*15+(budgetUsage.outputTokens||0)*75)/1e6,toolCalls},null,2));
+ const deadline=setTimeout(()=>budgetSession?.close(Error('Live acceptance time limit reached')),180000);
+ const a=new AgentTask({directory,think:(task,deps)=>thinkNative(task,deps,{settings,env:process.env,directory:directory+'/context',createSession:hooks=>{
+  const {CodexAppSession}=require('../services/codex-app-session.cjs');
+  budgetSession=new CodexAppSession({...hooks,onEvent:(method,params)=>{hooks.onEvent(method,params);if(method==='thread/tokenUsage/updated'){budgetUsage=params.tokenUsage.total;void saveBudget();if(((budgetUsage.inputTokens||0)*15+(budgetUsage.outputTokens||0)*75)/1e6>=stopUSD)budgetSession.close(Error('Live acceptance budget guard stopped inference'));}},onRequest:async(method,params)=>{if(method==='item/tool/call'&&++toolCalls>8){budgetSession.close(Error('Live acceptance tool limit reached'));throw Error('Budget tool limit');}return hooks.onRequest(method,params);}});return budgetSession;
+ }}),execute:async(tool,args,{task})=>{
   calls.push(tool);if(tool==='read_batch'||tool==='workspace')return {fixture:true,note:'Only design_layout is needed once; no artwork mutation or export.'};
   if(tool!=='design_layout')throw Error('Read-only protocol fixture only');operations++;
   for(const phase of ['plan','review']){
@@ -23,5 +31,5 @@ if(process.env.SPARKIT_PERFORMANCE_LIVE!=='1')throw Error('Set SPARKIT_PERFORMAN
  try{a.start({request:'只读本机Codex通信验收。调用一次design_layout，亲自回答软件的两个阶段和可能的analysisCorrection，使用同一analysisId重交。禁止重启design_layout。最后workspace核对并结束，注明没有改稿或导出。',model:'gpt-6.1-sol'});await a.runPromise;
   assert.equal(a.current.status,'completed',a.current.error);assert.equal(operations,1);assert.equal(analyses,2);assert.equal(answers.length,2);assert.equal(a.current.performance.analysisCorrections,1);assert.equal(a.current.performance.nativeTurns,1);
   const verified={passed:true,operations,analyses,answers,calls,performance:a.current.performance,sharedInstructionBytes:Buffer.byteLength(shared),scope:'Real local Codex + actual demo image, injected validation error, software fixture, no Adobe'};await fs.writeFile(directory+'/verified.json',JSON.stringify(verified,null,2));console.log(JSON.stringify(verified));
- }finally{closeNativeTask(a.current);}
+ }finally{clearTimeout(deadline);closeNativeTask(a.current);await saveBudget();}
 })().catch(e=>{console.error(e.stack);process.exitCode=1;});

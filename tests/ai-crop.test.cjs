@@ -24,9 +24,9 @@ test('missing font in unrelated text stops an AI object before any edit or repla
 
 test('AI analysis includes missing fonts from unrelated text only in an object that may be edited',()=>{
  const data={texts:2,entries:[{index:0,name:'target',original:'SALE',fonts:['Ready'],styles:[],problems:[],visible:true},{index:1,name:'price',original:'180',fonts:['Missing'],styles:[],problems:[],visible:true}]};
- const c={RULE:{},fontPresent:n=>n==='Ready',layerKey:()=> '0',hits:()=>1,textPlan:s=>({exact:s==='SALE'?'MEGA':s,related:[]})};vm.createContext(c);vm.runInContext(photoshopAiBridgeNative,c);c.exportAiObject=()=>({fsName:'fixture.ai',remove(){}});c.callAi=()=>data;
+ const c={RULE:{},desc:()=>({getObjectValue:()=>({size:{width:100,height:100},resolution:{value:72},crop:1})}),objectData:v=>v,sid:v=>v,fontPresent:n=>n==='Ready',layerKey:()=> '0',hits:()=>1,textPlan:s=>({exact:s==='SALE'?'MEGA':s,related:[]})};vm.createContext(c);vm.runInContext(photoshopAiBridgeNative,c);c.exportAiObject=()=>({fsName:'fixture.ai',remove(){}});c.callAi=()=>data;
  const result={matches:[],related:[],skipped:[]};c.scanAi({}, {},[{path:[0]}],{},true,false,'object',result);assert.equal(result.matches.length,1);assert.deepEqual(Array.from(result.matches[0].objectFonts),['Ready','Missing']);assert.equal(result.fontResources.length,1);assert.equal(result.fontResources[0].aiIndex,1);assert.equal(result.fontResources[0].problems[0],'缺少字体 Missing');
- data.entries[0].original='UNCHANGED';const unrelated={matches:[],related:[],skipped:[]};c.scanAi({}, {},[],{},true,false,'untouched object',unrelated);assert.equal(unrelated.fontResources,undefined);
+ data.sourceFrameIssue='AI 原始裁切尺寸不一致';const guarded={matches:[],related:[],skipped:[]};c.scanAi({}, {},[{path:[0]}],{},true,false,'mismatched object',guarded);assert.ok(guarded.matches[0].problems.includes(data.sourceFrameIssue));data.entries[0].original='UNCHANGED';const unrelated={matches:[],related:[],skipped:[]};c.scanAi({}, {},[],{},true,false,'untouched object',unrelated);assert.equal(unrelated.fontResources,undefined);
 });
 
 test('font repair groups and clears object resource blockers using a representative without changing user decisions',()=>{

@@ -8,12 +8,14 @@ function createArtboardOperations({run,directory,requireOutput}){
   let entry=cache.get(key);
   if(input.action==='visual'){if(!entry)throw Error('画板预览已失效，请重新preview');return artboardVisual(deliveredVisuals.get(key)||entry,input);}
   if(input.action==='verify'&&!entry)throw Error('画板成果缓存已失效，请重新导出');
+  if(input.action==='verify'&&!delivered.has(key))throw Error('画板尚未导出');
+  if(input.action==='export')await requireOutput(task.outputDirectory);
   // run revalidates the imported fingerprint even when reusing a prepared copy.
   const result=await run({source:input.source,plan:input.plan,directory:path.join(directory(),task.id,key,crypto.randomUUID()),prepared:entry,onProgress:progress});
   cache.set(key,result);if(cache.size>12){const old=cache.keys().next().value;cache.delete(old);delivered.delete(old);deliveredVisuals.delete(old);}entry=result;
   if(input.action==='verify'){const saved=delivered.get(key);if(!saved)throw Error('画板尚未导出');for(const a of saved)if(await require('../photoshop-file-io.cjs').hashFile(a.path)!==a.hash)throw Error('最终画板交付文件已变化，审验结果失效');return {verified:true,reused:true};}
   if(input.action==='export'){
-   await requireOutput(task.outputDirectory);const dest=path.join(task.outputDirectory,'Sparkit-'+task.id,'artboards-'+key.slice(0,12));await fs.mkdir(dest,{recursive:true});
+   const dest=path.join(task.outputDirectory,'Sparkit-'+task.id,'artboards-'+key.slice(0,12));await fs.mkdir(dest,{recursive:true});
    const copy=async(from,to)=>{try{await fs.copyFile(from,to,require('node:fs').constants.COPYFILE_EXCL);}catch(e){if(e.code!=='EEXIST')throw e;if(await require('../photoshop-file-io.cjs').hashFile(from)!==await require('../photoshop-file-io.cjs').hashFile(to))throw Error('输出已有同名但不同的文件，未覆盖');}return to;};
    const output=await copy(entry.output,path.join(dest,(input.plan.documentName||'artboards')+'.'+entry.format.toLowerCase()));
    const boards=[];for(const [i,b]of entry.boards.entries())boards.push({...b,image:await copy(b.image,path.join(dest,'board-'+i+'.jpg'))});

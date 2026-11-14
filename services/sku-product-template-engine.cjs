@@ -10,17 +10,21 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  const equal=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
  const location=id=>{if(!/^[a-f0-9]{64}$/.test(id||''))throw Error('模板扫描ID无效');return path.join(base(),id);};
- async function inputs(source,mapping,template){
-  if(!mapping?.approved||!equal(mapping.source.path,source.path))throw Error('模板替换需要本原稿的当前产品批准');
+ function assertInputs(source,mapping,template){
+  if(!mapping?.approved||typeof mapping.source?.path!=='string'||typeof source?.path!=='string'||!source.fingerprint||!equal(mapping.source.path,source.path))throw Error('模板替换需要本原稿的当前产品批准');
   if(!template?.path||!template.fingerprint||! /\.(psd|psb)$/i.test(template.path)||equal(template.path,source.path))throw Error('请附加独立的PSD/PSB模板');
-  if(await hash(source.path)!==source.fingerprint||await hash(template.path)!==template.fingerprint)throw Error('原稿或模板已变化，请重新导入');
+ }
+ async function inputs(source,mapping,template,checkedHash=hash){
+  assertInputs(source,mapping,template);
+  if(await checkedHash(source.path)!==source.fingerprint||await checkedHash(template.path)!==template.fingerprint)throw Error('原稿或模板已变化，请重新导入');
  }
  async function inspect({source,mapping,template,metadata}){
-  await inputs(source,mapping,template);
+  assertInputs(source,mapping,template);
   const sourceKey=digest([source,mapping.id,mapping.approved.approvalDigest]);
   const id=digest([3,source,template,mapping.id,mapping.approved.approvalDigest]);
   if(pending.has(id))return pending.get(id);
   const job=(async()=>{
+   await inputs(source,mapping,template);
    const dir=location(id),file=path.join(dir,'scan.json');
    try{const envelope=JSON.parse(await fs.readFile(file,'utf8'));if(envelope.digest!==digest(envelope.scan)||envelope.scan.id!==id)throw Error('模板扫描记录损坏');sourceCache.set(sourceKey,envelope.scan.sourceInventory);return envelope.scan;}catch(e){if(e.code!=='ENOENT')throw e;}
    if(!metadata?.artboards?.length||mapping.source.boards.length!==metadata.artboards.length||mapping.source.boards.some(b=>!metadata.artboards.some(a=>a.id===b.id&&a.name===b.name&&JSON.stringify(a.box)===JSON.stringify(b.box))))throw Error('原生画板与当前产品批准不一致');
@@ -38,11 +42,15 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
  async function catalogs(configs){const result={},byDirectory=new Map();for(const c of configs){if(!c.gifts)continue;const dir=c.gifts.directory;if(!byDirectory.has(dir))byDirectory.set(dir,await require('../sku-gifts.cjs').scanGiftAssets(dir));result[c.templateFileId]=byDirectory.get(dir);}return result;}
  async function validate({source,plan}){
   const p=plan.productTemplate;if(!p)throw Error('缺少模板计划');
-  const entries=require('../sku-template-routing.cjs').templateSources(p),scans=[];let mapping;
+  const entries=require('../sku-template-routing.cjs').templateSources(p),scans=[],mappings=new Map(),hashes=new Map();let mapping;
+  // Share reads only within this validation. No fingerprint survives into the
+  // next preview/export/run; compose still performs its own mutation fence.
+  const checkedHash=file=>{const key=path.resolve(file).toLowerCase();if(!hashes.has(key))hashes.set(key,hash(file));return hashes.get(key);};
   for(const entry of entries){
    const envelope=JSON.parse(await fs.readFile(path.join(location(entry.scanId),'scan.json'),'utf8')),scan=envelope.scan;
    if(envelope.digest!==digest(scan)||scan.id!==entry.scanId||!equal(scan.source.path,source.path)||scan.source.fingerprint!==source.fingerprint||JSON.stringify(entry.template)!==JSON.stringify(scan.template))throw Error('模板扫描损坏或不属于本原稿');
-   const current=await readMapping(scan.mappingId);if(mapping&&(current.id!==mapping.id||current.approved?.approvalDigest!==mapping.approved?.approvalDigest))throw Error('多模板扫描批准不一致');mapping=current;await inputs(source,mapping,scan.template);scans.push(scan);
+   if(!mappings.has(scan.mappingId))mappings.set(scan.mappingId,await readMapping(scan.mappingId));
+   const current=mappings.get(scan.mappingId);if(mapping&&(current.id!==mapping.id||current.approved?.approvalDigest!==mapping.approved?.approvalDigest))throw Error('多模板扫描批准不一致');mapping=current;await inputs(source,mapping,scan.template,checkedHash);scans.push(scan);
   }
   const giftCatalog=p.templates?await catalogs(p.decisions.templates):p.decisions.gifts?await require('../sku-gifts.cjs').scanGiftAssets(p.decisions.gifts.directory):undefined;
   const rebuilt=buildTemplatePlan(p.templates?scans:scans[0],mapping,p.decisions,mappingRecords(mapping),giftCatalog);

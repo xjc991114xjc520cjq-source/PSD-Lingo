@@ -1,5 +1,13 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const {createArtboardOperations}=require('../services/agent-artboards.cjs'),{hashFile}=require('../photoshop-file-io.cjs');
+test('invalid output and verification before delivery stop before expensive native work',async()=>{
+ let runs=0;const operate=createArtboardOperations({run:async()=>{runs++;return {boards:[{name:'One'}]};},directory:()=>'.',requireOutput:async()=>{throw Error('输出位置不可用');}}),input={source:{path:'fixture.psb',fingerprint:'h'},plan:{},action:'export'},task={id:'isolated'};
+ await assert.rejects(operate(input,task),/输出位置/);assert.equal(runs,0);
+ // Preview validates inputs before the view selection, so it establishes the
+ // prepared cache even though this deliberately empty visual is invalid.
+ await assert.rejects(operate({...input,action:'preview',boardName:'Missing'},task),/画板名称/);assert.equal(runs,1);
+ await assert.rejects(operate({...input,action:'verify'},task),/尚未导出/);assert.equal(runs,1);
+});
 test('artboard export reuses native work without overwriting another result, verifies delivered bytes, and isolates tasks',async t=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'artboard-export-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let nativeRuns=0;const source=path.join(dir,'source.psb');await fs.writeFile(source,'original');const sourceFingerprint=await hashFile(source);
  const run=async({source:s,prepared,directory})=>{assert.equal(await hashFile(s.path),s.fingerprint,'source fingerprint must still match');if(prepared)return {...prepared,reused:true};nativeRuns++;await fs.mkdir(directory,{recursive:true});const output=path.join(directory,'draft.psd'),image=path.join(directory,'board.jpg');await fs.writeFile(output,'editable output');await fs.writeFile(image,'proof bytes');return {output,fingerprint:await hashFile(output),format:'PSD',boards:[{name:'One',box:[0,0,100,100],image}],delivery:{verified:true,reopened:true}};};

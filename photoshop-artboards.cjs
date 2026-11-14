@@ -18,6 +18,7 @@ function applyBoardEdits(ab,b,index,total){checkpoint('检查画板 '+(index+1)+
  }finally{relock(locks);}}
 `;
 function compositionScript(input,boards,format,directory,options={}){return String.raw`#target photoshop
+// sparkit:composition-save-notice
 (function(){var proofDocs=[],proofSources=[],source=null,work=null,reopened=null,opened=false,previous=null,dialogs=app.displayDialogs,units=app.preferences.rulerUnits,templatePool=[],stage='读取模板',failure=null;try{previous=app.activeDocument;}catch(_){}app.displayDialogs=DialogModes.NO;app.preferences.rulerUnits=Units.PIXELS;
 ${options.productTemplate?require('./sku-template-native.cjs').templateNative+require('./sku-template-native.cjs').placementNative+require('./sku-template-native.cjs').templatePoolNative:''}
 ${require('./native-json.cjs').jsonNative}

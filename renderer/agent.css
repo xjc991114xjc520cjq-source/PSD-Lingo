@@ -2,6 +2,31 @@
 
 .agent-sidebar-entry img{width:21px;height:21px;object-fit:contain;margin-right:10px}.spark-reduce-motion .agent-animation img,.spark-reduce-motion .agent-orbit{animation:none}
 
+/* A finished task presents its result first; the complete history stays available. */
+.agent-control>.agent-completion-mark{display:none}
+.agent-dialog.is-completed{width:min(760px,94vw)}
+.is-completed .agent-body{display:flex;flex-direction:column;gap:24px;padding:38px 28px 28px}
+.is-completed .agent-control{order:0;width:100%;margin:0 auto}
+.is-completed .agent-control>:not(#agentStatus):not(.agent-completion):not(.agent-completion-mark){display:none}
+.is-completed .agent-control>.agent-completion-mark{display:block;width:52px;height:52px;color:#bedac9;margin:0 auto 20px}
+.agent-completion-mark svg{width:100%;height:100%}
+.is-completed .agent-control>.agent-completion-mark[data-tone=attention]{color:#efc7a7}
+.is-completed #agentStatus{margin:0 0 10px;font-size:28px;line-height:1.4;font-weight:600}
+.agent-completion-summary{margin:0;font-size:16px;line-height:1.6;color:var(--agent-ink)}
+.agent-completion-verification{margin:8px 0 0;font-size:13px;line-height:1.65;color:#c2d7c9}
+.agent-completion[data-tone=attention] .agent-completion-verification{color:#efc7a7}
+.agent-completion-location{margin:20px auto 0;max-width:62ch;font-size:12px;line-height:1.65;color:var(--agent-muted);overflow-wrap:anywhere}
+.agent-completion-location:empty{display:none}
+.agent-completion-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+.agent-completion-actions button{min-height:44px;padding:10px 16px;font-size:14px}
+.agent-completion-usage{margin-top:24px;color:var(--agent-muted);font-size:12px;text-align:center;line-height:1.65}
+.agent-completion-usage summary{cursor:pointer;padding:8px;min-height:24px}
+.agent-completion-usage p{white-space:pre-line;margin:10px 0 0}
+.is-completed .agent-conversation{display:none;order:1;padding-top:24px;border-top:1px solid #ffffff18}
+.is-completed.is-conversation-open .agent-conversation{display:block}
+.is-completed .agent-conversation>h2,.is-completed .agent-conversation>.agent-intro{display:none}
+@media(max-width:600px){.agent-dialog.is-completed .agent-head{padding:16px;gap:10px;align-items:flex-start}.is-completed .agent-head-actions{flex-wrap:wrap;justify-content:flex-end}.is-completed .agent-brand{font-size:12px;letter-spacing:0;white-space:nowrap;padding-top:10px}.is-completed .agent-body{padding:28px 18px 22px}.agent-completion-actions button{flex:1;min-width:135px}.is-completed #agentStatus{font-size:25px}}
+
 /* Isolate this surface from legacy global dialog overrides. */
 .agent-dialog{background:#232428!important;border:1px solid #ffffff24!important;border-radius:18px!important;box-shadow:0 30px 100px #0008!important}
 .agent-dialog.is-takeover{background:#1e2024f5!important;border:0!important;border-radius:0!important;overflow:hidden}

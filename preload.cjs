@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('desktop', {
   agentCacheContext:()=>ipcRenderer.invoke('agent-cache-context'),
   agentFiles:v=>ipcRenderer.invoke('agent-files',v),
   agentOutput:()=>ipcRenderer.invoke('agent-output'),
+  agentOpenOutput:()=>ipcRenderer.invoke('agent-open-output'),
   agentModels:()=>ipcRenderer.invoke('agent-models'),
   agentStart:v=>ipcRenderer.invoke('agent-start',v),
   agentFollowup:v=>ipcRenderer.invoke('agent-followup',v),

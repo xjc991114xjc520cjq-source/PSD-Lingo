@@ -28,7 +28,7 @@ app.whenReady().then(async()=>{let exit=0;try{
   await js(`document.getElementById('agentAddFiles').click()`);await wait(`document.querySelectorAll('#agentFiles .agent-file').length===1`);
   await js(`document.getElementById('agentChooseOutput').click()`);await wait(`document.querySelector('.agent-output').textContent.includes('output')`);
   await js(`document.getElementById('agentRequest').value=${JSON.stringify(mode==='error'?'测试错误显示':'仅导入并检查原稿预览')};document.getElementById('agentStart').click()`);
-  await wait(`document.getElementById('agentTranscript').textContent.startsWith(${JSON.stringify(mode==='error'?'测试错误显示':'仅导入并检查原稿预览')})&&['本轮任务已结束','任务未完成'].includes(document.getElementById('agentStatus').textContent)&&!document.getElementById('agentDialog').classList.contains('is-takeover')`);
+  await wait(`document.getElementById('agentTranscript').textContent.startsWith(${JSON.stringify(mode==='error'?'测试错误显示':'仅导入并检查原稿预览')})&&['任务已完成','任务未完成'].includes(document.getElementById('agentStatus').textContent)&&!document.getElementById('agentDialog').classList.contains('is-takeover')`);
   const state=(await js(`window.desktop.agentState()`)).value;
   if(mode==='error'){
    assert.equal(state.status,'failed');assert.match(state.error,/fileIndex/);

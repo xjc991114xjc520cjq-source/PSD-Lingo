@@ -1,15 +1,15 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {inspectFile,hashFile}=require('../photoshop-file-io.cjs');
-const {PSB_MAX_BYTES}=require('../photoshop-file.cjs');
+const PSB_MAX_BYTES=6*1024**3;
 const snapshot=size=>({size,mtimeMs:123,ctimeMs:456,ino:789,dev:10,isFile:()=>true});
 function header(){const b=Buffer.alloc(26);b.write('8BPS');b.writeUInt16BE(2,4);b.writeUInt32BE(36000,14);b.writeUInt32BE(800,18);b.writeUInt16BE(8,22);b.writeUInt16BE(3,24);return b;}
 test('6 GiB PSB inspection reads only its 26-byte header with 64-bit-safe size',async()=>{
  let closed=false,readBytes=0;const io={open:async()=>({stat:async()=>snapshot(PSB_MAX_BYTES),read:async(buffer,offset,length,position)=>{assert.equal(position,0);header().copy(buffer);readBytes+=length;return {bytesRead:26};},close:async()=>{closed=true;}})};
  const info=await inspectFile('six-gib.psb',io);assert.equal(info.format,'PSB');assert.equal(info.stat.size,6442450944);assert.equal(readBytes,26);assert.ok(closed);
 });
-test('6 GiB+1 is rejected from header and handles close on failure',async()=>{
+test('PSB above 6 GiB is accepted with a header-only read and closes its handle',async()=>{
  let closed=false;const io={open:async()=>({stat:async()=>snapshot(PSB_MAX_BYTES+1),read:async b=>{header().copy(b);return {bytesRead:26};},close:async()=>{closed=true;}})};
- await assert.rejects(inspectFile('too-large.psb',io),/6 GiB/);assert.ok(closed);
+ assert.equal((await inspectFile('large.psb',io)).stat.size,PSB_MAX_BYTES+1);assert.ok(closed);
 });
 test('streaming checksum crosses 4 GiB and reaches 6 GiB without file Buffer allocation',async()=>{
  // Simulate lengths only: this code-level test does not create/read a real giant file.

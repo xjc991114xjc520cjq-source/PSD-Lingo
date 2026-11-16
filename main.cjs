@@ -46,13 +46,12 @@ function serviceStatus(){return {version:app.getVersion(),authorization:authoriz
 function protectedAction(feature){if(!authorization||!updates)throw new Error('服务正在初始化，请稍候');updates.assert();authorization.assert(feature);}
 const {validateArtworkHides}=require('./artwork-visibility.cjs');
 const imported = new Map(),importedMetadata=new Map();
-async function importFilePath(value, extensions, label, maxBytes=Infinity) {
+async function importFilePath(value, extensions, label) {
   if(typeof value!=='string'||!value.trim()||value.includes('\0')||!path.isAbsolute(value))throw new Error(label+'路径无效，请拖入本机文件。');
   const selected=path.normalize(value),ext=path.extname(selected).toLowerCase();
   if(!extensions.includes(ext))throw new Error(label+'格式不支持，请选择 '+extensions.join(' / ')+' 文件。');
   const stat=await fs.stat(selected);
   if(!stat.isFile())throw new Error('请拖入'+label+'文件，不能使用文件夹。');
-  if(stat.size>maxBytes)throw new Error(label+'超过 20 MB。');
   return selected;
 }
 function safe(handler) { return async (_, ...args) => { try { return {ok: true, value: await handler(...args)}; } catch (e) { return {ok: false, error: String(e.message || e)}; } }; }
@@ -61,31 +60,18 @@ async function readPsd(filePath,{preview=true}={}) {
     if(psBusy||batchBusy)throw Error('原生文件任务正在运行，请稍后导入 AI');
     psBusy=true;try{const fingerprint=await hashFile(filePath),result=await illustrator.readIllustrator(path.join(app.getPath('userData'),'previews','ai-'+Date.now()),filePath,{preview});if(await hashFile(filePath)!==fingerprint)throw Error('AI 原稿在读取期间发生变化，请重新导入');imported.set(filePath,fingerprint);importedMetadata.set(filePath,{fingerprint,metadata:structuredClone(result.metadata)});return {path:filePath,name:path.basename(filePath),fingerprint,format:'AI',...result};}finally{psBusy=false;}
   }
-  const info=await inspectFile(filePath);
-  if(info.format==='PSB'||info.width*info.height>65000000){
-    if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请等待当前任务完成后读取大画布文件。');
-    let fingerprint,metadata,image;psBusy=true;
-    try{
-      fingerprint=await hashFile(filePath,{expectedStat:info.stat});
-      const directory=path.join(app.getPath('userData'),'previews','import-'+Date.now());
-      metadata=await readPhotoshopMetadata(directory,filePath,{helperPath});
-      if(preview)image=await createBackground(directory,filePath,[],{helperPath,scalePreview:true});
-      if(metadata.width!==info.width||metadata.height!==info.height||metadata.bitsPerChannel!==8||metadata.colorMode!==3)throw new Error('原稿尺寸或颜色模式在读取期间发生变化，请重新导入。');
-      if(await hashFile(filePath)!==fingerprint)throw new Error('源文件在读取期间发生变化，请保存后重新导入。');
-      imported.set(filePath,fingerprint);importedMetadata.set(filePath,{fingerprint,metadata:structuredClone(metadata)});
-      return {path:filePath,name:path.basename(filePath),fingerprint,format:info.format,metadata,preview:image};
-    }finally{psBusy=false;}
-  }
-  const buffer=await fs.readFile(filePath),fingerprint=hash(buffer);
-  imported.set(filePath,fingerprint);importedMetadata.delete(filePath);
-  return {path:filePath,name:path.basename(filePath),bytes:new Uint8Array(buffer),fingerprint,format:info.format};
+  const result=await require('./photoshop-import.cjs').readPhotoshopInput(filePath,{inspect:inspectFile,read:fs.readFile,checksum:hashFile,reserve:()=>{if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请等待当前任务完成后读取大文件。');psBusy=true;return ()=>{psBusy=false;};},native:async()=>{
+    const directory=path.join(app.getPath('userData'),'previews','import-'+Date.now()),metadata=await readPhotoshopMetadata(directory,filePath,{helperPath}),image=preview?await createBackground(directory,filePath,[],{helperPath,scalePreview:true}):undefined;return {metadata,preview:image};
+  }});
+  imported.set(filePath,result.fingerprint);if(result.metadata)importedMetadata.set(filePath,{fingerprint:result.fingerprint,metadata:structuredClone(result.metadata)});else importedMetadata.delete(filePath);
+  return {path:filePath,name:path.basename(filePath),...result};
 }
 
 async function actualMetadata(file){
   const cached=importedMetadata.get(file.path);
   if(cached&&cached.fingerprint===file.fingerprint)return cached.metadata;
   if(illustrator.isIllustrator(file))throw Error('AI 元数据未验证，请重新导入 AI 原稿');
-  const info=await inspectFile(file.path);if(info.format==='PSB')throw new Error('PSB 元数据尚未验证，请重新导入原稿。');
+  const info=await inspectFile(file.path);if(require('./photoshop-file.cjs').needsNativePhotoshop(info))throw new Error('大文件元数据尚未验证，请重新导入原稿。');
   const psd=require('ag-psd').readPsd(await fs.readFile(file.path),{skipLayerImageData:true,skipCompositeImageData:true,skipThumbnail:true,skipLinkedFilesData:true});
   return {width:psd.width,height:psd.height,layers:extractLayers(psd),containers:extractContainers(psd)};
 }
@@ -213,9 +199,8 @@ ipcMain.handle('import-document', safe(async (options = {}) => {
   if(options && Object.hasOwn(options,'path'))selected=options.path;
   else{const r = await dialog.showOpenDialog(win, {title: '导入唯一目标文案来源', properties: ['openFile'], filters: [{name: '文案文档', extensions: options.workbookOnly?['xlsx']:['xlsx', 'docx', 'csv', 'tsv', 'txt']}]});
     if(r.canceled)return null;selected=r.filePaths[0];}
-  if(typeof selected==='string'&&/\.xlsx$/i.test(selected)){const p=await importFilePath(selected,['.xlsx'],'翻译表',512*1024*1024);return importWorkbook(p,options);}
-  const p=await importFilePath(selected,['.docx','.csv','.tsv','.txt'],'文案文档',20*1024*1024), name=path.basename(p),ext=path.extname(p).toLowerCase(),buffer=await fs.readFile(p);
-  if (buffer.length > 20 * 1024 * 1024) throw new Error('文档超过 20 MB。');
+  if(typeof selected==='string'&&/\.xlsx$/i.test(selected)){const p=await importFilePath(selected,['.xlsx'],'翻译表');return importWorkbook(p,options);}
+  const p=await importFilePath(selected,['.docx','.csv','.tsv','.txt'],'文案文档'), name=path.basename(p),ext=path.extname(p).toLowerCase(),buffer=await fs.readFile(p);
   let records, rawText = null;
   const splitMode = options.splitMode === 'paragraph' ? 'paragraph' : 'line';
   if (ext === '.csv' || ext === '.tsv') records = recordsFromRows(parseCsv(buffer.toString('utf8')), name);
@@ -229,7 +214,6 @@ ipcMain.handle('import-document', safe(async (options = {}) => {
 ipcMain.handle('resplit-document', safe(async request => {
   if (!request || !['line', 'paragraph'].includes(request.splitMode)) throw new Error('无效的文案拆分方式');
   if (typeof request.rawText === 'string') {
-    if (request.rawText.length > 20 * 1024 * 1024) throw new Error('文本超过测试版范围');
     return recordsFromText(request.rawText, request.name, request.splitMode);
   }
   return resplitRecords(request.records, request.splitMode);
@@ -256,7 +240,7 @@ ipcMain.handle('load-project', safe(async (options = {}) => {
   let selected;
   if(options && Object.hasOwn(options,'path'))selected=options.path;
   else{const r=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'PSD Lingo 项目',extensions:['json']}]});if(r.canceled)return null;selected=r.filePaths[0];}
-  const projectPath=await importFilePath(selected,['.json'],'项目',20*1024*1024);
+  const projectPath=await importFilePath(selected,['.json'],'项目');
   const data = JSON.parse(await fs.readFile(projectPath, 'utf8'));
   return hydrateSavedProject(data);
 }));
@@ -324,7 +308,6 @@ async function finalizeLanguageBatchLearning(tasks,documents,{cancelled=false,un
 ipcMain.handle('run-photoshop',safe(async plan=>{if(batchBusy)throw new Error('批量任务正在运行');const r=await dialog.showOpenDialog(win,{title:'选择修改后 PSD / PSB / AI 的保存文件夹',properties:['openDirectory','createDirectory']});if(r.canceled)return null;return runPhotoshop(plan,r.filePaths[0]);}));
 async function readLanguageDocument(p,splitMode){
   const name=path.basename(p),ext=path.extname(p).toLowerCase(),buffer=await fs.readFile(p);
-  if(buffer.length>20*1024*1024)throw new Error('文档超过 20 MB');
   let records;
   if(ext==='.csv'||ext==='.tsv')records=recordsFromRows(parseCsv(buffer.toString('utf8')),name);
   else if(ext==='.docx')records=recordsFromText(await readDocxText(buffer),name,splitMode);
@@ -346,8 +329,8 @@ ipcMain.handle('load-batch-template',safe(async(options={})=>{
   let selected;
   if(options && Object.hasOwn(options,'path'))selected=options.path;
   else{const r=await dialog.showOpenDialog(win,{title:'打开多语言排版模板',properties:['openFile'],filters:[{name:'PSD Lingo 模板',extensions:['json']}]});if(r.canceled)return null;selected=r.filePaths[0];}
-  const templatePath=await importFilePath(selected,['.json'],'模板',20*1024*1024);
-  const bytes=await fs.readFile(templatePath);if(bytes.length>20*1024*1024)throw new Error('模板超过 20 MB');
+  const templatePath=await importFilePath(selected,['.json'],'模板');
+  const bytes=await fs.readFile(templatePath);
   const template=validateTemplate(JSON.parse(bytes.toString('utf8')));
   for(const file of template.plan.files){const actual=await readPsd(file.path,{preview:false});if(actual.fingerprint!==file.fingerprint)throw new Error('模板原 PSD 已变化，请重新导入原稿并制作模板：'+file.name);}
   await checkPlan(template.plan);activeBatchTemplate=template;batchDocuments.clear();return {template,path:templatePath};
@@ -386,7 +369,7 @@ ipcMain.handle('run-language-reference',safe(request=>bulkTask(async()=>{
 })));
 ipcMain.handle('add-workbook-language',safe(async request=>{
  if(batchBusy)throw Error('请等待批量任务完成');if(!activeBatchTemplate)throw Error('请先保存或打开排版模板');
- const p=await importFilePath(request?.path,['.xlsx'],'翻译表',512*1024*1024),doc=await importWorkbook(p,{fingerprint:request.fingerprint,selection:request.selection});
+ const p=await importFilePath(request?.path,['.xlsx'],'翻译表'),doc=await importWorkbook(p,{fingerprint:request.fingerprint,selection:request.selection});
  if(doc.selectionRequired)throw Error('请先选择并预览表格范围');
  const id=require('node:crypto').randomUUID();doc.name=doc.name.replace(/\.xlsx$/i,'')+'-'+doc.sheet+'-'+doc.selection.segments.map(s=>s.targetColumns+s.rowStart+'-'+s.rowEnd).join('_');batchDocuments.set(id,doc);return {...doc,id};
 }));

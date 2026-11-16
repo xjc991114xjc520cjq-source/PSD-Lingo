@@ -1,7 +1,7 @@
 // Bounded, read-only PSD/PSB layer index. No channel pixels or smart objects opened.
 const fs=require('node:fs/promises'),crypto=require('node:crypto');
 const {sameSnapshot}=require('./photoshop-file-io.cjs');
-async function readBoardIndex(file,{signal,maxBytes=16*1024*1024}={}){
+async function readBoardIndex(file,{signal,maxBytes=Infinity}={}){
  const h=await fs.open(file,'r');let pos=0,bytesRead=0;const digest=crypto.createHash('sha256');
  try{const before=await h.stat();if(!before.isFile())throw Error('请选择PSD/PSB文件');
  async function take(n,end=before.size){signal?.throwIfAborted();if(!Number.isSafeInteger(n)||n<0||pos+n>end||pos+n>before.size||bytesRead+n>maxBytes)throw Error('画板结构越界或读取预算超限');const b=Buffer.alloc(n);let at=0;while(at<n){const r=await h.read(b,at,n-at,pos+at);if(!r.bytesRead)throw Error('画板结构截断');at+=r.bytesRead;}digest.update(String(pos)+':');digest.update(b);pos+=n;bytesRead+=n;return b;}

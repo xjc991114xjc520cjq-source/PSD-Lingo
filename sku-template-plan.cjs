@@ -37,7 +37,7 @@ function buildSingleTemplatePlan(scan,mapping,args,records,giftCatalog){
   const exclusions=b.fieldExclusions||[];
   if(!Array.isArray(exclusions)||new Set(exclusions.map(e=>e.recordId)).size!==exclusions.length||exclusions.some(e=>!available.some(r=>r.id===e.recordId&&r.context.boardId===b.boardId)))throw Error('排除字段重复或不属于本产品');
   for(const f of approved.fields.filter(f=>f.role!=='gift')){const role=fieldObjects.find(o=>o.field===f.key);if(!role)throw Error('所有表格字段均需模板角色，不能漏字段');const objects=role.objectIds.map(get),record=available.find(r=>r.context.boardId===b.boardId&&r.context.field===f.key),edits=record?actions.filter(a=>a.recordId===record.id):[];
-   if(f.state!=='value'){if(!objects.every(removed))throw Error('空白/斜杠字段的模板金额必须明确清除，不能保留示例价格');continue;}
+   if(f.state!=='value'){if(approved.placeholderPolicy==='leave-unchanged'){if(objects.some(removed))throw Error('用户选择保留空字段原文，不能清除对应模板对象');continue;}if(!objects.every(removed))throw Error('空白/斜杠字段的模板金额必须明确清除，不能保留示例价格');continue;}
    const exclusion=exclusions.find(e=>e.recordId===record.id);if(exclusion){if(edits.length||!exclusion.reason?.trim()||!objects.every(removed))throw Error('排除有效字段需说明授权依据，并移除其所有金额对象');continue;}
    let at=0;for(const e of edits.sort((a,b)=>a.slice[0]-b.slice[0])){if(e.slice[0]!==at)throw Error('金额字符重复或遗漏');at=e.slice[1];}if(at!==record.target.length||objects.some(o=>!removed(o)&&!edits.some(e=>e.objectId===o.id)))throw Error('表格字段或模板金额未完整落实');
   }

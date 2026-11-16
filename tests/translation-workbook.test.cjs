@@ -26,7 +26,7 @@ test('workbook search compares matching rows across sheets and reads only an anc
  assert.equal((await load(file,{search:{queries:['日冕为形'],offset:20}})).matches.length,0);
  for(const search of [{queries:[]},{queries:['!!!']},{queries:['a'],offset:-1},{queries:['x'],sheet:'不存在'}])await assert.rejects(load(file,{search}));
  for(const image of [{sheet:'海报',media:'xl/media/unanchored.png'},{sheet:'商详',media:'xl/media/image.png'},{sheet:'海报',media:'../private.png'}])await assert.rejects(load(file,{image}),/实际返回/);
- z.file('xl/media/image.png',Buffer.alloc(8*1024*1024+1));await fs.writeFile(file,await z.generateAsync({type:'nodebuffer'}));await assert.rejects(load(file,{image:{sheet:'海报',media:'xl/media/image.png'}}),/8 MB/);
+ z.file('xl/media/image.png',Buffer.alloc(8*1024*1024+1));await fs.writeFile(file,await z.generateAsync({type:'nodebuffer'}));await assert.rejects(load(file,{image:{sheet:'海报',media:'xl/media/image.png'}}),/格式无效/);
 });
 
 test('shared workbook importer serves overview, bounded pages and selection with identity invalidation',async t=>{

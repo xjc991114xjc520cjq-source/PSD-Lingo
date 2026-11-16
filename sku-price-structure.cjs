@@ -3,7 +3,7 @@ const prefix=(a,b)=>a.length<=b.length&&a.every((v,i)=>v===b[i]);
 const contains=(a,b)=>a.steps.length===b.steps.length&&a.steps.slice(0,-1).every((s,i)=>JSON.stringify(s.path)===JSON.stringify(b.steps[i].path))&&prefix(a.steps.at(-1).path,b.steps.at(-1).path);
 const union=boxes=>{const x=Math.min(...boxes.map(b=>b[0])),y=Math.min(...boxes.map(b=>b[1]));return [x,y,Math.max(...boxes.map(b=>b[0]+b[2]))-x,Math.max(...boxes.map(b=>b[1]+b[3]))-y];};
 function priceStructure({objects,root,fields,approved,groups,removes=[],layout=[],exclusions=[]}){
- const missing=new Set(approved.fields.filter(f=>f.state!=='value').map(f=>f.key));
+ const missing=new Set(approved.fields.filter(f=>f.state!=='value'&&approved.placeholderPolicy!=='leave-unchanged').map(f=>f.key));
  for(const e of exclusions){const f=approved.fields.find(f=>e.recordId===f.recordId);if(f)missing.add(f.key);}
  if(!groups){if(missing.size)throw Error('价格结构减少：请根据当前模板声明priceGroups（字段完整阅读组、标签与运算符关系），软件将默认清理并回收空槽；不能只清金额');return {removeIds:removes,reflows:[],summary:[]};}
  if(!Array.isArray(groups)||!groups.length)throw Error('priceGroups必须声明当前模板真实容器与字段角色');

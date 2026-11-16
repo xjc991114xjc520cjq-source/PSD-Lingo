@@ -5,9 +5,7 @@ async function readDocxText(buffer) {
   const zip = await JSZip.loadAsync(buffer);
   const entry = zip.file('word/document.xml');
   if (!entry) throw new Error('Word 文档缺少正文 XML');
-  if (entry._data?.uncompressedSize > 20 * 1024 * 1024) throw new Error('Word 正文超过 20 MB');
   const xml = await entry.async('string');
-  if (xml.length > 20 * 1024 * 1024) throw new Error('Word 正文超过 20 MB');
   const errors = [];
   const document = new DOMParser({errorHandler: {warning:()=>{}, error:m=>errors.push(m), fatalError:m=>errors.push(m)}}).parseFromString(xml, 'application/xml');
   if (errors.length || document.documentElement.localName !== 'document') throw new Error('Word 正文 XML 无法解析');

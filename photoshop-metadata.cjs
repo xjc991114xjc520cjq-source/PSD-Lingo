@@ -112,7 +112,6 @@ async function readPhotoshopMetadata(directory,input,{helperPath}={}) {
   await executeScript(directory,metadataScript(input.replace(/\\/g,'/'),output.replace(/\\/g,'/')));
   const after=await fs.stat(input);
   if(before.size!==after.size||before.mtimeMs!==after.mtimeMs||before.ino!==after.ino)throw new Error('读取期间原 PSD／PSB 已改变，请重新导入');
-  if((await fs.stat(output)).size>32*1024*1024)throw new Error('文字层元数据过大');
   return normalizeNativeMetadata(JSON.parse((await fs.readFile(output,'utf8')).replace(/^\uFEFF/,'')));
 }
 module.exports={readPhotoshopMetadata,metadataScript,normalizeNativeMetadata};

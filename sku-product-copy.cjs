@@ -8,6 +8,7 @@ function productCopyPlan(file,mapping,args,records){
  if(!mapping?.approved||!file.artboards?.length)throw Error('请先确认产品对应并读取原生画板');
  if(mapping.approved.boards.some(b=>b.action==='use'&&b.fields.some(f=>f.role==='gift')))throw Error('赠品必须使用模板流程，不能只改价格并遗漏图片');
  if(mapping.approved.boards.some(b=>b.action==='delete'))throw Error('产品确认含删除画板，请使用configure_product_template的deleteBoardIds；原位文字流程不支持删板');
+ if(mapping.approved.boards.some(b=>b.action==='use'&&b.placeholderPolicy==='remove-and-reflow'&&b.fields.some(f=>f.role!=='gift'&&f.state!=='value')))throw Error('已选择删除空项并重排，请使用inspect_product_template和configure_product_template配置完整价格阅读组，不能只改文字并忽略删除');
  const expected=mapping.source.boards;
  if(file.artboards.length!==expected.length||expected.some(b=>!file.artboards.some(a=>a.id===b.id&&a.name===b.name&&JSON.stringify(a.box)===JSON.stringify(b.box))))throw Error('当前原生画板与产品对应记录不一致');
  if(!Array.isArray(args.boards)||args.boards.length!==mapping.approved.boards.filter(b=>b.action==='use').length||new Set(args.boards.map(b=>b.boardId)).size!==args.boards.length)throw Error('请一次覆盖全部采用的画板；跳过画板不能夹带修改');

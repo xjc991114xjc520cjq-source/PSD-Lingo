@@ -9,7 +9,7 @@ function installAgent({ipcMain,dialog,window:windowFn,dataDirectory,settings,fet
  const transition=fn=>async input=>{if(transitioning)throw Error('任务切换正在进行，请稍候');transitioning=true;try{return await fn(input);}finally{transitioning=false;}};
  const projectStore=new (require('./agent-project.cjs').AgentProject)(dataDirectory());
  const exportOnce=require('./agent-export-cache.cjs').createExportCache(runPhotoshop);
- const deliveryResults=new Map();
+ const deliveryResults=new Map(),readTextDocument=require('./assistant-document.cjs').createDocumentReader();
  async function requireOutput(candidate){if(!candidate||!path.isAbsolute(candidate))throw Error('请先选择输出位置，再开始任务');let stat;try{stat=await fs.stat(candidate);await fs.access(candidate,require('node:fs').constants.W_OK);}catch{throw Error('输出位置不存在或不可写，请重新选择后开始任务');}if(!stat.isDirectory())throw Error('输出位置不是文件夹，请重新选择');return candidate;}
  const artboardOperations=require('./agent-artboards.cjs').createArtboardOperations({run:runArtboards,directory:()=>path.join(dataDirectory(),'artboard-compositions'),requireOutput});
  const notify=s=>{windowFn()?.webContents.send('agent-state',s);if(activeRecordId)void workRecords?.agent(activeRecordId,s).catch(e=>console.error('助手工作记录保存失败：'+e.message));};
@@ -35,14 +35,14 @@ function installAgent({ipcMain,dialog,window:windowFn,dataDirectory,settings,fet
    const f=await file(args.fileId,task);if(f.type==='folder')throw Error('请先用 list_folder 查看文件夹，再选择其中的文件');
    if(tool==='import_source'){if(!/\.(ai|psd|psb)$/i.test(f.path))throw Error('请选择 AI/PSD/PSB 原稿');const result=await renderer(tool,{path:f.path,attachmentIdentity:JSON.stringify([f.id,f.bytes,f.mtimeMs]),replaceExisting:args.replaceExisting===true},task);if(result?.error)throw Error(result.error);task.sourcePaths=[...new Set([...(task.sourcePaths||[]),f.path])];return result;}
    if(tool==='import_document')return renderer(tool,{path:f.path,selection:args.selection,attachmentIdentity:JSON.stringify([f.id,f.bytes,f.mtimeMs]),replaceExisting:args.replaceExisting===true},task);
-   if(/\.(png|jpe?g|webp)$/i.test(f.path)){if(f.bytes>8*1024*1024)throw Error('参考图大于 8 MB，请提供较小预览图');const ext=path.extname(f.path).slice(1).replace('jpg','jpeg');return {name:f.name,images:['data:image/'+ext+';base64,'+(await fs.readFile(f.path)).toString('base64')]};}
+   if(/\.(png|jpe?g|webp)$/i.test(f.path)){const ext=path.extname(f.path).slice(1).replace('jpg','jpeg');return {name:f.name,...await require('./reference-image.cjs').readReferenceImage(f.path,ext)};}
    if(/\.xlsx$/i.test(f.path)){
     if(args.search&&args.image)throw Error('表格查找与参照图请分别读取');
     return importWorkbook(f.path,args.image?{image:args.image}:args.search?{search:{queries:args.search,sheet:args.sheet,offset:args.offset}}:args.sheet?{page:{sheet:args.sheet,rowStart:args.rowStart,rowEnd:args.rowEnd}}:{});
    }
    if(/\.(ai|psd|psb)$/i.test(f.path))throw Error('原稿请使用 import_source 后查看 workspace 和 preview，不能把大型源文件当文本上传');
-   if(!/\.(txt|csv|tsv|docx|json)$/i.test(f.path)||f.bytes>20*1024*1024)throw Error('该文件暂不支持直接解析，请添加 TXT/DOCX/XLSX 或预览图片');
-   const b=await fs.readFile(f.path),text=/\.docx$/i.test(f.path)?await require('../document-reader.cjs').readDocxText(b):b.toString('utf8');if(text.length>120000)throw Error('文档内容过长，请按任务拆分文档');return {name:f.name,text};
+   if(!/\.(txt|csv|tsv|docx|json)$/i.test(f.path))throw Error('该文件暂不支持直接解析，请添加 TXT/DOCX/XLSX 或预览图片');
+   return {name:f.name,...await readTextDocument(f.path,args)};
   }
   if(tool==='export_files'){if(!task.outputDirectory)throw Error('未选择输出目录，请让用户点击蒙版中的“选择输出位置”');}
   return renderer(tool,args,task);

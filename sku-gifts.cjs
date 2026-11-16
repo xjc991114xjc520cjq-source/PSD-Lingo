@@ -11,8 +11,8 @@ function matchGifts(value,catalog){return parseGifts(value).map(g=>{const candid
 async function scanGiftAssets(directory,{imageInfo}={}){
  if(!path.isAbsolute(directory||''))throw Error('请选择赠品PNG文件夹');const real=await fs.realpath(directory),assets=[];
  const entries=await fs.readdir(real,{withFileTypes:true});if(entries.length>2000)throw Error('赠品目录超过2000项，请缩小范围');
- for(const e of entries.sort((a,b)=>a.name.localeCompare(b.name))){if(!/\.png$/i.test(e.name))continue;if(!e.isFile()||e.isSymbolicLink())throw Error('赠品必须是目录内普通PNG，不能使用链接');const file=path.join(real,e.name),st=await fs.stat(file);if(st.size>32*1024*1024)throw Error('单张赠品PNG超过32MiB');const b=await fs.readFile(file);if(b.length<33||!b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))throw Error('无效PNG：'+e.name);
-  const width=b.readUInt32BE(16),height=b.readUInt32BE(20);if(!width||!height||width*height>32*1024*1024)throw Error('赠品PNG像素过大或无效');
+ for(const e of entries.sort((a,b)=>a.name.localeCompare(b.name))){if(!/\.png$/i.test(e.name))continue;if(!e.isFile()||e.isSymbolicLink())throw Error('赠品必须是目录内普通PNG，不能使用链接');const file=path.join(real,e.name),st=await fs.stat(file);const b=await fs.readFile(file);if(b.length<33||!b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))throw Error('无效PNG：'+e.name);
+  const width=b.readUInt32BE(16),height=b.readUInt32BE(20);if(!width||!height)throw Error('赠品PNG尺寸无效');
   let inkBox;if(imageInfo)inkBox=await imageInfo(b);else{const im=require('electron').nativeImage.createFromBuffer(b);if(im.isEmpty())throw Error('无法解码赠品PNG');const pixels=im.toBitmap();let x=width,y=height,r=-1,bottom=-1;for(let j=0;j<height;j++)for(let i=0;i<width;i++)if(pixels[(j*width+i)*4+3]>0){x=Math.min(x,i);y=Math.min(y,j);r=Math.max(r,i);bottom=Math.max(bottom,j);}if(r<0)throw Error('赠品PNG完全透明：'+e.name);inkBox=[x,y,r-x+1,bottom-y+1];}
   const after=await fs.stat(file);if(st.size!==after.size||st.mtimeMs!==after.mtimeMs)throw Error('赠品PNG读取期间变化');assets.push({id:hash(Buffer.from(e.name+'\0'+hash(b))),name:path.basename(e.name,path.extname(e.name)),path:file,fingerprint:hash(b),width,height,inkBox});
  }

@@ -65,7 +65,7 @@ export function installAgentUi({call,execute,openSettings,isBusy=()=>false}){
  pause.onclick=action(async()=>update(await call(current?.status==='paused'?'agentResume':'agentPause')));stop.onclick=action(async()=>update(await call('agentStop')));
  send.onclick=action(async()=>{const text=note.value;send.disabled=true;try{update(await call('agentSupplement',text));note.value='';noteState.textContent='补充已进入原任务上下文，将在下一次分析时与原需求、已完成步骤一起处理。';}finally{send.disabled=!active(current);}});
  window.desktop?.onAgentState(s=>{update(s);});
- window.desktop?.onAgentCommand(async command=>{try{if(command.taskId!==current?.id)throw Error('接管任务身份已变化');const revision=current.revision;const value=await execute(command.tool,command.args,command.model,()=>current?.id===command.taskId&&current.revision===revision&&current.status==='running');window.desktop.agentCommandResult({id:command.id,ok:true,value});}catch(e){window.desktop.agentCommandResult({id:command.id,ok:false,error:e.message});}});
+ window.desktop?.onAgentCommand(async command=>{try{if(command.taskId!==current?.id)throw Error('接管任务身份已变化');const revision=current.revision;const value=await execute(command.tool,command.args,command.model,()=>current?.id===command.taskId&&current.revision===revision&&current.status==='running');window.desktop.agentCommandResult({id:command.id,ok:true,value});}catch(e){window.desktop.agentCommandResult({id:command.id,ok:false,error:e.message,...(e.code==='NATIVE_PLAN_WORKFLOW'?{errorCode:e.code,fileIndex:e.fileIndex}:{})});}});
  // Shortcuts outside this modal must not mutate the covered workspace.
  document.addEventListener('keydown',e=>{if(dialog.open&&!dialog.contains(e.target)){e.stopImmediatePropagation();e.preventDefault();}},true);
  control.hidden=true;

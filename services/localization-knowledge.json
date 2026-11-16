@@ -1,7 +1,7 @@
 {
   "schema": "sparkit-layout-knowledge/v1",
   "id": "manual-localization-visual-relations",
-  "revision": 14,
+  "revision": 15,
   "updatedAt": "2026-11-12",
   "status": "active",
   "scope": "cross-document-layout",
@@ -100,7 +100,7 @@
       "id": "gift-count-reading-band",
       "appliesTo": "sku-gift-strip",
       "recognize": "按批准赠品数量识别标签、分隔线、名称价值、小字及图片。",
-      "arrange": "单赠品与多赠品均按实际字形和PNG轮廓收紧图文空隙；单元连续紧凑排列并靠近赠送标签，槽位只作尺寸上限。保留名称价值层级及原有说明，不用大槽分别居中。",
+      "arrange": "双赠品按模板原位替换PNG及对应文字，保留中间加号、原间距、样式和装饰，不压紧重排或重建。单赠品沿用用户已确认的紧凑结构；保留名称价值层级及原有说明。",
       "verify": "审阅最终JPG的真实字形、PNG轮廓、紧凑图文间隙、小字归属及价格层级；数值居中、未重叠不等于通过。",
       "skip": "无对应参考不套版，不沿用案例产品、价格、坐标，不编造说明。"
     },

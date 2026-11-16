@@ -1,6 +1,6 @@
 {
   "id": "composition-review",
-  "revision": 4,
-  "sha256": "409c6f4afa6ec1ee223b76671093f758c2c173d12c683bd3c78ef108b2894e87",
+  "revision": 5,
+  "sha256": "6b8d46a83890e73fb52ad7105a04115a14e6732c3cc5b7bde1b1b908936e2d53",
   "source": "Adapted review method from local atk-design-review; brand styling and product facts excluded"
 }

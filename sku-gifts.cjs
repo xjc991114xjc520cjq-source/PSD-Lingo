@@ -29,6 +29,27 @@ function singleGiftParts(parts){
  const name=lines.findIndex(l=>l.some(p=>p.token==='name')),value=lines.findIndex(l=>l.some(p=>p.token==='value'));if(name<0||value<0||name===value||name<value)return parts;
  const order=[name,value,...lines.map((_,i)=>i).filter(i=>i!==name&&i!==value)];return order.flatMap((i,j)=>j?[breaks[j-1],...lines[i]]:lines[i]);
 }
+// Preserve supplied multi-gift slots, including their original separator objects.
+function templateGiftSlots(container,objects,gifts){
+ if(gifts.length<2)return null;
+ const direct=objects.filter(o=>o.steps.length===container.steps.length&&o.nativePath.length===container.nativePath.length+1&&container.nativePath.every((v,i)=>o.nativePath[i]===v)&&o.steps.slice(0,-1).every((s,i)=>JSON.stringify(s.path)===JSON.stringify(container.steps[i].path)));
+ const images=direct.filter(o=>['smart','pixel'].includes(o.kind)&&o.box?.[2]>0&&o.box?.[3]>0).sort((a,b)=>a.box[0]-b.box[0]);
+ const separators=direct.filter(o=>o.kind==='text'&&/^[+＋]$/.test(o.original?.trim()));
+ if(images.length!==gifts.length||separators.length!==gifts.length-1)return null;
+ const cuts=separators.map(o=>o.box[0]+o.box[2]/2).sort((a,b)=>a-b);
+ return images.map((image,i)=>{
+  const texts=direct.filter(o=>o.kind==='text'&&!separators.includes(o)&&(o.box[0]+o.box[2]/2)>(cuts[i-1]??-Infinity)&&(o.box[0]+o.box[2]/2)<(cuts[i]??Infinity));
+  const gift=gifts[i];let hasName=false,hasValue=false;
+  const changes=texts.map(o=>{const original=o.original,match=/(?:价值(?:约)?\s*[¥￥]?\s*)(\d+(?:\.\d+)?)(\s*元)/.exec(original);let spans=[];
+   if(match){const start=match.index+match[0].indexOf(match[1]),end=start+match[1].length;spans=[{text:original.slice(0,start),sourceStart:0},{text:gift.value,sourceStart:start},{text:original.slice(end),sourceStart:end}];hasValue=true;
+    const name=(original.slice(0,match.index)+original.slice(match.index+match[0].length)).trim();if(name){const at=original.indexOf(name,match.index+match[0].length);if(at<0)throw Error('赠品模板名称与价值位置不明确');spans=[{text:original.slice(0,start),sourceStart:0},{text:gift.value,sourceStart:start},{text:original.slice(end,at),sourceStart:end},{text:gift.name,sourceStart:at},{text:original.slice(at+name.length),sourceStart:at+name.length}];hasName=true;}
+   }else{if(hasName)throw Error('赠品模板有多段独立说明，不能猜测名称替换对象');spans=[{text:gift.name,sourceStart:0}];hasName=true;}
+   return {path:o.nativePath,original,spans:spans.filter(s=>s.text.length)};
+  });
+  if(!hasName||!hasValue)throw Error('赠品模板原位替换缺少名称或价值文字');
+  return {imagePath:image.nativePath,imageBox:image.box,texts:changes};
+ });
+}
 function giftAction({config,approved,catalog,objects,priceFields}){
  const fields=approved.fields.filter(f=>f.role==='gift');if(!fields.length){if(config)throw Error('产品批准记录没有role=gift字段，请先把赠品列纳入当前对应');return null;}
  if(fields.length!==1||!config||config.field!==fields[0].key||!catalog)throw Error('赠品字段需单独role=gift，并配置当前目录及模板赠品区域');
@@ -48,7 +69,7 @@ function giftAction({config,approved,catalog,objects,priceFields}){
  const normalized=f=>Array.isArray(f)&&f.length===4&&f.every(Number.isFinite)&&f[0]>=0&&f[1]>=0&&f[2]>0&&f[3]>0&&f[0]+f[2]<=1&&f[1]+f[3]<=1;
  if(!normalized(config.imageFrame)||!normalized(config.textFrame)||!['left','center','right'].includes(config.textAnchor||'center'))throw Error('赠品单元需明确等比图片区域和文案区域（0至1），不能拉伸图片');
  if(config.imageFrame[0]<config.textFrame[0]+config.textFrame[2]&&config.imageFrame[0]+config.imageFrame[2]>config.textFrame[0]&&config.imageFrame[1]<config.textFrame[1]+config.textFrame[3]&&config.imageFrame[1]+config.imageFrame[3]>config.textFrame[1])throw Error('赠品图片与文案区域不能重叠');
- return {mode:'gift-replace',steps:container.steps,objectId:container.id,prototypePath:prototype.nativePath,...(supporting.length?{supportingPaths:supporting.map(o=>o.nativePath)}:{}),original:prototype.original,prototypeStyles:prototype.styles,frame:box,axis:config.axis||'horizontal',imageFrame:config.imageFrame,textFrame:config.textFrame,textAnchor:config.textAnchor||'center',unitAlignment:config.unitAlignment||'center',gifts:gifts.map(g=>({...g,spans:parts.map(p=>({text:p.token?g[p.token]:p.text,sourceStart:p.sourceStart}))})),emptyRemoves:gifts.length?[]:common.map(o=>({mode:'remove',steps:o.steps,objectId:o.id,name:o.name,original:o.original})),reference:{field:fields[0].key,cell:fields[0].cell,original:fields[0].value,...(layout.variant==='default'?{}:{layoutVariant:layout.variant}),gifts:gifts.map(g=>({name:g.name,value:g.value,assetName:g.asset.name,fingerprint:g.asset.fingerprint}))}};
+ return {mode:'gift-replace',templateSlots:templateGiftSlots(container,objects,gifts),steps:container.steps,objectId:container.id,prototypePath:prototype.nativePath,...(supporting.length?{supportingPaths:supporting.map(o=>o.nativePath)}:{}),original:prototype.original,prototypeStyles:prototype.styles,frame:box,axis:config.axis||'horizontal',imageFrame:config.imageFrame,textFrame:config.textFrame,textAnchor:config.textAnchor||'center',unitAlignment:config.unitAlignment||'center',gifts:gifts.map(g=>({...g,spans:parts.map(p=>({text:p.token?g[p.token]:p.text,sourceStart:p.sourceStart}))})),emptyRemoves:gifts.length?[]:common.map(o=>({mode:'remove',steps:o.steps,objectId:o.id,name:o.name,original:o.original})),reference:{field:fields[0].key,cell:fields[0].cell,original:fields[0].value,...(layout.variant==='default'?{}:{layoutVariant:layout.variant}),gifts:gifts.map(g=>({name:g.name,value:g.value,assetName:g.asset.name,fingerprint:g.asset.fingerprint}))}};
 }
 async function giftVisualReferences(reference,catalog){
  if(!reference)return [];const visuals=[];

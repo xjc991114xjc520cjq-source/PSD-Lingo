@@ -98,3 +98,19 @@ test('native character checks tolerate one 16-bit RGB conversion step only, reta
  assert.equal(c.compatible(15,15.002,'.textStyleRange.0.textStyle.size.value'),false);
  assert.equal(c.compatible('FontA','FontB','.textStyle.fontPostScriptName'),false);
 });
+
+test('multi-gift template replaces original independent text/image slots and retains plus and decorations',()=>{
+ const f=fixture('蓝键帽 价值99元+鼠标垫 价值69元');
+ f.objects[2].box=[20,20,65,33];
+ const obj=(id,kind,original,box)=>({id,kind,original,box,steps:[{path:id.split('.').map(Number)}],nativePath:id.split('.').map(Number)});
+ f.objects.push(obj('0.0.1','smart',null,[100,10,71,59]),obj('0.0.2','text','+',[200,30,13,13]),obj('0.0.3','smart',null,[350,10,66,56]),obj('0.0.4','text','旧鼠标垫',[260,40,76,13]),obj('0.0.5','text','价值69元\r',[260,20,66,18]));
+ // Use actual paragraph separators, not literal backslash characters.
+ f.objects.at(-1).original='价值69元\r'.replace('\\r','\r');
+ const a=giftAction(f);assert.equal(a.templateSlots.length,2);
+ assert.deepEqual(a.templateSlots.map(s=>s.imagePath),[[0,0,1],[0,0,3]]);
+ assert.deepEqual(a.templateSlots[0].imageBox,[100,10,71,59]);
+ assert.equal(a.templateSlots[0].texts[0].spans.map(s=>s.text).join(''),'价值99元\n蓝键帽');
+ assert.deepEqual(a.templateSlots[1].texts.map(t=>t.spans.map(s=>s.text).join('')),['鼠标垫','价值69元\r']);
+ assert.ok(a.templateSlots.every(s=>s.texts.every(t=>t.original!=='+')));
+ assert.equal(giftAction({...f,approved:fixture().approved}).templateSlots,null);
+});

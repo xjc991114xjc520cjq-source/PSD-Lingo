@@ -1,7 +1,7 @@
 {
   "schema": "sparkit-layout-knowledge/v1",
   "id": "manual-localization-visual-relations",
-  "revision": 13,
+  "revision": 14,
   "updatedAt": "2026-11-12",
   "status": "active",
   "scope": "cross-document-layout",
@@ -100,9 +100,17 @@
       "id": "gift-count-reading-band",
       "appliesTo": "sku-gift-strip",
       "recognize": "按批准赠品数量识别标签、分隔线、名称价值、小字及图片。",
-      "arrange": "单赠品默认左侧紧凑文字块、右侧图片；名称、价值与原有附属小字紧邻成组，再贴近PNG可见轮廓，不按大槽位分别居中。多赠品另分单元；标签及说明不得被示例组清理。",
+      "arrange": "单赠品与多赠品均按实际字形和PNG轮廓收紧图文空隙；单元连续紧凑排列并靠近赠送标签，槽位只作尺寸上限。保留名称价值层级及原有说明，不用大槽分别居中。",
       "verify": "审阅最终JPG的真实字形、PNG轮廓、紧凑图文间隙、小字归属及价格层级；数值居中、未重叠不等于通过。",
       "skip": "无对应参考不套版，不沿用案例产品、价格、坐标，不编造说明。"
+    },
+    {
+      "id": "sku-template-geometry-preservation",
+      "appliesTo": "sku-template-replacement",
+      "recognize": "模板原尺寸、画板尺寸及标签金额的原有视觉轴线。",
+      "arrange": "原有居中的标签金额改字后保持同轴；文字下图形内容及尺寸保持。整体画板比例尺寸不一致必须给用户选择助手调整或自行修改，并提示缩放可能出现锯齿或模糊，不擅自缩放裁切。",
+      "verify": "用户同意调整后检查实际画面的清晰度、裁切、图层完整性和贴底；说明原模板已有模糊，不冒充新增损坏或已修复。",
+      "skip": "没有明确缩放选择不执行；资料不明确不猜图形角色。"
     }
   ]
 }

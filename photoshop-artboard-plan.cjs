@@ -24,6 +24,7 @@ function validateArtboardPlan(plan,file){
    if(b.templateId!==null&&l.boardId!==b.templateId)throw Error('修改文字不属于模板画板');
    if(l.issues?.some(i=>!['文字层或分组已锁定','混合文字样式暂不支持'].includes(i)))throw Error('画板内文字暂不支持原生修改：'+l.name+'：'+l.issues.join('；'));
    if(typeof c.target!=='string'||!c.target.trim()||c.target.length>20000||(plan.nativeTextScanId?/[\uD800-\uDFFF]/:/[\r\n\uD800-\uDFFF]/).test(c.target+c.original)||!['left','center','right'].includes(c.anchor)||!Array.isArray(c.spans)||!c.spans.length||c.spans.length>256||c.spans.map(s=>s.text).join('')!==c.target||c.spans.some(s=>typeof s.text!=='string'||!s.text||!Number.isInteger(s.sourceStart)||s.sourceStart<0||s.sourceStart>=c.original.length))throw Error('画板改字必须完整覆盖目标并引用原字符样式');
+   if(c.layout!==undefined){if(!plan.nativeTextScanId)throw Error('局部布局仅支持原生文字计划');require('./native-text-layout.cjs').validateNativeLayout(c.layout);}
    if(!Array.isArray(c.recordIds)||!c.recordIds.length||c.recordIds.some(id=>typeof id!=='string')||typeof c.reason!=='string'||!c.reason.trim())throw Error('画板改字缺少批准文案来源或依据');
   }
  }
@@ -42,7 +43,7 @@ function makeArtboardPlan(file,args,records){
   if(!nativeSelection&&c.recordSlice!==undefined){const sl=c.recordSlice;if(ids.length!==1||!Array.isArray(sl)||sl.length!==2||!sl.every(Number.isInteger)||sl[0]<0||sl[1]<=sl[0]||sl[1]>target.length)throw Error('字段字符段范围无效');target=target.slice(sl[0],sl[1]);}
   const prefix=c.prefix||'',suffix=c.suffix||'';if(typeof prefix!=='string'||typeof suffix!=='string'||/[\p{L}\p{N}]/u.test(prefix+suffix)||!l.original.startsWith(prefix)||!l.original.endsWith(suffix))throw Error('前后缀只能保留原文字中的货币或标点符号');target=prefix+target+suffix;
   const signatures=new Set(l.mixedStyleRuns?.map(s=>s.signature));if(signatures.size>1&&!c.spans)throw Error('混合样式文字必须指定spans，从原字符继承货币、数值等不同样式');
-  return {layerId:l.id,original:l.original,target,recordIds:[...ids],separator,recordSlice,sourceRecords:ids.map(id=>{const r=records.find(r=>r.id===id);return {id,digest:r.digest,target:r.target};}),spans:c.spans||[{text:target,sourceStart:0}],anchor:c.anchor||l.alignment||'left',reason:c.reason};
+  return {layerId:l.id,original:l.original,target,recordIds:[...ids],separator,recordSlice,sourceRecords:ids.map(id=>{const r=records.find(r=>r.id===id);return {id,digest:r.digest,target:r.target};}),spans:c.spans||[{text:target,sourceStart:0}],anchor:c.anchor||l.alignment||'left',reason:c.reason,...(c.layout!==undefined?{layout:require('./native-text-layout.cjs').validateNativeLayout(c.layout)}:{})};
  })}))};validateArtboardPlan(plan,file);return plan;
 }
 function renameArtboardPlan(file,args){if(!['PSD','PSB'].includes(file.format)||!file.artboards?.length)throw Error('当前文档没有可重命名的PS原生画板');if(!Array.isArray(args.names)||!args.names.length||new Set(args.names.map(n=>n.boardId)).size!==args.names.length||args.names.some(n=>!file.artboards.some(b=>b.id===n.boardId)))throw Error('重命名画板ID无效或重复');const plan={version:1,operation:'rename',outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns:1,rows:file.artboards.length,gap:0,boards:[...file.artboards].sort((a,b)=>a.box[1]-b.box[1]||a.box[0]-b.box[0]).map(b=>({name:args.names.find(n=>n.boardId===b.id)?.name??b.name,mode:'duplicate',templateId:b.id,changes:[]}))};validateArtboardPlan(plan,file);return plan;}

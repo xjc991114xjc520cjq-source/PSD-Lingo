@@ -6,6 +6,7 @@ const {retrieveReferences}=require('./learning-references.cjs');
 const {validBox}=require('../design-layout-context.cjs');
 const {manualStyleIssues}=require('../layout.cjs');
 const {validateLayoutPng}=require('./layout-memory.cjs');
+const {validateDesignImage}=require('./design-visual-image.cjs');
 const {readKnowledge}=require('./localization-knowledge.cjs');
 const {validateParagraphs}=require('../design-text-layout.cjs');
 const reviewContract=require('./design-visual-review.cjs');
@@ -83,7 +84,7 @@ async function suggestLayout(request,credentials,deps={}){
  const accepted=visuals.map(v=>{
   const p=v?.provenance;if(!v||!['source','substituted','current'].includes(v.stage)||!validBox(v.crop)||v.crop[0]<0||v.crop[1]<0||v.crop[0]+v.crop[2]>request.canvas.width+.1||v.crop[1]+v.crop[3]>request.canvas.height+.1||!['native-background','original-source'].includes(v.quality))throw Error('AI 排版预览图状态无效，请等待背景载入后重试。');
   if(v.quality==='native-background'&&(!p||!p.backgroundKey||p.backgroundKey!==p.expectedBackgroundKey||p.renderRevision===undefined||p.renderRevision!==p.expectedRenderRevision))throw Error('AI 排版预览已过期，请等待背景载入后重试。');
-  const bytes=validateLayoutPng(v.dataURL,1024*1024);if(!bytes)throw Error('AI 排版预览图为空。');return {bytes,url:'data:image/png;base64,'+bytes.toString('base64'),metadata:{stage:v.stage,crop:[...v.crop],quality:v.quality}};
+  const image=validateDesignImage(v.dataURL);return {...image,metadata:{stage:v.stage,crop:[...v.crop],quality:v.quality}};
  });
  // Main supplies the library location, never the renderer. Re-read per task:
  // replacing a small data file takes effect without restarting the application.

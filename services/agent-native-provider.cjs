@@ -45,7 +45,7 @@ async function thinkNative(task,deps,{settings,env,directory,knowledgeDirectory,
      const parsed=args.operations.map(o=>require('./agent-task.cjs').parseStep({kind:'tool',tool:o.tool,arguments:o.arguments,message:o.message,questions:[]}));
      const analysis=parsed.some(o=>['design_layout','auto_bind','export_files'].includes(o.tool));if(analysis&&parsed.length!==1)throw Error('包含视觉分析或导出的操作须单独调用');
      if(analysis){const o=parsed[0];state.exchange=new AnalysisExchange(()=>deps.runTool(o.tool,o.args,o.message));task.analysisExchange=state.exchange;value=await state.exchange.next();if(state.exchange.finished){state.exchange=null;task.analysisExchange=null;}}
-     else{const items=[];for(const o of parsed){if(state.signal.aborted||task.paused||task.stopping)break;const result=await deps.runTool(o.tool,o.args,o.message);items.push({tool:o.tool,result});if(result?.uncertain||require('./agent-operation-result.cjs').operationFailure(result))break;}value={items,executed:items.length,remaining:parsed.length-items.length};}
+     else{const items=[];for(const o of parsed){if(state.signal.aborted||task.paused||task.stopping)break;const result=await deps.runTool(o.tool,o.args,o.message);items.push({tool:o.tool,result});if(result?.uncertain||require('./agent-operation-result.cjs').operationFailure(result,0,o.tool))break;}value={items,executed:items.length,remaining:parsed.length-items.length};}
     }else throw Error('未开放的软件工具');
     const shared=value.analysisRequired?.sharedInstructions;
     if(shared){const id=imageId(shared);state.instructions||=new Set();value.analysisRequired.sharedInstructions={id,...(state.instructions.has(id)?{alreadyProvided:true}:{text:shared})};state.instructions.add(id);}

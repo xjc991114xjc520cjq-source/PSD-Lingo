@@ -113,3 +113,10 @@ test('explicit export scope excludes old blocked files before validation, planni
  const r=await run('export_files',{fileIndices:[1]});assert.deepEqual([...scope],[1]);assert.equal(calls,1);assert.equal(r.blocked,undefined);assert.deepEqual([...r.audits],[]);
  for(const fileIndices of [[],[2],[-1],[1,1],['1']])await assert.rejects(run('export_files',{fileIndices}),/fileIndices/);
 });
+
+test('native PSB scan and mixed plan share approved records and preserve all boards without ordinary edit loss',async()=>{
+ const f=fixture(async(name,args)=>{assert.equal(name,'agentArtboards');assert.equal(args.action,'metadata');return {nativeTextScanId:'scan',layers:[{id:'native:p',name:'Mixed',original:'$79',nativePath:[0,0],box:[20,20,70,30],boardId:1,issues:[],mixedStyleRuns:[{signature:'small'},{signature:'large'}]}],artboards:[{id:1,name:'A',box:[0,0,400,300],nativePath:[0]}]};});
+ const file=f.state.files[0];Object.assign(file,{format:'PSB',width:400,height:300,layers:[]});await f.run('inspect_native_text',{fileIndex:0});f.state.records=[{id:'r',target:'€199',digest:'d'}];
+ const args={fileIndex:0,scanId:'scan',changes:[{layerId:'native:p',original:'$79',recordIds:['r'],spans:[{text:'€',sourceStart:0},{text:'199',sourceStart:1}],anchor:'right',reason:'Approved mixed price'}]};await f.run('configure_native_text',args);assert.equal(file.artboardPlan.boards[0].changes[0].target,'€199');assert.equal(file.artboardPlan.operation,'edit');assert.equal(file.artboardPlan.nativeTextScanId,'scan');await f.run('configure_native_text',args);assert.equal(f.transactions.at(-1),'native-text-plan');
+ await assert.rejects(f.run('configure_native_text',{...args,scanId:'foreign'}),/原生文字/);file.layers[0].manual={size:20};const before=JSON.stringify(file.artboardPlan);await assert.rejects(f.run('configure_native_text',args),/其他编辑/);assert.equal(JSON.stringify(file.artboardPlan),before);
+});

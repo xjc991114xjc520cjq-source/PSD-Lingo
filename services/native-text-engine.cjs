@@ -1,0 +1,26 @@
+const crypto=require('node:crypto'),path=require('node:path'),fs=require('node:fs/promises');
+const {hashFile}=require('../photoshop-file-io.cjs');
+function styleRuns(e){const a=e.styles?.textStyleRange||e.aiStyles||[],out=[];for(let i=0;i<a.length;i++){const r=a[i],st=r.textStyle||r,from=r.from??i,to=Math.min(e.original.length,r.to??i+1);if(from>=to)continue;const signature=crypto.createHash('sha256').update(JSON.stringify(st)).digest('hex').slice(0,16),last=out.at(-1);if(last?.signature===signature&&last.to===from){last.to=to;continue;}out.push({from,to,font:st.fontPostScriptName||st.font,size:st.size?.value||st.size,color:st.color||st.fillColor,tracking:st.tracking,baselineShift:st.baselineShift?.value||st.baselineShift,signature});}return out;}
+function createNativeTextEngine({engine}){
+ const scans=new Map();
+ return {async inspect({source,metadata,boardIds}){
+  if(!metadata.artboards?.length)throw Error('当前原生文字流程需要包含画板的PSD/PSB');
+  const ids=boardIds||metadata.artboards.map(b=>b.id);if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||ids.some(id=>!metadata.artboards.some(b=>b.id===id)))throw Error('请使用当前原生画板ID');
+  const key=JSON.stringify([source.path,source.fingerprint,ids]);for(const r of scans.values())if(r.key===key)return r.metadata;
+  const rule={productScan:true,boardIds:ids.map(String),regions:Object.fromEntries(ids.map(id=>[id,[0,0,1,1]])),includeHidden:false,detectVariants:false};
+  const data=await engine.execute(source.path,{rule,operation:'analyze'});if(await hashFile(source.path)!==source.fingerprint)throw Error('读取期间原稿已变化');
+  const scanId=crypto.randomUUID(),layers=data.matches.map(e=>({id:'native:'+e.key,name:e.name,group:e.source,original:e.original,box:e.box,localBox:e.localBox,nativeCanvas:e.nativeCanvas,boardId:Number(e.board.id),boardBox:e.board.box,boardNames:[e.board.name],nativePath:e.steps[0].path,visible:e.visible,font:e.fonts[0],size:(e.styles?.textStyleRange?.[0]?.textStyle?.size?.value||e.styles?.textStyleRange?.[0]?.textStyle?.size||e.aiStyles?.[0]?.size||12),alignment:'left',issues:e.problems,supported:!e.problems.length,engine:e.engine||'photoshop',depth:e.steps.length-1,mixedStyleRuns:styleRuns(e)}));
+  const result={...metadata,containers:[],layers,nativeTextScanId:scanId,nativeTextIssues:data.issues,nativeTextSkipped:data.skipped};scans.set(scanId,{key,source,data,rule,metadata:result});if(scans.size>8)scans.delete(scans.keys().next().value);return result;
+ },async run({source,plan,directory,onProgress=()=>{}}){
+  const scan=scans.get(plan.nativeTextScanId);if(!scan||scan.source.path!==source.path||scan.source.fingerprint!==source.fingerprint)throw Error('原生文字定位已失效，请重新inspect_native_text');
+  require('../photoshop-artboard-plan.cjs').validateArtboardPlan(plan,scan.metadata);
+  if(plan.operation!=='edit'||plan.deleteBoardIds?.length)throw Error('原生嵌套改字必须保留原画板');
+  const changes=plan.boards.flatMap(b=>b.changes),matches=changes.map(c=>{const e=scan.data.matches.find(e=>'native:'+e.key===c.layerId);if(!e||e.original!==c.original||e.problems.length)throw Error('文字来源变化或存在未解决限制');return {...e,target:c.target.replace(/\r\n?|\n/g,'\r'),count:1,productCopyAnchor:e.engine==='illustrator'?undefined:c.anchor,productCopySpans:c.spans.map(s=>({...s,text:s.text.replace(/\r\n?|\n/g,'\r')}))};});
+  if(!matches.length)throw Error('没有原生文字修改');const format=path.extname(source.path).slice(1).toUpperCase();if(plan.outputFormat!=='auto'&&plan.outputFormat!==format)throw Error('原生嵌套改字保留源PSD/PSB格式，请选auto或原格式');
+  const id=crypto.randomUUID(),boards=plan.boards.map((b,i)=>({id:String(b.templateId),name:b.name,box:scan.metadata.artboards.find(a=>a.id===b.templateId).box,path:scan.metadata.artboards.find(a=>a.id===b.templateId).nativePath,file:'board-'+i+'.jpg'}));
+  const nativePlan={...scan.data,id,input:source.path,fingerprint:source.fingerprint,rule:scan.rule,matches,related:[],boards,blockers:[]};await fs.mkdir(directory,{recursive:true});engine.plans.set(id,nativePlan);let r;try{onProgress({label:'原位修改混合及嵌套文字，保存重开并导出全部画板JPG',indeterminate:true});r=await engine.run(id,directory,[],{enabled:true,items:{content:true,fonts:true,styles:true,geometry:true,reopen:true,jpg:true}});}finally{engine.plans.delete(id);}
+  const layers=scan.metadata.layers.map(l=>{const c=changes.find(c=>c.layerId===l.id);return c?{...l,original:c.target,customText:c.target,nativeVerifiedText:true,recordId:c.recordIds[0],issues:[]}:l;});const outputBoards=boards.map(b=>({...b,sourceBox:b.box,crop:b.box,image:path.join(r.jpg,b.file)})),artifacts=[];for(const b of outputBoards)artifacts.push({path:b.image,hash:await hashFile(b.image)});
+  return {output:r.output,format,reopened:true,boards:outputBoards,metadata:{...scan.metadata,layers},fingerprint:r.outputSha256,artifactFingerprints:artifacts,sourceFingerprint:source.fingerprint,delivery:{verified:true,reopened:true,boards:outputBoards}};
+ }};
+}
+module.exports={createNativeTextEngine};

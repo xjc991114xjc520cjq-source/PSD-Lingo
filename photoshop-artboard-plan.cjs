@@ -23,7 +23,7 @@ function validateArtboardPlan(plan,file){
   for(const c of b.changes){const l=file.layers.find(l=>l.id===c.layerId);if(!l||ids.has(c.layerId)||l.original!==c.original||!Array.isArray(l.nativePath))throw Error('画板文字来源失效或重复');ids.add(c.layerId);
    if(b.templateId!==null&&l.boardId!==b.templateId)throw Error('修改文字不属于模板画板');
    if(l.issues?.some(i=>!['文字层或分组已锁定','混合文字样式暂不支持'].includes(i)))throw Error('画板内文字暂不支持原生修改：'+l.name+'：'+l.issues.join('；'));
-   if(typeof c.target!=='string'||!c.target.trim()||c.target.length>20000||/[\r\n\uD800-\uDFFF]/.test(c.target+c.original)||!['left','center','right'].includes(c.anchor)||!Array.isArray(c.spans)||!c.spans.length||c.spans.length>256||c.spans.map(s=>s.text).join('')!==c.target||c.spans.some(s=>typeof s.text!=='string'||!s.text||!Number.isInteger(s.sourceStart)||s.sourceStart<0||s.sourceStart>=c.original.length))throw Error('画板改字必须完整覆盖目标并引用原字符样式');
+   if(typeof c.target!=='string'||!c.target.trim()||c.target.length>20000||(plan.nativeTextScanId?/[\uD800-\uDFFF]/:/[\r\n\uD800-\uDFFF]/).test(c.target+c.original)||!['left','center','right'].includes(c.anchor)||!Array.isArray(c.spans)||!c.spans.length||c.spans.length>256||c.spans.map(s=>s.text).join('')!==c.target||c.spans.some(s=>typeof s.text!=='string'||!s.text||!Number.isInteger(s.sourceStart)||s.sourceStart<0||s.sourceStart>=c.original.length))throw Error('画板改字必须完整覆盖目标并引用原字符样式');
    if(!Array.isArray(c.recordIds)||!c.recordIds.length||c.recordIds.some(id=>typeof id!=='string')||typeof c.reason!=='string'||!c.reason.trim())throw Error('画板改字缺少批准文案来源或依据');
   }
  }
@@ -35,7 +35,7 @@ function makeArtboardPlan(file,args,records){
  if(!['PSD','PSB'].includes(file.format))throw Error('画板合成目前支持PSD/PSB，AI请使用对应原生流程');
  if(!Array.isArray(args.boards))throw Error('请提供boards列表');
  const columns=args.columns??Math.min(4,args.boards.length);
- const plan={version:1,operation:args.operation||'compose',outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns,rows:args.rows??Math.ceil(args.boards.length/columns),gap:args.gap??100,boards:args.boards.map(b=>({...b,mode:b.mode||'duplicate',templateId:b.templateId??null,changes:(b.changes||[]).map(c=>{
+ const plan={version:1,...(args.nativeTextScanId?{nativeTextScanId:args.nativeTextScanId}:{}),operation:args.operation||'compose',outputFormat:args.outputFormat||'auto',documentName:args.documentName,columns,rows:args.rows??Math.ceil(args.boards.length/columns),gap:args.gap??100,boards:args.boards.map(b=>({...b,mode:b.mode||'duplicate',templateId:b.templateId??null,changes:(b.changes||[]).map(c=>{
   const l=file.layers.find(l=>l.id===c.layerId);if(!l)throw Error('图层ID不存在');const ids=c.recordIds;if(!Array.isArray(ids)||!ids.length||ids.some(id=>!records.some(r=>r.id===id)))throw Error('请先import_document导入批准文案，再引用recordIds');
   const separator=c.separator??'';if(!['',' ','\n'].includes(separator))throw Error('文案分隔符无效');let target=ids.map(id=>records.find(r=>r.id===id).target).join(separator);
   if(c.recordSlice!==undefined){const sl=c.recordSlice;if(ids.length!==1||!Array.isArray(sl)||sl.length!==2||!sl.every(Number.isInteger)||sl[0]<0||sl[1]<=sl[0]||sl[1]>target.length)throw Error('字段字符段范围无效');target=target.slice(sl[0],sl[1]);}

@@ -127,3 +127,7 @@ test('configured project is prepared before thread creation and returned assignm
  assert.equal(threadParams.cwd,'D:/project/Example');assert.equal(threadParams.projectId,'project-confirmed');assert.equal(turns,mismatch?0:1);assert.equal(f.a.current.status,mismatch?'failed':'completed');assert.equal(f.a.public().codexProject.projectId,'project-confirmed');
  }
 });
+
+test('native operation errors and selection requirements fail tool receipts and stop the rest of the batch',async t=>{
+ for(const result of [{error:'Rejected'},{ok:false,message:'Rejected'},{selectionRequired:true},{qualityPassed:false},{failed:1}]){let executions=0;const f=await fixture(t,async({call})=>{const r=await call('software_operations',{operations:[...ops('workspace').operations,...ops('attachments').operations]});assert.equal(r.success,false);const data=JSON.parse(r.contentItems[0].text);assert.equal(data.executed,1);assert.equal(data.remaining,1);},async tool=>{if(tool==='read_batch')return {prepared:true};executions++;return result;});f.a.start({request:'Test actual failure envelope'});await f.a.runPromise;assert.equal(f.a.current.status,'failed');assert.equal(executions,1);}
+});

@@ -6,6 +6,12 @@ const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {pro
 test('unknown native result is recorded and stops the model before a repeated write',async()=>{let calls=0;const a=new AgentTask({think:async()=>{calls++;return {kind:'tool',message:'Export',tool:'export_files',arguments:'{}',questions:[]};},execute:async()=>({uncertain:true,failed:1,message:'RPC response lost; inspect output',results:[{pendingOutput:'copy.ai'}]})});a.start({request:'Export copy'});await a.runPromise;assert.equal(calls,1);assert.equal(a.current.status,'failed');assert.match(a.current.error,/inspect output/);assert.equal(a.current.history.find(h=>h.type==='tool_result').result.results[0].pendingOutput,'copy.ai');});
 const step=(kind,tool='',args={},questions=[])=>({kind,message:kind,tool,arguments:JSON.stringify(args),questions});
 
+test('returned errors and unfinished document selection cannot be reported as completed',async()=>{
+ for(const result of [{error:'Renderer rejected operation'},{ok:false,message:'Rejected'},{selectionRequired:true},{cancelled:true},{items:[{result:{error:'Nested read failed'}}]}]){
+  let n=0;const a=new AgentTask({think:async()=>[step('tool','read_document',{fileId:'book'}),step('complete')][n++],execute:async()=>result});a.start({request:'Process'});await a.runPromise;assert.equal(a.current.status,'failed',JSON.stringify(result));
+ }
+});
+
 test('product copy clears stale visuals and cannot finish until the actual export is reviewed',async()=>{
  for(const exported of [false,true]){
   let n=0;const steps=[step('tool','configure_product_copy',{fileIndex:0}),...(exported?[step('tool','export_files')]:[]),step('complete')];

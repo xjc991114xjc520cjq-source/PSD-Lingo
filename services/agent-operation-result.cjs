@@ -1,0 +1,3 @@
+// Inspect only explicit operation envelopes, never arbitrary document issues or data.
+function operationFailure(r,depth=0){if(!r||typeof r!=='object'||depth>8)return '';if(r.error||r.ok===false||r.selectionRequired||r.cancelled||r.exported===false||r.qualityPassed===false||Number(r.failed)>0||r.failures?.length)return String(r.error||r.message||r.failures?.join('；')||'操作尚未完成或需要选择');if(r.operationResult){const e=operationFailure(r.operationResult,depth+1);if(e)return e;}if(Array.isArray(r.items))for(const i of r.items){const e=i.error||operationFailure(i.result,depth+1);if(e)return String(e);}return '';}
+module.exports={operationFailure};

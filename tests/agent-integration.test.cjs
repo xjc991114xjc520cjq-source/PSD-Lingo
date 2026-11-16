@@ -19,6 +19,15 @@ test('follow-up checks output again before appending attachments or user history
 });
 async function finished(f){for(let n=0;n<600;n++){if(f.last&&['completed','failed','stopped'].includes(f.last.status))return;await new Promise(r=>setTimeout(r,5));}throw Error('task did not finish');}
 
+test('rejected follow-up must not append files, history or change output state',async t=>{
+ const f=await fixture(t);await f.invoke('agent-start',{request:'Analyze',fileIds:[]});await finished(f);const extra=path.join(f.directory,'later.txt');await fs.writeFile(extra,'later');const files=(await f.invoke('agent-files',{paths:[extra]})).value;
+ const before=JSON.stringify(f.last);const r=await f.invoke('agent-followup',{text:'',fileIds:files.map(x=>x.id)});assert.equal(r.ok,false);assert.equal(JSON.stringify((await f.invoke('agent-state')).value),before);
+});
+test('a duplicate start cannot close the current native session or mutate the active task',async t=>{
+ const f=await fixture(t);f.steps.push({kind:'question',message:'scope',tool:'',arguments:'{}',questions:[{id:'q',title:'Scope?',options:[]}]});await f.invoke('agent-start',{request:'First',fileIds:[]});for(let i=0;i<100&&!f.last.question;i++)await new Promise(r=>setTimeout(r,2));
+ let closed=0;t.mock.method(require('../services/agent-native-provider.cjs'),'closeNativeTask',()=>closed++);const before=JSON.stringify(f.last);const r=await f.invoke('agent-start',{request:'Second',fileIds:[]});assert.equal(r.ok,false);assert.equal(closed,0);assert.equal(JSON.stringify(f.last),before);
+});
+
 test('assistant forwards cross-sheet search and workbook images while blocking image reads inside text batches',async t=>{
  const calls=[],f=await fixture(t,{importWorkbook:async(file,options)=>{calls.push(options);return options.image?{name:'copy.xlsx',referenceFileId:'xlsx-reference:verified',images:['data:image/png;base64,YQ==']}:{matches:[]};}}),book=path.join(f.directory,'copy.xlsx');await fs.writeFile(book,'workbook fixture');
  const picked=await f.invoke('agent-files',{paths:[book]}),fileId=picked.value[0].id;
@@ -100,4 +109,11 @@ test('multi-template assistant RPC forwards all trusted sources and rejects a mi
  const op=()=>({kind:'tool',message:'configure',tool:'configure_product_template',arguments:JSON.stringify({sourceFileId:picked[0].id,workbookFileId:picked[1].id,mappingId:'mapping',templates:[{templateFileId:picked[2].id,scanId:'a'},{templateFileId:picked[3].id,scanId:'b',giftMode:'none'}]}),questions:[]});
  f.steps.push(op());await f.invoke('agent-start',{request:'Route two templates',fileIds:picked.map(p=>p.id)});await finished(f);assert.equal(f.last.status,'completed',f.last.error);assert.equal(calls,1);
  f.steps.push(op());await f.invoke('agent-start',{request:'Reject foreign second template',fileIds:picked.slice(0,3).map(p=>p.id)});await finished(f);assert.equal(f.last.status,'failed');assert.match(f.last.error,/不属于本任务/);assert.equal(calls,1);
+});
+
+test('native text scan is routed only from the matching active tool and independent source',async t=>{
+ let seen;const f=await fixture(t,{runArtboards:async input=>{seen=input;return {nativeTextScanId:'deep'};},onCommand:async(data,invoke)=>invoke('agent-artboards',{action:'metadata',source:{path:source,fingerprint:'trusted'},boardIds:[7]})});
+ const source=path.join(f.directory,'native.psb');await fs.writeFile(source,'fixture');const picked=(await f.invoke('agent-files',{paths:[source]})).value;
+ f.steps.push({kind:'tool',tool:'inspect_native_text',message:'Deep inspect',arguments:JSON.stringify({fileIndex:0,boardIds:[7]}),questions:[]});await f.invoke('agent-start',{request:'Inspect editable nested text',fileIds:picked.map(p=>p.id)});await finished(f);assert.equal(f.last.status,'completed',f.last.error);assert.equal(seen.nativeText,true);assert.deepEqual(seen.boardIds,[7]);
+ const denied=await f.invoke('agent-artboards',{action:'metadata',source:{path:source}});assert.equal(denied.ok,false);
 });

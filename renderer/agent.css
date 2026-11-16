@@ -33,3 +33,15 @@
 
 .agent-project{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;margin:12px 0;padding:14px;border:1px solid #ffffff20;border-radius:10px;min-width:0}.agent-project legend{padding:0 6px}.agent-project label,.agent-project-status{grid-column:1/-1}.agent-project input{min-width:0;width:100%;box-sizing:border-box}.agent-project #agentProjectName{grid-column:1/-1}.agent-project-status{margin:0;font-size:12px;color:#aeb3bc;overflow-wrap:anywhere}.agent-project:disabled{opacity:.65}
 .agent-project-settings{margin:10px 0}.agent-project-settings summary{cursor:pointer;color:#c9c3b9;font-size:13px;padding:6px 0;overflow-wrap:anywhere}.agent-project #agentProjectSave{grid-column:1/-1;justify-self:start}
+.is-takeover.has-product-review .agent-control{width:min(900px,calc(100vw - 48px))}
+.has-product-review .agent-animation{display:none}
+.agent-product-review [hidden]{display:none!important}
+.agent-product-review{padding:12px;text-align:left}
+.agent-product-review select,.agent-product-review input{box-sizing:border-box}
+
+.agent-task-actions{display:flex;gap:12px;margin-top:12px;align-items:stretch}
+.agent-task-actions #agentStart,.agent-task-actions #agentNewTask{flex:1;min-width:0;width:auto;min-height:48px;margin:0;padding:12px 16px;font-size:14px;font-weight:600;line-height:1.5;border-radius:8px;white-space:normal}
+.agent-task-actions #agentNewTask{border:1px solid #d49b73;background:#2b2928;color:#efc7a7;text-decoration:none}
+.agent-task-actions #agentNewTask:hover{background:#3b302a;border-color:#efc7a7}
+.agent-task-hint{margin:10px 0 0;color:var(--agent-muted);font-size:12px;line-height:1.65}
+@media(max-width:560px){.agent-task-actions{flex-direction:column;gap:8px}}

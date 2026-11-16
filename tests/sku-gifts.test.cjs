@@ -84,6 +84,12 @@ test('empty gift fields explicitly mean no gifts and do not inherit the price pl
  const approved=confirmMapping(report,{identityDigest:report.identityDigest,choices:[{boardId:1,rowId:rows[0].id,action:'use',reason:'exact'}]});assert.equal(approved.boards[0].fields[1].state,'missing');
 });
 
+test('single gift synchronizes intrinsic and transformed leading without changing font size',()=>{
+ class D{constructor(v){this.v=v;}hasKey(k){return k in this.v;}getList(k){return this.v[k];}getObjectValue(k){return this.v[k];}getDouble(k){return this.v[k];}getUnitDoubleValue(k){return this.v[k];}putBoolean(k,v){this.v[k]=v;}putUnitDouble(k,u,v){this.v[k]=v;}putObject(k,t,v){this.v[k]=v;}putList(k,v){this.v[k]=v;}}
+ class L{constructor(items=[]){this.items=items;}get count(){return this.items.length;}getObjectValue(i){return this.items[i];}getObjectType(){return 'textStyleRange';}putObject(t,v){this.items.push(v);}}
+ const c=vm.createContext({sid:s=>s,charIDToTypeID:s=>s,ActionList:L});vm.runInContext(require('../sku-gift-native.cjs').giftNative,c);const style=new D({size:15,impliedLeading:30}),td=new D({transform:new D({yx:0,yy:.96}),textStyleRange:new L([new D({textStyle:style})])});c.giftTightText(td);assert.equal(style.v.size,15);assert.equal(style.v.autoLeading,false);assert.ok(Math.abs(style.v.leading-17.25)<.00001);assert.ok(Math.abs(style.v.impliedLeading-16.56)<.00001);
+});
+
 test('native character checks tolerate one 16-bit RGB conversion step only, retaining font and geometry checks',()=>{
  const c=vm.createContext({});vm.runInContext(require('../sku-workflow.cjs').skuNative,c);
  assert.equal(c.compatible(22.8925707936287,22.8913491591811,'.textStyleRange.0.textStyle.color.red'),true);

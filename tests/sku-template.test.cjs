@@ -178,6 +178,13 @@ test('terminal range normalization accepts only implicit suffix and rejects visi
  const same=(x,y)=>c.tplTextSame(vm.runInContext('('+JSON.stringify(x)+')',c),vm.runInContext('('+JSON.stringify(y)+')',c),'¥688');assert.equal(same(a,b),true);
  for(const change of [v=>v.textStyleRange[1].textStyle.size=12,v=>v.textStyleRange[1].textStyle.fontPostScriptName='B',v=>v.textStyleRange[1].from=2,v=>v.textStyleRange[1].to=6,v=>v.paragraphStyleRange[0].paragraphStyle.justification='left']){const bad=structuredClone(b);change(bad);assert.equal(same(a,bad),false);}assert.equal(a.textStyleRange[1].to,4);
 });
+test('template and gift style checks accept equivalent Photoshop range merging but reject real glyph changes',()=>{
+ const c=vm.createContext({});vm.runInContext(templateNative,c);
+ const before={textKey:'Gift\r99',textStyleRange:[{from:0,to:5,textStyle:{size:12}},{from:5,to:8,textStyle:{size:12}}],paragraphStyleRange:[{from:0,to:8,paragraphStyle:{justification:'center'}}]},after=structuredClone(before);after.textStyleRange=[{from:0,to:8,textStyle:{size:12}}];
+ const same=(a,b)=>c.tplTextSame(vm.runInContext('('+JSON.stringify(a)+')',c),vm.runInContext('('+JSON.stringify(b)+')',c),'Gift\r99');assert.equal(same(before,after),true);
+ for(const change of [a=>a.textStyleRange[0].textStyle.size=13,a=>a.textStyleRange[0].from=1,a=>a.textStyleRange[0].to=9,a=>a.paragraphStyleRange[0].paragraphStyle.justification='left']){const bad=structuredClone(after);change(bad);assert.equal(same(before,bad),false);}
+});
+
 test('native template pool selects exact file and scan and closes only documents it opened',()=>{
  const pool=[],existing={saved:true,fullName:{fsName:'A.psd'},close(){assert.fail('closed user document');}},closed=[],app={documents:[existing],open:f=>({saved:true,fullName:f,close(){closed.push(f.fsName);}})};
  function File(p){this.fsName=p;this.exists=true;}const c=vm.createContext({app,File,SaveOptions:{DONOTSAVECHANGES:'no'}});vm.runInContext(require('../sku-template-native.cjs').templatePoolNative,c);c.tplOpenTemplates([{templateFileId:'A',scanId:'a',template:{path:'A.psd'}},{templateFileId:'B',scanId:'b',template:{path:'B.psb'}}],pool);assert.equal(c.tplPoolDoc(pool,{templateFileId:'A',scanId:'a'}),existing);assert.equal(c.tplPoolDoc(pool,{templateFileId:'B',scanId:'b'}).fullName.fsName,'B.psb');assert.throws(()=>c.tplPoolDoc(pool,{templateFileId:'B',scanId:'a'}),/路由/);c.tplCloseTemplates(pool);assert.deepEqual(closed,['B.psb']);

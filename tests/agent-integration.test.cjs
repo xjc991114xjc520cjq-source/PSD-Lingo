@@ -104,6 +104,21 @@ test('template tools accept only current attachments and forward trusted templat
  f.steps.push(op(picked[2].id));await f.invoke('agent-start',{request:'No foreign attachments',fileIds:picked.slice(0,2).map(x=>x.id)});await finished(f);assert.equal(f.last.status,'failed');assert.match(f.last.error,/不属于本任务/);assert.equal(calls,1);
 });
 
+test('software RPC requests real scale consent before applying a template and honors manual adjustment',async t=>{
+ for(const accept of [true,false]){let mapping,delivered=false;
+ const plan={productTemplate:{scanId:'scan',template:{path:'template.psb'},requests:[{boardId:1,frame:[0,0,1500,1500],placement:[0,0,1440,1440]}]}};
+ const f=await fixture(t,{productMappings:{read:async()=>mapping},runArtboards:async()=>({plan}),onCommand:async(data,invoke)=>{const result=await invoke('agent-artboards',{action:'metadata',source:{path:source,fingerprint:'source'},productMapping:'mapping',templateArgs:data.args});delivered=result.ok;return result;}});
+ const source=path.join(f.directory,'source.psb'),book=path.join(f.directory,'book.xlsx'),template=path.join(f.directory,'template.psb');for(const p of [source,book,template])await fs.writeFile(p,p);
+ const files=(await f.invoke('agent-files',{paths:[source,book,template]})).value;mapping={id:'mapping',source:{path:source},workbook:{path:book},approved:{approvalDigest:'approved'}};
+ f.steps.push({kind:'tool',message:'configure',tool:'configure_product_template',arguments:JSON.stringify({sourceFileId:files[0].id,workbookFileId:files[1].id,mappingId:'mapping',templateFileId:files[2].id}),questions:[]});
+ await f.invoke('agent-start',{request:'Use template',fileIds:files.map(f=>f.id)});
+ for(let i=0;i<100&&!f.last?.question;i++)await new Promise(r=>setTimeout(r,2));
+ const q=f.last.question;assert.equal(q.kind,'template_scale');assert.equal(delivered,false);assert.match(q.items[0].title,/锯齿或模糊/);
+ await f.invoke('agent-answer',{questionId:q.id,answers:{template_scale:q.items[0].options[accept?0:1]}});await finished(f);
+ assert.equal(delivered,accept);if(!accept)assert.match(f.last.error,/自行修改模板/);
+ }
+});
+
 test('multi-template assistant RPC forwards all trusted sources and rejects a missing second attachment',async t=>{
  let mapping,calls=0;const f=await fixture(t,{productMappings:{read:async()=>mapping},runArtboards:async input=>{calls++;assert.equal(input.templateAction,'configure_product_template');assert.deepEqual(input.templateInputs.map(t=>t.template.path),[a,b]);assert.ok(input.templateInputs.every(t=>/^[a-f0-9]{64}$/.test(t.template.fingerprint)));assert.equal(input.templateArgs.templates[1].giftMode,'none');return {plan:{}};},onCommand:async(data,invoke)=>invoke('agent-artboards',{action:'metadata',source:{path:source,fingerprint:'source'},productMapping:'mapping',templateArgs:data.args})});
  const source=path.join(f.directory,'source.psb'),book=path.join(f.directory,'book.xlsx'),a=path.join(f.directory,'A.psd'),b=path.join(f.directory,'B.psb');for(const p of [source,book,a,b])await fs.writeFile(p,p);const picked=(await f.invoke('agent-files',{paths:[source,book,a,b]})).value;mapping={id:'mapping',source:{path:source},workbook:{path:book},approved:{approvalDigest:'approved'}};

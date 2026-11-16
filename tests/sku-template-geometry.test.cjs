@@ -19,6 +19,15 @@ test('scale consent identity changes with the actual template and target dimensi
  assert.equal(scaleMismatches(plan)[0].scale,.96);const key=scaleKey(plan);plan.productTemplate.scanId='b';assert.notEqual(scaleKey(plan),key);
  plan.productTemplate.requests[0].placement=[0,0,1500,1500];assert.deepEqual(scaleMismatches(plan),[]);
 });
+test('template verification checks group identity and real content geometry while ignoring automatic child names',()=>{
+ const vm=require('node:vm'),context={};vm.runInNewContext(require('../sku-template-native.cjs').templateNative,context);
+ context.bounds=o=>o.box;context.tplLocate=(c,p)=>p.reduce((o,i)=>o.layers[i],c);
+ const pixel={name:'Layer 26',box:[1,2,30,40]},group={name:'Footer',layers:[pixel]},container={layers:[group]};
+ const checks=[{path:[0],name:'Footer',group:[{path:[0],name:'Layer 24',box:[1,2,30,40]}]}];
+ assert.doesNotThrow(()=>context.tplVerify({},checks,container));assert.equal(pixel.name,'Layer 26');
+ group.name='Wrong footer';assert.throws(()=>context.tplVerify({},checks,container),/整组名称/);group.name='Footer';
+ pixel.box[2]=31;assert.throws(()=>context.tplVerify({},checks,container),/位置不一致/);
+});
 test('software asks the user about scaling and never treats manual adjustment as assistant permission',async()=>{
  for(const accept of [true,false]){const a=new AgentTask({think:async()=>{},execute:async()=>{}});a.current={id:'test',status:'running',history:[],revision:0};
  const waiting=a.confirmTemplateScale([{templateSize:[1500,1500],targetSize:[1440,1440],scale:.96}]);

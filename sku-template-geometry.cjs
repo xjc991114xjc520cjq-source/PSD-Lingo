@@ -24,7 +24,7 @@ function footerPlacement(frame, placement, objects){
 function scaleMismatches(plan){
  const p=plan?.productTemplate;if(!p)return [];
  const entries=p.templates||[{template:p.template,scanId:p.scanId}];
- return p.requests.filter(r=>Math.abs(r.placement[2]/(r.templateCanvas?.[0]||r.frame[2])-1)>.000001).map(r=>({boardId:r.boardId,scanId:r.scanId||p.scanId,template:entries.find(t=>t.scanId===(r.scanId||p.scanId))?.template?.path,templateSize:r.templateCanvas||r.frame.slice(2),targetSize:r.placement.slice(2),scale:r.placement[2]/(r.templateCanvas?.[0]||r.frame[2])}));
+ return p.requests.filter(r=>[0,1].some(i=>Math.abs(r.placement[i+2]/(r.templateCanvas?.[i]||r.frame[i+2])-1)>.000001)||Math.abs(r.placement[2]/r.frame[2]-1)>.000001).map(r=>({boardId:r.boardId,scanId:r.scanId||p.scanId,template:entries.find(t=>t.scanId===(r.scanId||p.scanId))?.template?.path,templateSize:r.templateCanvas||r.frame.slice(2),targetSize:r.placement.slice(2),scale:r.placement[2]/(r.templateCanvas?.[0]||r.frame[2])}));
 }
 function scaleKey(plan){return JSON.stringify(scaleMismatches(plan));}
 module.exports={priceAnchor,footerPlacement,scaleMismatches,scaleKey};

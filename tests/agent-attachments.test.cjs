@@ -17,3 +17,9 @@ test('folder browsing does not follow junctions or grant unsupported binaries',a
  const {dir,store}=await fixture(t);await fs.mkdir(path.join(dir,'real'));await fs.symlink(path.join(dir,'real'),path.join(dir,'linked'),'junction');await fs.writeFile(path.join(dir,'unsafe.exe'),'binary');
  const root=await store.register(dir),list=await store.list({fileId:root.id},{files:[root]});for(const name of ['linked','unsafe.exe']){const entry=list.items.find(x=>x.name===name);assert.equal(entry.readable,false);assert.equal(entry.id,undefined);}
 });
+
+test('restart continuation restores original attachment and nested IDs without widening access',async t=>{
+ const {dir,store}=await fixture(t);await fs.writeFile(path.join(dir,'copy.txt'),'Approved');const root=await store.register(dir),listing=await store.list({fileId:root.id},{files:[root]}),child=listing.items[0];const restarted=createAttachments();await restarted.restore([root],[{type:'tool_result',result:listing}]);assert.equal((await restarted.get(child.id,{files:[root]})).path,child.path);await assert.rejects(restarted.get(child.id,{files:[]}),/不属于/);
+ await fs.writeFile(child.path,'Changed copy');await assert.rejects(createAttachments().restore([root],[{result:listing}]),/已变化/);
+ const outside=path.join(path.dirname(dir),path.basename(dir)+'-outside.txt');await fs.writeFile(outside,'Outside');t.after(()=>fs.rm(outside,{force:true}));const stat=await fs.stat(outside);await assert.rejects(createAttachments().restore([root],[{id:'escape',path:outside,rootId:root.id,type:'file',bytes:stat.size,mtimeMs:stat.mtimeMs}]),/移出授权/);
+});

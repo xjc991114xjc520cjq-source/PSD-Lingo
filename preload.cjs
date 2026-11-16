@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('desktop', {
   workRecordRestore:v=>ipcRenderer.invoke('work-record-restore',v),
   onWorkRecordProgress:callback=>{const fn=(_,v)=>callback(v);ipcRenderer.on('work-record-progress',fn);return()=>ipcRenderer.removeListener('work-record-progress',fn);},
   workRecordOpen:v=>ipcRenderer.invoke('work-record-open',v),
+  agentRestoreContinuation:v=>ipcRenderer.invoke('agent-restore-continuation',v),
   agentRestoreDraft:v=>ipcRenderer.invoke('agent-restore-draft',v),
   agentProject:()=>ipcRenderer.invoke('agent-project'),
   agentProjectSave:v=>ipcRenderer.invoke('agent-project-save',v),

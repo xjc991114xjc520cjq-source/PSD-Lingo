@@ -31,6 +31,17 @@ function createAttachments(){
   }
   return {path:folder.path,items,total:names.length,offset,nextOffset:offset+limit<names.length?offset+limit:null};
  }
- return {register,get,list};
+ async function restore(files,history=[]){
+  const roots=new Map(files.map(f=>[f.id,f])),candidates=new Map(roots);
+  const visit=v=>{if(!v||typeof v!=='object')return;if(typeof v.id==='string'&&typeof v.path==='string'&&v.rootId&&roots.get(v.rootId)?.type==='folder')candidates.set(v.id,v);for(const x of Object.values(v))if(x&&typeof x==='object')visit(x);};visit(history);
+  const checked=[];for(const f of candidates.values()){
+   if(!f.id||!path.isAbsolute(f.path)||!['file','folder'].includes(f.type))throw Error('历史附件身份无效');
+   const stat=await fs.stat(f.path),actual=await fs.realpath(f.path);if(stat.isDirectory()!==(f.type==='folder')||f.type==='file'&&(stat.size!==f.bytes||stat.mtimeMs!==f.mtimeMs))throw Error('历史附件已变化：'+f.path);
+   if(f.rootId){const root=roots.get(f.rootId),relative=path.relative(await fs.realpath(root.path),actual);if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('历史附件已移出授权文件夹');}
+   const old=entries.get(f.id);if(old&&(old.path!==f.path||realPaths.get(f.id)!==actual))throw Error('历史附件身份冲突');checked.push({f,actual});
+  }
+  for(const {f,actual}of checked){entries.set(f.id,structuredClone(f));realPaths.set(f.id,actual);}return structuredClone(files);
+ }
+ return {register,get,list,restore};
 }
 module.exports={createAttachments};

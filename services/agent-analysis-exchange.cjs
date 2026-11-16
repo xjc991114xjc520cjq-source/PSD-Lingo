@@ -18,6 +18,6 @@ class AnalysisExchange{
   }
   this.pending=null;pending.resolve(answer);return this.next();
  }
- cancel(reason=Error('任务已暂停、终止或收到新说明，未应用待分析结果')){this.cancelled=reason;if(this.pending){const pending=this.pending;this.pending=null;pending.reject(reason);}}
+ cancel(reason=require('./operation-error.cjs').interrupted()){this.cancelled=reason;if(this.pending){const pending=this.pending;this.pending=null;pending.reject(reason);}}
 }
 module.exports={AnalysisExchange};

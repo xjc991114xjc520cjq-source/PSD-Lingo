@@ -1,3 +1,4 @@
+import {restoreError} from '../services/operation-error.cjs';
 import {validateMixedEdits} from '../mixed-text.cjs';
 import {installWorkRecords,readWorkControls,writeWorkControls} from './work-records.js';
 import {textActionsFor,validateCreation} from '../native-text-objects.cjs';
@@ -54,7 +55,7 @@ function toast(text, error = false) { $('toast').textContent = text; $('toast').
 const pendingWorkspaceCalls=new Set();
 async function call(method, payload) {
   if (!window.desktop) throw new Error('请通过“启动测试版.cmd”打开桌面软件。此页面仅支持示例预览。');
-  const lock=['importPsd','importDocument','loadProject','resplitDocument','runPhotoshop','runLanguageBatch','prepareBatchPreview','loadBatchTemplate','saveBatchTemplate','exportPlan','suggest','suggestLayout'].includes(method);if(lock)pendingWorkspaceCalls.add(method);try{const execute=async value=>{const r=await window.desktop[method](value);if(!r.ok)throw new Error(r.error);return r.value;};return workRecords?await workRecords.trackedCall(method,payload,execute):await execute(payload);}finally{if(lock)pendingWorkspaceCalls.delete(method);}
+  const lock=['importPsd','importDocument','loadProject','resplitDocument','runPhotoshop','runLanguageBatch','prepareBatchPreview','loadBatchTemplate','saveBatchTemplate','exportPlan','suggest','suggestLayout'].includes(method);if(lock)pendingWorkspaceCalls.add(method);try{const execute=async value=>{const r=await window.desktop[method](value);if(!r.ok)throw restoreError(r);return r.value;};return workRecords?await workRecords.trackedCall(method,payload,execute):await execute(payload);}finally{if(lock)pendingWorkspaceCalls.delete(method);}
 }
 const file = () => state.files[state.fileIndex];
 const layer = () => file()?.layers[state.layerIndex];

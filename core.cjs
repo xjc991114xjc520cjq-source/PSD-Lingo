@@ -85,6 +85,7 @@ function validatePlan(plan) {
   }
   let count = 0;
   for (const file of plan.files) {
+    if(file.deliveryBoards)require('./photoshop-delivery.cjs').validateBoards(file.deliveryBoards);
     validateMixedEdits(file.mixedTextEdits,{records:plan.records,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.mixedTextEdits||[]).length;
     validateTextActions(file.textActions,{jobs:file.jobs});count+=(file.textActions||[]).length;
     validateArtworkHides(file.artworkHides,{textActions:file.textActions,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.artworkHides||[]).length;
@@ -122,7 +123,7 @@ function jsxForPlan(input, options={}) {
   const plan = validatePlan(input);
   const json = JSON.stringify(plan).replace(/[\u2028\u2029]/g, c => c === '\u2028' ? '\\u2028' : '\\u2029');
   return `#target photoshop
-app.bringToFront();
+${options.silent?'':'app.bringToFront();'}
 (function () {
 // Photoshop 的 ExtendScript 在部分版本没有 JSON，全程不依赖外部脚本。
 function jsonEncode(v) {
@@ -154,11 +155,12 @@ function bounds(layer) { var b = layer.bounds; return [b[0].as("px"), b[1].as("p
 function within(layer, box) { var b = bounds(layer); return b[0] >= box[0] - 1 && b[1] >= box[1] - 1 && b[2] <= box[0] + box[2] + 1 && b[3] <= box[1] + box[3] + 1; }
 ${photoshopFit}
 ${photoshopTextObjects}
+${require('./photoshop-delivery.cjs').nativeDelivery}
 ${containerScript}
 ${extractionScript}
 try {
   for (var f = 0; f < plan.files.length; f++) {
-      var item = plan.files[f], opened = false, original = null, layouts = [];
+      var item = plan.files[f], opened = false, original = null, layouts = [], out = null;
     try {
       var file = new File(item.path);
       if (!file.exists) throw new Error("原 PSD／PSB 不存在");
@@ -198,6 +200,7 @@ try {
         layouts.push({layerId:job.layerId,name:layer.name,sourceText:typeof job.documentText==="string"?job.documentText:job.target,editedText:job.override?job.target:null,recordId:job.recordId,override:job.override||null,renderedText:fitted.text,insertedBreaks:fitted.breaks,font:ti.font,sizePt:ti.size.as("pt"),tracking:fitted.tracking,leadingPt:typeof fitted.leading==="number"?fitted.leading:null,autoLeading:ti.useAutoLeading,fauxBold:finalBold,previewLayout:job.previewLayout||null,renderingMode:job.previewLayout?"preview":"legacy-fit",manual:job.manual||null,horizontalScale:finalHorizontalScale,verticalScale:finalVerticalScale,position:job.position||null,finalBounds:bounds(layer),unchanged:fitted.unchanged});
       }
       nativeTextActions(current,item.textActions||[]);
+      var expectedDelivery=item.deliveryBoards?psDeliverySnapshot(current):null;
       // 大型文档始终保留 PSB 格式；扩展名和 Photoshop 保存选项必须一致。
       var isLargeDocument = item.format === "PSB" || (!item.format && (/\\.psb$/i.test(item.path) || /\\.psb$/i.test(item.name))), extension = isLargeDocument ? ".psb" : ".psd";
       var stem = item.name.replace(/\\.ps[db]$/i, "") + "_localized", out = new File(folder.fsName + "/" + stem + extension), n = 1;
@@ -217,11 +220,12 @@ try {
         current.saveAs(out, options, true, Extension.LOWERCASE);
       }
       current.close(SaveOptions.DONOTSAVECHANGES); current = null;
-      results.push({file: item.name, status: "已保存，待人工检查字体字形及图像差异", output: out.fsName, layouts:layouts,containerEdits:edits});
+      var delivery=null;if(item.deliveryBoards){current=app.open(out);psDeliveryCheck(current,expectedDelivery);delivery=psDeliveryJpegs(current,item.deliveryBoards,out);current.close(SaveOptions.DONOTSAVECHANGES);current=null;}
+      results.push({file: item.name, status: item.deliveryBoards?"已保存重开PSD，最终JPG待审验":"已保存，待人工检查字体字形及图像差异", output: out.fsName, delivery:delivery,layouts:layouts,containerEdits:edits});
     } catch (e) {
       if (current) { try { current.close(SaveOptions.DONOTSAVECHANGES); } catch (_) {} current = null; }
       if (opened && original) { try { original.close(SaveOptions.DONOTSAVECHANGES); } catch (_) {} }
-      results.push({file: item.name, status: "失败，未导出", error: String(e) + "（脚本行 " + e.line + "）"});
+      var failedResult={file:item.name,status:out&&out.exists?"交付核验失败，已保存副本保留":"失败，未导出",error:String(e)+"（脚本行 "+e.line+"）"};if(out&&out.exists){failedResult.output=out.fsName;failedResult.nativeSaved=true;}results.push(failedResult);
     }
   }
 } finally { app.preferences.rulerUnits = previousUnits; app.displayDialogs = previousDialogs; }

@@ -18,8 +18,8 @@ async function executeScript(directory, source) {
   const diagnostic=path.join(directory,'bridge-status.json');
   await fs.writeFile(diagnostic,JSON.stringify({transport:'native-com',state:'starting',at:new Date().toISOString()}));
   if(!bridge)throw Error('Photoshop 原生调用组件缺失，请重新安装软件');
-  try{const reply=await helper(bridge,{op:'photoshop-script',path:jsx},{timeoutMs:0});if(reply.completed!==true)throw Error('调用组件未确认脚本执行结果');await fs.writeFile(diagnostic,JSON.stringify({transport:'native-com',state:'completed',at:new Date().toISOString()}));}
-  catch(error){await fs.writeFile(diagnostic,JSON.stringify({transport:'native-com',state:'failed',error:error.message,at:new Date().toISOString()}));throw Error('Photoshop 调用失败：'+error.message);}
+  try{const reply=await helper(bridge,{op:'photoshop-script',path:jsx},{timeoutMs:0});if(reply.completed!==true)throw require('./services/native-receipt.cjs').missingReceipt('调用组件未确认脚本执行结果');await fs.writeFile(diagnostic,JSON.stringify({transport:'native-com',state:'completed',at:new Date().toISOString()}));}
+  catch(error){if(/Photoshop script failed:/i.test(error.message)&&!error.uncertain)error=require('./services/native-receipt.cjs').missingReceipt(error);await fs.writeFile(diagnostic,JSON.stringify({transport:'native-com',state:'failed',error:error.message,uncertain:!!error.uncertain,at:new Date().toISOString()}));throw Object.assign(Error('Photoshop 调用失败：'+error.message),require('./services/operation-error.cjs').errorDetails(error),error.code?{code:error.code}:{});}
 
 }
 function backgroundScript(input, ids, output, options={}) {

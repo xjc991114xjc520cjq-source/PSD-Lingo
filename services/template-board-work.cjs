@@ -21,4 +21,11 @@ async function validBoardWork(source,plan,candidates,hash){
  }
  return [...accepted.values()];
 }
-module.exports={boardWorkKey,representativeBoardIds,canSample,validBoardWork};
+function selectResumeDocument(plan,valid){
+ if(!canSample(plan))return null;
+ const groups=new Map();for(const r of valid){if(!r.partial||!Array.isArray(r.completedBoardKeys)||!r.completedBoardKeys.length)continue;if(!groups.has(r.output))groups.set(r.output,[]);groups.get(r.output).push(r);}
+ const choices=[...groups.values()].filter(rows=>rows.every(r=>r.fingerprint===rows[0].fingerprint&&JSON.stringify(r.completedBoardKeys)===JSON.stringify(rows[0].completedBoardKeys))&&rows[0].completedBoardKeys.every(key=>rows.some(r=>r.key===key)));
+ choices.sort((a,b)=>b.length-a.length);if(!choices.length)return null;
+ const rows=choices[0];return {output:rows[0].output,fingerprint:rows[0].fingerprint,boardIds:rows.map(r=>r.boardId)};
+}
+module.exports={boardWorkKey,representativeBoardIds,canSample,validBoardWork,selectResumeDocument};

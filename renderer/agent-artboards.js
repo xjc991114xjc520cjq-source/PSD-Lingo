@@ -1,3 +1,4 @@
+import {interrupted} from '../services/operation-error.cjs';
 import {makeArtboardPlan,validateArtboardPlan,renameArtboardPlan,arrangeArtboardPlan,renamePlannedArtboards} from '../photoshop-artboard-plan.cjs';
 import {auditDesignFile} from '../design-document-audit.cjs';
 import {auditFailureSummary} from '../services/audit-failure-summary.cjs';
@@ -8,12 +9,12 @@ export function configureArtboards(file,args,records){
 }
 function validateSources(file,records){if(file.artboardPlan.productSourceRecords?.some(r=>!records.some(x=>x.id===r.id&&x.target===r.target&&x.digest===r.digest)))throw Error('产品字段已变化，请重新configure_product_copy');for(const b of file.artboardPlan.boards)for(const c of b.changes){if(c.sourceRecords?.some(r=>!records.some(x=>x.id===r.id&&x.target===r.target&&x.digest===r.digest)))throw Error('画板批准文案已变化，请重新configure_artboards');}validateArtboardPlan(file.artboardPlan,file);}
 export async function previewArtboards({file,args,records,call,isCurrent}){
- validateSources(file,records);const r=await call('agentArtboards',{action:'preview',artboards:file.artboards,source:{path:file.path,fingerprint:file.fingerprint},plan:file.artboardPlan,boardName:args.boardName,crop:args.crop,offset:args.offset,limit:args.limit});if(!isCurrent())throw Error('任务已变化，画板预览已丢弃');
+ validateSources(file,records);const r=await call('agentArtboards',{action:'preview',artboards:file.artboards,source:{path:file.path,fingerprint:file.fingerprint},plan:file.artboardPlan,boardName:args.boardName,crop:args.crop,offset:args.offset,limit:args.limit});if(!isCurrent())throw interrupted('任务已变化，画板预览已丢弃');
  return {fileIndex:args.fileIndex,format:r.format,previewScope:r.previewScope,representativeBoards:r.representativeBoards,remainingBoards:r.remainingBoards,...(r.previewScope==='template-representatives'?{nextStep:'当前只制作了各模板/赠品结构的代表画板，尚未批量套用。先核对实际图像并一次修齐对应模板；确认后调用export_files生成其余画板，代表板成果会按当前计划校验复用。不要为查看其余尚未制作画板逐页调用preview。'}:{}),shownBoards:r.shownBoards,nextOffset:r.nextOffset,boards:r.boards.map(b=>({name:b.name,box:b.box})),images:r.visuals.map(v=>v.dataURL),evidence:r.visuals.map(({dataURL,...v})=>v),reused:r.reused};
 }
 export async function exportArtboards({file,records,call,fitText,buildRequest,getVisual,isCurrent,cache,cacheIdentity,forceReview}){
  validateSources(file,records);const signature=JSON.stringify([file.artboardPlan,records]),source={path:file.path,fingerprint:file.fingerprint},plan=file.artboardPlan;
- const native=await call('agentArtboards',{action:'export',source,plan});if(!isCurrent()||signature!==JSON.stringify([file.artboardPlan,records]))throw Error('任务或文案已变化，已保存画板副本保留但未通过审验');
+ const native=await call('agentArtboards',{action:'export',source,plan});if(!isCurrent())throw interrupted('任务或文案已变化，已保存画板副本保留但未通过审验');if(signature!==JSON.stringify([file.artboardPlan,records]))throw Error('任务或文案已变化，已保存画板副本保留但未通过审验');
  const composed={...file,artboardPlan:undefined,format:native.format,width:native.metadata.width,height:native.metadata.height,fingerprint:native.fingerprint,layers:native.metadata.layers,containers:native.metadata.containers,artboards:native.metadata.artboards,composedBoards:native.boards,templateCopy:plan.productTemplate?{records:records.filter(r=>r.context?.productMappingId===plan.productMapping.id),decisions:plan.productTemplate.decisions}:undefined};
  const actualVisual=async options=>{
   const b=native.boards.find(b=>options.crop[0]>=b.box[0]&&options.crop[1]>=b.box[1]&&options.crop[0]+options.crop[2]<=b.box[0]+b.box[2]+.1&&options.crop[1]+options.crop[3]<=b.box[1]+b.box[3]+.1);if(!b)throw Error('找不到当前审验画板');
@@ -21,7 +22,7 @@ export async function exportArtboards({file,records,call,fitText,buildRequest,ge
  };
  const nativeRequest=options=>{const request=buildRequest({...options,fitText:undefined}),f=options.file;request.nativeArtboardComposition={verifiedEditable:true,verifiedCharacterStyles:true,layers:f.layers.filter(l=>l.nativeVerifiedText).map(l=>({id:l.id,target:l.customText,visibleBox:l.nativeLayout?undefined:l.box,sourceBox:l.box,appliedLayout:l.nativeLayout,styles:l.mixedStyleRuns?.map(s=>({from:s.from,to:s.to,font:s.font,size:s.size,leading:s.leading}))})),note:'此处字形、完整字符样式及锚点已由Photoshop保存重开验证；第一字符可能仅为小货币符号，不代表整行字号。appliedLayout存在时sourceBox为原稿参照，不冒充修改后的实测字形框；位移和行距按对象自身文档局部像素执行。只按实际最终JPG评价整体设计和可见字形，不使用浏览器的单字体拟合代替原生混合样式。'};return request;};
  const audit=await auditDesignFile({file:composed,records,fitText:undefined,buildRequest:nativeRequest,getVisual:actualVisual,requireDelivery:true,call,callBatch:pages=>call('suggestLayout',{phase:'audit-batch',pages}),cache,cacheIdentity,forceReview,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',p).catch(()=>{});}});
- if(!isCurrent()||signature!==JSON.stringify([file.artboardPlan,records]))throw Error('最终画板审验期间任务或文案已变化');
+ if(!isCurrent())throw interrupted('最终画板审验期间任务或文案已变化');if(signature!==JSON.stringify([file.artboardPlan,records]))throw Error('最终画板审验期间任务或文案已变化');
  await call('agentArtboards',{action:'verify',source,plan});
  const failures=audit.failures||[];
  return {saved:1,exported:true,...(!audit.passed?{message:auditFailureSummary(audit)}:{}),results:[{file:file.name,output:native.output,format:native.format,fallbackReason:native.fallbackReason,delivery:native.delivery}],failed:0,qualityPassed:audit.passed===true,audits:[{file:file.name,...audit}],failures,deliveryStages:[{file:file.name,nativeSave:'saved',nativeReopen:'passed',jpeg:'passed',finalAudit:audit.passed?'passed':'failed'}],visualAcceptance:audit.passed?'同一可编辑文件内的全部画板已保存重开、字符样式及最终JPG审验通过，仍待用户视觉确认':'可编辑画板副本已保留，按整页审验问题修改configure_artboards后再导出，不重复尝试相同计划'};

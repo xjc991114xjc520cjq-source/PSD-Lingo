@@ -54,7 +54,7 @@ async function importFilePath(value, extensions, label) {
   if(!stat.isFile())throw new Error('请拖入'+label+'文件，不能使用文件夹。');
   return selected;
 }
-function safe(handler) { return async (_, ...args) => { try { return {ok: true, value: await handler(...args)}; } catch (e) { return {ok: false, error: String(e.message || e)}; } }; }
+function safe(handler) { return async (_, ...args) => { try { return {ok: true, value: await handler(...args)}; } catch (e) { return {ok: false, error: String(e.message || e),...require('./services/operation-error.cjs').errorDetails(e)}; } }; }
 async function readPsd(filePath,{preview=true}={}) {
   if(illustrator.isIllustrator(filePath)){
     if(psBusy||batchBusy)throw Error('原生文件任务正在运行，请稍后导入 AI');
@@ -265,10 +265,11 @@ async function executePhotoshopPlan(plan,outputDir){
     await new Promise((resolve, reject) => {
       const child = spawn('cscript.exe', ['//nologo','//U', vbs, jsx], {windowsHide: true}); const output = [];
       child.stdout.on('data', b => output.push(b)); child.stderr.on('data', b => output.push(b));
-      child.on('error', reject); child.on('close', code => code === 0 ? resolve(decodeBridgeOutput(output)) : reject(new Error(decodeBridgeOutput(output) || '无法连接 Photoshop，请导出 JSX 后手动执行。')));
+      child.on('error', reject); child.on('close', code => {const message=decodeBridgeOutput(output);if(code===0)resolve(message);else reject(message.includes('Photoshop COM unavailable')?Error(message):require('./services/native-receipt.cjs').missingReceipt(Error(message||'Photoshop脚本进程未正常返回')));});
     });
-    const psResults=JSON.parse((await fs.readFile(resultPath,'utf8')).replace(/^\uFEFF/,''));
+    let psResults;try{psResults=JSON.parse((await fs.readFile(resultPath,'utf8')).replace(/^\uFEFF/,''));if(!Array.isArray(psResults)||psResults.length!==plan.files.length)throw Error('原生结果数量不符');}catch(error){throw require('./services/native-receipt.cjs').missingReceipt(error);}
 
+    for(const [i,r]of psResults.entries()){const file=plan.files[i];if(!file)continue;if(!r.error&&file.deliveryBoards)try{await require('./photoshop-delivery.cjs').verifyDelivery(r,{expectedBoards:file.deliveryBoards});}catch(e){r.error=e.message;r.status='最终JPG核验未通过，已保存副本保留';}if(await hashFile(file.path)!==file.fingerprint){r.error='制作期间原稿已变化，当前副本不能作为已通过成果';}}
     return psResults;
 }
 async function runPhotoshop(plan,outputDir=null,{deferLearning=false}={}){

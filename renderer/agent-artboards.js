@@ -1,5 +1,6 @@
 import {makeArtboardPlan,validateArtboardPlan,renameArtboardPlan,arrangeArtboardPlan,renamePlannedArtboards} from '../photoshop-artboard-plan.cjs';
 import {auditDesignFile} from '../design-document-audit.cjs';
+import {auditFailureSummary} from '../services/audit-failure-summary.cjs';
 export function configureArtboards(file,args,records){
  if(args.restore===true){delete file.artboardPlan;return;}
  if(file.layers.some(l=>l.recordId||l.nativeCreation||l.nativeDisposition||l.manual||l.position||l.copyAdjustment)||file.containerEdits?.length||file.mixedTextEdits?.length||file.artworkHides?.length)throw Error('请先撤回普通改字或对象修改，再配置画板；画板改字应在boards.changes中一次指定，避免遗漏已有修改');
@@ -23,5 +24,5 @@ export async function exportArtboards({file,records,call,fitText,buildRequest,ge
  if(!isCurrent()||signature!==JSON.stringify([file.artboardPlan,records]))throw Error('最终画板审验期间任务或文案已变化');
  await call('agentArtboards',{action:'verify',source,plan});
  const failures=audit.failures||[];
- return {saved:1,exported:true,results:[{file:file.name,output:native.output,format:native.format,fallbackReason:native.fallbackReason,delivery:native.delivery}],failed:0,qualityPassed:audit.passed===true,audits:[{file:file.name,...audit}],failures,deliveryStages:[{file:file.name,nativeSave:'saved',nativeReopen:'passed',jpeg:'passed',finalAudit:audit.passed?'passed':'failed'}],visualAcceptance:audit.passed?'同一可编辑文件内的全部画板已保存重开、字符样式及最终JPG审验通过，仍待用户视觉确认':'可编辑画板副本已保留，按整页审验问题修改configure_artboards后再导出，不重复尝试相同计划'};
+ return {saved:1,exported:true,...(!audit.passed?{message:auditFailureSummary(audit)}:{}),results:[{file:file.name,output:native.output,format:native.format,fallbackReason:native.fallbackReason,delivery:native.delivery}],failed:0,qualityPassed:audit.passed===true,audits:[{file:file.name,...audit}],failures,deliveryStages:[{file:file.name,nativeSave:'saved',nativeReopen:'passed',jpeg:'passed',finalAudit:audit.passed?'passed':'failed'}],visualAcceptance:audit.passed?'同一可编辑文件内的全部画板已保存重开、字符样式及最终JPG审验通过，仍待用户视觉确认':'可编辑画板副本已保留，按整页审验问题修改configure_artboards后再导出，不重复尝试相同计划'};
 }

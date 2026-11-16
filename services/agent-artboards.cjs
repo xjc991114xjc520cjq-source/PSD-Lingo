@@ -1,5 +1,10 @@
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 const {artboardVisual}=require('../photoshop-artboards.cjs');
+function selectPreviewBoards(entry,input){
+ const offset=input.offset??0,limit=input.limit??3;if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>3)throw Error('画板预览每批1至3张，请按boardName或offset分页');
+ if(input.crop!==undefined){const c=input.crop;if(!Array.isArray(c)||c.length!==4||!c.every(Number.isFinite)||c[2]<=0||c[3]<=0)throw Error('画板预览范围须为全局坐标[x,y,width,height]');const matches=entry.boards.filter(b=>{const r=b.crop||b.box;return c[0]>=r[0]&&c[1]>=r[1]&&c[0]+c[2]<=r[0]+r[2]+.1&&c[1]+c[3]<=r[1]+r[3]+.1;});if(matches.length!==1)throw Error('预览范围必须完整落在一个画板内，请使用返回的boards.box或指定boardName查看整页');return matches;}
+ const selected=input.boardName?entry.boards.filter(b=>b.name===input.boardName):entry.boards.slice(offset,offset+limit);if(!selected.length)throw Error('画板名称不存在');return selected;
+}
 function createArtboardOperations({run,directory,requireOutput}){
  const cache=new Map(),delivered=new Map(),deliveredVisuals=new Map();
  return async function operate(input,task,progress=()=>{}){
@@ -24,10 +29,9 @@ function createArtboardOperations({run,directory,requireOutput}){
    // Subsequent visual requests must read the actual delivered JPEG, not the temporary proof.
    deliveredVisuals.set(key,exported);return exported;
   }
-  const offset=input.offset??0,limit=input.limit??3;if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>3)throw Error('画板预览每批1至3张，请按boardName或offset分页');const selected=input.boardName?entry.boards.filter(b=>b.name===input.boardName):entry.boards.slice(offset,offset+limit);
-  if(!selected.length)throw Error('画板名称不存在');
+  const offset=input.offset??0,limit=input.limit??3,selected=selectPreviewBoards(entry,input);
   const visuals=[];for(const b of selected)visuals.push(await artboardVisual(entry,{boardName:b.name,crop:input.crop}));
-  return {...entry,visuals,shownBoards:selected.map(b=>b.name),nextOffset:!input.boardName&&offset+limit<entry.boards.length?offset+limit:null,reused:!!result.reused};
+  return {...entry,visuals,shownBoards:selected.map(b=>b.name),nextOffset:!input.boardName&&!input.crop&&offset+limit<entry.boards.length?offset+limit:null,reused:!!result.reused};
  };
 }
-module.exports={createArtboardOperations};
+module.exports={createArtboardOperations,selectPreviewBoards};

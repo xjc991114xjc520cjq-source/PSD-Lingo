@@ -47,7 +47,7 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   Object.assign(request,{designReviewSources:require('./services/design-plugins/manifest.json').skills.map(s=>({...s,required:['design-critique','graphic-judgment'].includes(s.id)})),phase:'audit',designReviewVersion:1,designSkillIdentity:require('./services/design-skill-manifest.json'),activeBoard:{name:g.name,box:g.crop},selectedLayerKeys:g.ids.map(String),scope:'full'});
   const visuals=await getVisual({file,layer,scope:'full',crop:g.crop,requireCurrent:true});
   if(!visuals?.some(v=>v.stage==='current'))throw Error('整页审阅缺少实际当前画面');
-  if(requireDelivery){const current=visuals.find(v=>v.stage==='current');if(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened)throw Error('最终审验必须使用保存重开后的实际JPG');request.finalDelivery=current.deliveryEvidence;}
+  if(requireDelivery){const current=visuals.find(v=>v.stage==='current');if(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened)throw Error('最终审验必须使用保存重开后的实际JPG');if(!Array.isArray(current.crop)||current.crop.length!==4||current.crop.some((n,i)=>!Number.isFinite(n)||Math.abs(n-g.crop[i])>.01))throw Error('最终审验缺少对应画板的完整JPG，不能用局部裁图替代整页');request.finalDelivery=current.deliveryEvidence;}
   request.visuals=visuals.filter(v=>['source','current'].includes(v.stage)).slice(0,2);
   const cacheKey=cache&&JSON.stringify([cacheIdentity,file.fingerprint,request]);
   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');

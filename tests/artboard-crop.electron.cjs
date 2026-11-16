@@ -1,0 +1,8 @@
+const {app,nativeImage}=require('electron'),fs=require('node:fs/promises'),assert=require('node:assert/strict');
+const out=process.env.SPARKIT_NATIVE_OUTPUT||'D:/PSD-Lingo/work/artboard-crop-'+Date.now();app.setPath('userData',out+'/profile');
+app.whenReady().then(async()=>{let code=0;try{await fs.mkdir(out,{recursive:true});const image=out+'/proof.jpg';await fs.writeFile(image,nativeImage.createFromBitmap(Buffer.alloc(100*100*4,255),{width:100,height:100}).toJPEG(90));
+ const boards=Array.from({length:10},(_,i)=>({name:'Board '+i,box:[1600*i,0,1500,1500],crop:[1600*i,0,1500,1500],image}));let runs=0;
+ const op=require('../services/agent-artboards.cjs').createArtboardOperations({directory:()=>out,requireOutput:async()=>{},run:async({prepared})=>{runs++;return prepared||{output:out+'/fixture.psb',fingerprint:'fixture',boards};}}),input={action:'preview',source:{path:out+'/source.psb',fingerprint:'fixture'},plan:{}},task={id:'isolated-crop'};
+ assert.equal((await op(input,task)).visuals.length,3);const r=await op({...input,crop:[4801,1,1498,1498]},task);assert.deepEqual(r.shownBoards,['Board 3']);assert.equal(r.nextOffset,null);assert.equal(r.visuals.length,1);assert.deepEqual(r.visuals[0].crop,[4801,1,1498,1498]);assert.ok(!nativeImage.createFromDataURL(r.visuals[0].dataURL).isEmpty());await assert.rejects(op({...input,crop:[1490,0,200,100]},task),/完整落在一个画板/);
+ await fs.writeFile(out+'/verified.json',JSON.stringify({passed:true,cropSelectedBeyondFirstPage:true,actualEncodedPixels:true,ambiguousCropRejected:true,runs},null,2));console.log('PASS artboard crop',out);
+ }catch(e){code=1;console.error(e.stack);}finally{app.exit(code);}});

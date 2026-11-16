@@ -346,10 +346,32 @@ dialog>select:not([multiple]){width:100%;margin:6px 0 14px;font-size:12px;min-he
 #skuProductPanel>label{display:grid;gap:6px;margin-top:12px}
 #skuProductPanel>button{margin-top:8px}
 #skuProductPanel input,#skuProductPanel select{min-width:0;max-width:100%;width:100%}
-#skuProductRows fieldset{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--line,#414249)}
-#skuProductRows legend{max-width:100%;padding:0 6px;font-weight:600;overflow-wrap:anywhere}
-#skuProductRows fieldset>input{margin:8px 0}
-#skuProductRows fieldset>label{display:flex;gap:8px;align-items:flex-start}
-#skuProductRows input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:4px 0}
-#skuProductRows p,#skuProductSummary,#skuProductHandoff{font-size:13px;overflow-wrap:anywhere}
+:is(#skuProductRows,.sku-product-suggestions) fieldset{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--line,#414249)}
+:is(#skuProductRows,.sku-product-suggestions) legend{max-width:100%;padding:0 6px;font-weight:600;overflow-wrap:anywhere}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>input{margin:8px 0}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>label{display:flex;gap:8px;align-items:flex-start}
+:is(#skuProductRows,.sku-product-suggestions) input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:4px 0}
+:is(#skuProductRows,.sku-product-suggestions) p,#skuProductSummary,#skuProductHandoff{font-size:13px;overflow-wrap:anywhere}
 #skuProductHandoff{white-space:pre-wrap;font-family:inherit}
+#skuProductPanel [hidden]{display:none!important}
+.sku-product-toolbar{display:grid;gap:12px;margin:16px 0;padding:16px 0;border-block:1px solid var(--line,#414249)}
+.sku-product-toolbar p{margin:0;overflow-wrap:anywhere}
+.sku-product-bulk{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.sku-product-bulk>label,.sku-product-toolbar>label{display:grid;gap:6px;min-width:0}
+.sku-product-bulk button,.sku-product-toolbar>#skuProductApprove{min-height:44px;white-space:normal}
+.sku-product-toolbar>#skuProductApprove{justify-self:start}
+.sku-product-unused{margin:16px 0;overflow-wrap:anywhere}
+.sku-product-suggestions{margin:16px 0}
+.sku-product-suggestions>summary{padding:14px 12px;border:1px solid var(--line,#414249);font-weight:600;cursor:pointer;line-height:1.6;overflow-wrap:anywhere;color:var(--text,#eee)}
+.sku-product-suggestions>summary:hover{background:#ffffff08}
+.sku-product-suggestions>summary:focus-visible{outline:2px solid #d49b73;outline-offset:3px}
+.sku-product-unused ul{max-height:220px;overflow:auto;padding-left:24px}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>label:first-of-type{display:grid;gap:6px}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>button{min-height:40px}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>details{margin-top:12px}
+:is(#skuProductRows,.sku-product-suggestions) fieldset>details label{display:grid;gap:6px}
+:is(#skuProductRows,.sku-product-suggestions) .sku-product-issue{color:#f0c49b;margin:8px 0}
+:is(#skuProductRows,.sku-product-suggestions) .sku-product-issue:empty{display:none}
+:is(#skuProductRows,.sku-product-suggestions) .has-issue{border-color:#b48a67}
+:is(#skuProductRows,.sku-product-suggestions) .sku-product-reuse{margin-top:12px}
+@media(max-width:560px){.sku-product-bulk{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch}.sku-product-toolbar>#skuProductApprove{justify-self:stretch;width:100%}}

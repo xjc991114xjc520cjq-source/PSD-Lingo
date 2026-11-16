@@ -23,18 +23,20 @@ function auditTargets(file,records){
  return {targets,hidden};
 }
 function deliveryBoardsFor(file,records){const {targets}=auditTargets(file,records);return boardGroups(file,targets).map(g=>({name:g.name,crop:g.crop}));}
-async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,cache,cacheIdentity='',forceReview=false,requireDelivery=false,isCancelled=()=>false,onProgress=()=>{}}){
+async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,callBatch,cache,cacheIdentity='',forceReview=false,requireDelivery=false,isCancelled=()=>false,onProgress=()=>{}}){
  const {targets,hidden}=auditTargets(file,records);
  const groups=boardGroups(file,targets);if(!groups.length)return {passed:false,scope:'bound-artboards',boards:[],failures:['画板归属不明确，不能将总览视为整页验收']};
- const boards=[],failures=[];let reusedBoards=0;
+ const jobs=[],boards=[],failures=[];let reusedBoards=0;
  for(let i=0;i<groups.length;i++){
   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');const g=groups[i];onProgress({label:`整页审阅 ${i+1}/${groups.length}：${g.name}`,current:i,total:groups.length});
-  const seed=targets.find(l=>g.ids.includes(l.id)),layer=seed.artworkOnly?file.layers.find(l=>l.visible!==false&&l.boardNames?.includes(g.name)):seed;
-  const request=layer?buildRequest({file,layer,records,fitText,auditOnly:true}):{version:1,selectedLayerKey:'',canvas:{width:file.width,height:file.height},layers:[],containers:[]};
   const intersects=b=>b[0]<g.crop[0]+g.crop[2]&&b[0]+b[2]>g.crop[0]&&b[1]<g.crop[1]+g.crop[3]&&b[1]+b[3]>g.crop[1];
+  const belongs=l=>l.boardNames?.length?l.boardNames.includes(g.name):intersects(l.box);
+  const scopedFile={...file,layers:file.layers.filter(belongs),containers:(file.containers||[]).filter(c=>intersects(c.box))};
+  const seed=targets.find(l=>g.ids.includes(l.id)),layer=seed.artworkOnly?file.layers.find(l=>l.visible!==false&&l.boardNames?.includes(g.name)):seed;
+  const request=layer?buildRequest({file:scopedFile,layer,records,fitText,auditOnly:true}):{version:1,selectedLayerKey:'',canvas:{width:file.width,height:file.height},layers:[],containers:[]};
   request.layers=request.layers.filter(l=>intersects(l.sourceBox)||intersects(l.box));request.containers=request.containers.filter(c=>intersects(c.box));
   request.artworkObjects=(file.artworkObjects||[]).filter(o=>o.boardNames?.includes(g.name)).map(o=>({...o,hidden:hidden.some(h=>h.object.objectId===o.objectId)}));
-  request.nativeMixedEdits=(file.mixedTextEdits||[]).filter(e=>g.ids.includes(e.layerId));request.textObjectActions=textActionsFor(file);request.createdTextObjects=file.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
+  request.nativeMixedEdits=(file.mixedTextEdits||[]).filter(e=>g.ids.includes(e.layerId));request.textObjectActions=textActionsFor(file).filter(a=>scopedFile.layers.some(l=>l.id===a.layerId));request.createdTextObjects=scopedFile.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
   request.visibilityEdits=hidden.filter(h=>h.object.boardNames.includes(g.name)).map(h=>({...h.edit,box:h.object.box,kind:h.object.kind}));
   const ids=new Set(file.layers.filter(l=>g.ids.includes(l.id)).flatMap(l=>[l.recordId,...(l.copyAdjustment?.recordIds||[])]));
   for(const e of request.nativeMixedEdits)ids.add(e.recordId);
@@ -51,9 +53,22 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   request.visuals=visuals.filter(v=>['source','current'].includes(v.stage)).slice(0,2);
   const cacheKey=cache&&JSON.stringify([cacheIdentity,file.fingerprint,request]);
   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
+  jobs.push({g,layer,request,cacheKey});
+ }
+ const initialResults=new Map();
+ for(let i=0;i<jobs.length;i++){
+  const {g,layer,request,cacheKey}=jobs[i];
+  if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
+  onProgress({label: `整页审阅 ${i+1}/${jobs.length}：${g.name}`,current:i,total:jobs.length});
   const pluginFailures=a=>(a.skillReviews||[]).filter(c=>['revise','uncertain'].includes(c.verdict)).map(c=>g.name+' / skill:'+c.id+'：'+c.evidence);
   const saved=cacheKey&&!forceReview&&cache.get(cacheKey);if(saved){const audit=structuredClone(saved);boards.push(audit);failures.push(...pluginFailures(audit));for(const c of audit.checks)if(c.verdict!=='pass')failures.push(`${g.name} / ${c.id} / ${c.verdict}：${c.evidence}`);for(const c of audit.designChecks||[])if(c.verdict!=='accept')failures.push(`${g.name} / design:${c.id} / ${c.verdict}：${c.evidence}`);reusedBoards++;continue;}
-  let result=await call('suggestLayout',request),audit=validateAudit(result.audit,{...request,repairGuidanceVersion:result.repairGuidanceVersion});
+  if(callBatch&&!initialResults.has(i)){
+   const batch=[];for(let j=i;j<jobs.length&&batch.length<3;j++)if(!initialResults.has(j)&&!(jobs[j].cacheKey&&!forceReview&&cache.get(jobs[j].cacheKey)))batch.push(j);
+   const result=batch.length===1?{pages:[await call('suggestLayout',jobs[batch[0]].request)]}:await callBatch(batch.map(j=>jobs[j].request));
+   if(!Array.isArray(result?.pages)||result.pages.length!==batch.length)throw Error('合并审验返回画板数量不一致');
+   batch.forEach((j,k)=>initialResults.set(j,result.pages[k]));
+  }
+  let result=initialResults.has(i)?initialResults.get(i):await call('suggestLayout',request),audit=validateAudit(result.audit,{...request,repairGuidanceVersion:result.repairGuidanceVersion});
   const initialAudit=structuredClone(audit);
   if([...audit.checks,...(audit.designChecks||[]),...(audit.skillReviews||[])].some(c=>c.verdict==='uncertain')){
    const details=[];

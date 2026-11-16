@@ -37,6 +37,24 @@ async function main(){
  const baselineRoot=process.env.SPARKIT_BASELINE_ROOT;if(!baselineRoot&&process.env.SPARKIT_COMPACT_TEST!=='1')throw Error('Set SPARKIT_BASELINE_ROOT for performance comparison');let baseline=null,baselineMs=null,start=Date.now();if(baselineRoot){const baselineCompose=require(path.join(baselineRoot,'photoshop-artboards.cjs')).composeArtboards;baseline=await createProductTemplateEngine({...config,compose:baselineCompose}).run({source,plan:JSON.parse(JSON.stringify(plan)),directory:path.join(out,'baseline')});baselineMs=Date.now()-start;}start=Date.now();const result=await createProductTemplateEngine(config).run({source,plan:JSON.parse(JSON.stringify(plan)),directory:path.join(out,'result')});
  assert.equal(result.reopened,true);assert.equal(result.boards.length,3);assert.ok(result.boards.every(b=>b.templateVerified&&b.image));assert.deepEqual(result.boards.map(b=>b.templateSource.templateFileId),['fixture-0','fixture-0','fixture-1']);
  assert.ok(result.metadata.layers.some(l=>l.original==='¥688'));assert.ok(result.metadata.layers.some(l=>l.original==='¥544.8'));assert.equal(await hashFile(source.path),source.fingerprint);if(baseline)for(let i=1;i<result.boards.length;i++)assert.ok(require('electron').nativeImage.createFromPath(result.boards[i].image).toBitmap().equals(require('electron').nativeImage.createFromPath(baseline.boards[i].image).toBitmap()),'baseline and optimized decoded JPEG pixels '+i);for(const t of templates)assert.equal(await hashFile(t.template.path),t.template.fingerprint);
+
+ if(process.env.SPARKIT_INCREMENTAL_TEST==='1'){
+  const engine2=createProductTemplateEngine(config),events=[];
+  const sample=await engine2.run({source,plan,directory:path.join(out,'representative'),previewBoardIds:[plan.boards[0].templateId]});
+  assert.equal(sample.partial,true);assert.equal(sample.boards.length,1);assert.equal(sample.metadata.artboards.length,3);
+  // An already-open donor remains user-owned throughout reuse.
+  await executeScript(path.join(out,'open-donor'),'#target photoshop\napp.open(new File('+JSON.stringify(sample.output)+'));');
+  const completed=await engine2.run({source,plan,directory:path.join(out,'completed'),reusableBoards:sample.boardReuse,onProgress:p=>events.push(p)});
+  assert.deepEqual(completed.boards.map(b=>!!b.reused),[true,false,false]);
+  for(let i=0;i<3;i++)assert.ok(require('electron').nativeImage.createFromPath(completed.boards[i].image).toBitmap().equals(require('electron').nativeImage.createFromPath(result.boards[i].image).toBitmap()),'sample reuse preserves JPEG pixels '+i);
+  const decisions=structuredClone(plan.productTemplate.decisions),c=decisions.templates[1];c.layout=[{objectId:c.templateFields[0].objectIds[0],x:25,y:25,anchorX:0,anchorY:0}];
+  const {plan:changed}=await engine2.configure({source,mapping,templates,metadata:{artboards:fixture.boards},args:decisions,records});
+  const updated=await engine2.run({source,plan:changed,directory:path.join(out,'changed-one-template'),reusableBoards:completed.boardReuse});
+  assert.deepEqual(updated.boards.map(b=>!!b.reused),[true,true,false]);
+  for(let i=0;i<2;i++)assert.ok(require('electron').nativeImage.createFromPath(updated.boards[i].image).toBitmap().equals(require('electron').nativeImage.createFromPath(completed.boards[i].image).toBitmap()),'unaffected gift board pixels '+i);
+  await executeScript(path.join(out,'check-donor'),'#target photoshop\n(function(){var found=null;for(var i=0;i<app.documents.length;i++)try{if(app.documents[i].fullName.fsName.toLowerCase()===new File('+JSON.stringify(sample.output)+').fsName.toLowerCase())found=app.documents[i];}catch(_){}if(!found)throw Error("User-owned donor was closed");found.close(SaveOptions.DONOTSAVECHANGES);})();');
+  await fs.writeFile(path.join(out,'incremental-verified.json'),JSON.stringify({passed:true,sampleBoardCount:1,fullBoardCount:3,firstCompletionReused:completed.boards.filter(b=>b.reused).map(b=>b.name),oneTemplateCorrectionReused:updated.boards.filter(b=>b.reused).map(b=>b.name),unchangedPixelEquality:true,userOwnedDonorPreserved:true,sourceUnchanged:await hashFile(source.path)===source.fingerprint,output:updated.output},null,2));
+ }
  if(process.env.SPARKIT_COMPACT_TEST==='1'){assert.ok(result.metadata.layers.some(l=>l.original==='Original note'),'supporting copy survived save and reopen');await fs.writeFile(path.join(out,'reopened-metadata.json'),JSON.stringify(result.metadata,null,2));}
  await fs.writeFile(path.join(out,'verified.json'),JSON.stringify({passed:true,baselineMs,optimizedMs:Date.now()-start,oneComposition:true,restartedBackend:true,reopened:true,integerWithoutAddedDecimals:true,decimalRetained:true,withGiftAndNoGift:true,sourceAndTemplatesUnchanged:true,output:result.output,boards:result.boards.map(b=>({name:b.name,template:b.templateSource,image:b.image}))},null,2));
 }

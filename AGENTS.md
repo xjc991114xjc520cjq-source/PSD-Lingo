@@ -53,3 +53,5 @@
 - 2026-11-16：在0.3.87源码基线上完成全流程深查，补不明执行状态跨IPC保护、逐文件导出/重试/收尾、审验批次等待结算、普通PSD/PSB最终JPG审验、阶段文档续做、进度增量与工作记录节流、中途补充重评估及120操作暂停检查点。936项Node回归、5套Electron流程与后台PS/PSB/AI小样通过；软件实际侧栏到AI保存重开/最终JPG审验链路通过，执行及审验回包为确定性测试，未新增外部模型调用。一次Illustrator COM故障在重启后通过只读核对已有副本并补导恢复，不能称Adobe自身根因已修复。用户授权后续同类故障可自行重启Adobe，仍保护原稿与已有副本。见practice-records/2026-11-16-workflow-release-audit/实施与验收.md；本轮修复尚未发布，不代表客户整稿视觉验收。
 
 - 2026-11-16：用户授权发布逐画板模板复用、批量最终JPG审验及简洁完成页，准备0.3.85。914项自动测试、真实Electron及独立后台PS复用/像素/保存重开通过；客户整稿未重跑。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.85；公开状态以work/releases/0.3.85/public-verified.json和正式latest签名为准。
+
+- 2026-11-17：依据用户“所有页面都有类似低级错误”的反馈，统一共用标题留白、步骤数字与换行、侧栏标签、工作区窗口边界及不透明底色、工作记录响应式对齐。937项Node回归及三档尺寸七类页面几何/截图、助手21项、多图改字和工作记录Electron、正式包启动通过；无Adobe或外部模型调用。依用户持续发布授权准备0.3.90，归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.90；实际发布以work/releases/0.3.90/public-verified.json为准。详见practice-records/2026-11-17-shared-ui-layout/实施与验收.md。

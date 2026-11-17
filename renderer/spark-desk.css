@@ -61,7 +61,7 @@ body{background:radial-gradient(ellipse at 49% 31%,#8a493b66,transparent 56%),ra
 .spark-workspace-files{background:#22252946;padding:21px 24px}.spark-file-columns{margin-top:18px;color:#c4bab4}.spark-files-empty{color:#bfb6b0;height:52px}.spark-workspace-files #sparkFileCount{color:#bfb6b0}
 .spark-sample-row{display:grid;grid-template-columns:114px minmax(0,1fr);grid-template-rows:1fr;gap:24px;align-items:center;min-height:180px;margin-top:20px;flex:1}.spark-sample-preview{height:174px;width:114px;transform:rotate(-4deg);border:1px solid #fff5;border-radius:10px;box-shadow:5px 9px 16px #0004}.spark-sample-preview img{object-fit:cover}.spark-sample-info{min-width:0}.spark-sample-info h3{font-size:21px;margin:9px 0}.spark-sample-info p{color:#c6bcb5;font-size:11px;line-height:1.8;margin-bottom:14px}.spark-sample-badge{background:#ffffff0a;color:#d6cbc3;border-color:#ffffff25}.spark-sample-flow{display:none}
 .spark-desk-guide{background:linear-gradient(130deg,#ffffff0e,#a58c7120);padding:21px 20px 17px}.spark-desk-guide dl{margin:14px 0 16px}.spark-desk-guide dl>div{color:#c9beb6;font-size:11px;padding:8px 0}.spark-desk-guide dd{color:#e6d8cd;border-color:#ffffff29;background:#ffffff08}.spark-guide-note{padding-top:14px}.spark-guide-note h3{font-size:12px}.spark-guide-note p{color:#c5b9b0;font-size:11px}.spark-guide-note>svg{display:none}.spark-brand-signature{margin-top:auto;padding-top:16px}.spark-brand-signature small{color:#bfb1a6}
-.shell{padding:0 12px}.shell>main>.panel{background:#353638f5;border-color:#ffffff20}.binding-panel,.binding-actions{background:#353638!important}.inspector-context,.binding-tabs{background-color:#313235!important}.binding-tabs button[aria-selected=true]{background:#675347;color:#ffe4ce}.canvas-toolbar #dimensions{color:#c9c3be}#viewport,#replacementViewport{background:linear-gradient(135deg,#444247,#35373a)}
+.shell{padding:0 16px}.shell>main>.panel{background:#353638f5;border-color:#ffffff20}.binding-panel,.binding-actions{background:#353638!important}.inspector-context,.binding-tabs{background-color:#313235!important}.binding-tabs button[aria-selected=true]{background:#675347;color:#ffe4ce}.canvas-toolbar #dimensions{color:#c9c3be}#viewport,#replacementViewport{background:linear-gradient(135deg,#444247,#35373a)}
 .primary{background:linear-gradient(#ffc497,#f29c63);border-color:#ffd2ae;color:#3d2719}.primary:hover:not(:disabled){background:linear-gradient(#ffd4b0,#ffad76)}.text-button{color:#ffd0aa}.ghost{color:#e8dfd8;background:#ffffff0b;border-color:#ffffff30}
 dialog,#settingsDialog,.sku-dialog,.bulk-dialog{background:linear-gradient(135deg,#514849,#343538)!important;border-color:#ffffff40!important;box-shadow:inset 0 1px #ffffff22,0 24px 60px #0006!important}
 dialog::backdrop,.sku-dialog::backdrop,.bulk-dialog::backdrop,.spark-workspace-dialog::backdrop{background:#10111566;backdrop-filter:none;animation:none}dialog[data-spark-closing]::backdrop{animation:none}
@@ -76,3 +76,37 @@ button{transition:background-color 120ms,border-color 120ms,color 120ms}button:f
 .spark-format-strip{background:linear-gradient(110deg,#66504c,#805137);box-shadow:0 -1px #ffe2ca16}
 .spark-import-top>span{display:none}
 @media(min-width:1400px){.spark-proof-art{right:16px;transform:scale(1.12);transform-origin:right center}.spark-sample-row{grid-template-columns:114px minmax(180px,1fr) 178px;gap:24px}.spark-sample-flow{display:flex;border-left:1px solid #ffffff20;border-top:0;padding:5px 0 5px 22px;min-width:0;gap:22px}.spark-sample-flow b{font-size:11px}.spark-sample-flow small{font-size:9px;color:#c4b7ad}.spark-sample-flow>div{grid-template-columns:22px 1fr}.spark-sample-flow span{color:#ebc3a6;border-color:#ffb47e4a;background:#ffac7410}}
+/* Shared workspace geometry: safe rounded corners, stable steps and wrapping actions. */
+.shell>.command-bar{height:auto;min-height:76px;padding:18px 4px 14px;align-items:center;flex-wrap:wrap;row-gap:10px}
+.command-bar .brand{line-height:1.4;flex-shrink:0}
+.command-bar .project-actions,.command-bar .header-right{flex-wrap:wrap;row-gap:8px}
+.shell>.workspace-navigation{height:auto;min-height:46px;padding:6px;align-items:center;flex-wrap:wrap;gap:8px}
+.workspace-navigation .steps{height:auto;min-height:32px;flex:1 1 620px;gap:4px}
+.workspace-navigation .step{min-height:32px;padding:4px 8px;gap:7px;flex:1 1 auto}
+.workspace-navigation .step>span{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:22px;height:22px;min-width:22px;flex:0 0 22px;padding:0;line-height:1;border-radius:50%}
+.workspace-navigation .step>b{flex-shrink:0;line-height:1.4}
+.workspace-navigation .step>small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-navigation .workflow-guide{min-width:0;flex:1 1 240px;margin:0;padding:2px 8px;gap:10px}
+.workspace-navigation .workflow-guide>div{min-width:0}
+.workspace-navigation .workflow-guide b{white-space:normal;overflow-wrap:anywhere}
+.workspace-navigation .workflow-guide button{flex-shrink:0}
+.spark-sidebar nav{min-height:0;overflow-y:auto;overflow-x:hidden}
+.spark-sidebar-bottom{flex-shrink:0}
+.spark-workspace-dialog{box-sizing:border-box;max-width:none!important;width:calc(100vw - 240px)!important;margin:72px 16px 16px 218px!important;max-height:calc(100vh - 88px)!important}
+.dialog-top{align-items:center;flex-wrap:wrap;row-gap:12px}
+.dialog-top h2{margin:0;line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.dialog-top>button{flex-shrink:0;margin-left:auto}
+.spark-workspace-dialog>.dialog-top{padding:4px 0 16px}
+.spark-workspace-dialog .editor-buttons{flex-wrap:wrap;row-gap:10px}
+.spark-workspace-dialog .editor-buttons>input{min-width:120px;max-width:100%}
+@media(max-width:1300px){.spark-workspace-dialog{width:calc(100vw - 206px)!important;margin-left:190px!important}}
+@media(max-width:1100px){.workspace-navigation .steps{flex-basis:100%}.workspace-navigation .step{padding-inline:6px}.workspace-navigation .workflow-guide{flex-basis:100%}.shell>.command-bar{column-gap:10px}.command-bar .brand{min-width:100px}.command-bar .project-actions{flex:1 1 440px}}
+/* Keep labels intact; the navigation scrolls before it compresses its entries. */
+.spark-sidebar nav button{flex-shrink:0;gap:8px;padding-inline:10px}
+.spark-sidebar nav button>span{white-space:nowrap}
+.spark-sidebar nav button>svg,.spark-sidebar nav button>img{flex-shrink:0}
+.spark-sidebar nav .agent-sidebar-entry img{margin-right:0}
+/* An opaque workspace prevents the editor beneath it from competing with form text. */
+dialog.spark-workspace-dialog{background:linear-gradient(135deg,#514849,#343538)!important}
+#empty{min-height:280px;padding:18px 12px;box-sizing:border-box}
+@media(max-width:1100px){.workspace-navigation .workflow-guide{justify-content:space-between}.workspace-navigation .workflow-guide b{display:block}}

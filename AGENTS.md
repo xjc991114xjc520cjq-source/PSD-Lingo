@@ -55,3 +55,5 @@
 - 2026-11-16：用户授权发布逐画板模板复用、批量最终JPG审验及简洁完成页，准备0.3.85。914项自动测试、真实Electron及独立后台PS复用/像素/保存重开通过；客户整稿未重跑。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.85；公开状态以work/releases/0.3.85/public-verified.json和正式latest签名为准。
 
 - 2026-11-17：依据用户“所有页面都有类似低级错误”的反馈，统一共用标题留白、步骤数字与换行、侧栏标签、工作区窗口边界及不透明底色、工作记录响应式对齐。937项Node回归及三档尺寸七类页面几何/截图、助手21项、多图改字和工作记录Electron、正式包启动通过；无Adobe或外部模型调用。依用户持续发布授权准备0.3.90，归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.90；实际发布以work/releases/0.3.90/public-verified.json为准。详见practice-records/2026-11-17-shared-ui-layout/实施与验收.md。
+
+- 2026-11-17：按用户要求首页新增通栏AI助手大卡片，整个卡片直接调用现有助手入口。三档窗口渲染/实际点击、21项助手Electron整合、5项工作流UI及正式包启动验证通过；无Adobe或外部模型调用。依持续授权发布0.3.91，归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.91，公开状态以work/releases/0.3.91/public-verified.json为准。详见practice-records/2026-11-17-home-assistant/实施与验收.md。

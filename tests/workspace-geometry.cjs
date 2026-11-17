@@ -4,6 +4,11 @@ module.exports=async function({win,js,wait,out}){
  const results=[];
  const settle=()=>js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
  for(const [width,height] of [[1400,960],[1150,760],[1024,700]]){
+  win.setSize(width,height);await js(`window.sparkitNavigate('home')`);await settle();
+  const card=await js(`(()=>{const n=document.getElementById('sparkHomeAssistant'),r=n.getBoundingClientRect(),g=n.parentElement.getBoundingClientRect();return {width:r.width,gridWidth:g.width,height:r.height,top:r.top,bottom:r.bottom,viewport:innerHeight,overflow:n.scrollWidth>n.clientWidth,label:n.textContent}})()`);
+  assert.ok(card.width>=card.gridWidth-2&&card.height>=130,'assistant is a large full-width card');assert.ok(card.top>38&&card.bottom<card.viewport,'assistant card visible on arrival');assert.equal(card.overflow,false);assert.match(card.label,/AI 助手/);
+  await fs.writeFile(`${out}/home-assistant-${width}.png`,(await win.webContents.capturePage()).toPNG());
+  await js(`document.getElementById('sparkHomeAssistant').click()`);await wait(`document.getElementById('agentDialog').open`);assert.equal(await js(`document.body.dataset.sparkRoute`),'home');await js(`document.getElementById('agentDialog').close()`);await wait(`!document.getElementById('agentDialog').open`);
   win.setSize(width,height);await js(`window.sparkitNavigate('editor')`);await settle();
   const editor=await js(`(()=>{const rect=n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,w:r.width,h:r.height}},shell=rect(document.querySelector('.shell')),title=rect(document.querySelector('.command-bar .brand'));return {shell,title,steps:[...document.querySelectorAll('.steps .step')].map(n=>({row:rect(n),number:rect(n.querySelector('span')),label:rect(n.querySelector('b'))})),viewport:{w:innerWidth,h:innerHeight},nav:rect(document.querySelector('.workspace-navigation')),main:rect(document.querySelector('.shell>main'))}})()`);
   assert.ok(editor.title.x-editor.shell.x>=16&&editor.title.y-editor.shell.y>=16,'title clears rounded corners');

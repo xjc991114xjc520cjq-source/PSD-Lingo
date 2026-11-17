@@ -39,6 +39,9 @@ export function installSparkit({state,toast,importPaths}){
  <section class="spark-workspace-files"><div class="spark-section-heading"><div><h2>工作区文件</h2><span id="sparkFileCount">尚未导入</span></div><button class="text-button" data-route="editor">进入模板制作 ${icon('arrow')}</button></div><div class="spark-file-columns"><span>设计稿</span><span>内容</span><span>操作</span></div><div id="sparkProjects" class="spark-project-content"></div><div class="spark-sample-row"><button class="spark-sample-preview" data-action="demo" aria-label="打开内置示例"><img src="assets/demo-preview.png" alt="内置护肤详情页示例"></button><div class="spark-sample-info"><span class="spark-sample-badge">内置示例</span><h3>详情页文案替换</h3><p>原稿、5 个文字层和英文文案。<br>完整体验选字、替换与排版。</p><button class="ghost" data-action="demo">打开示例 ${icon('arrow')}</button></div><div class="spark-sample-flow"><div><span>1</span><b>选择文字层</b><small>在画布或图层列表中选择</small></div><div><span>2</span><b>替换文案</b><small>导入文档，确认每一处对应</small></div><div><span>3</span><b>检查与生成</b><small>调整字号排版，再另存副本</small></div></div></div></section>
  <aside class="spark-desk-guide"><h2>操作速查</h2><dl><div><dt>打开项目</dt><dd>Ctrl O</dd></div><div><dt>返回工作区</dt><dd>Ctrl H</dd></div><div><dt>撤销修改</dt><dd>Ctrl Z</dd></div><div><dt>收回窗口</dt><dd>Esc</dd></div></dl><div class="spark-guide-note">${icon('edit')}<h3>按原稿工作</h3><p>文件与图层在左，画布在中间，文案与排版在右。</p><button class="text-button" data-route="editor">打开模板制作 ${icon('arrow')}</button></div><div class="spark-brand-signature">${logo}<span>灵搭 Sparkit<small>ATK 创作工具</small></span></div></aside></div>`);
  home.id='sparkHome';document.body.append(home);
+ const assistantCard=make('button','spark-assistant-card',`<img src="assets/logo1.png" alt=""><span class="spark-assistant-copy"><b>AI 助手</b><span>添加文件，描述需求，让助手调用软件开始工作。</span></span><span class="spark-assistant-cta">开始对话 ${icon('arrow')}</span>`);
+ assistantCard.type='button';assistantCard.id='sparkHomeAssistant';assistantCard.dataset.action='assistant';
+ home.querySelector('.spark-desk-grid').prepend(assistantCard);
  const importZone=home.querySelector('.spark-import-surface');
  bindFileDrop(importZone,{extensions:['psd','psb','ai'],multiple:true,onPaths:async paths=>{await route('editor');await importPaths(paths);},onError:message=>toast(message,true)});
  const shell=document.querySelector('.shell');
@@ -103,6 +106,7 @@ export function installSparkit({state,toast,importPaths}){
   if(action==='demo'){await route('editor');$('loadDemo').click();}
   else if(action==='import'){await route('editor');$('importPsd').click();}
   else if(action==='open'){await route('editor');$('openProject').click();}
+  else if(action==='assistant'){$('openAgentSidebar').click();}
  });
  for(const d of document.querySelectorAll('dialog'))d.addEventListener('close',()=>paintNav(current));
  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!document.querySelector('dialog[open]')){if(e.key.toLowerCase()==='h'){e.preventDefault();route('home');}if(e.key.toLowerCase()==='o'){e.preventDefault();route('editor');$('openProject').click();}}});

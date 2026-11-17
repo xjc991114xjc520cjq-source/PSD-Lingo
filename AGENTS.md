@@ -61,3 +61,5 @@
 - 2026-11-17：助手卡片仅LOGO文字改白，保留橙色图形；新增静态星芒与弧线、指针光斑和悬停/焦点反馈。新增作用域动画来源，助手由首页卡片展开并收回，兼容减少动态设置。937项回归、三档真实页面/指针/卡片动画来源/关闭焦点及助手21项整合、正式包启动通过。依持续授权发布0.3.92，公开状态以work/releases/0.3.92/public-verified.json为准；记录practice-records/2026-11-17-assistant-card-effects/实施与验收.md。
 
 - 2026-11-17：用户要求完整UI交互检查并沿用改完即发布授权，准备0.3.93。首页示例区、共享卡片反馈、文件/文档面板、表单/弹窗/标签页、窄窗口检查面板滚动及键盘文件图层选择已修复。937项Node与助手/工作记录/下拉/SKU两套Electron测试、正式包启动通过。无Adobe或外部模型调用；详见practice-records/2026-11-17-interface-polish/实施与验收.md。公开状态以work/releases/0.3.93/public-verified.json为准。
+
+- 2026-11-17：另一台电脑AI导入UKFG line96定位为文字读取，新增逐对象隔离/错误阶段、稳定原生文字快照及清理失败保护。942项Node和客户副本99文字/完整预览、原生UKFG故障注入后其他98文字一致通过，原稿哈希未变。未自然复现对端错误，不声称Adobe根因或客户成稿通过。依持续发布授权准备0.3.94；详见practice-records/2026-11-17-ai-text-import-isolation/实施与验收.md及work/releases/0.3.94/public-verified.json。

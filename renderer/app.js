@@ -60,7 +60,9 @@ async function call(method, payload) {
 const file = () => state.files[state.fileIndex];
 const layer = () => file()?.layers[state.layerIndex];
 const record = id => state.records.find(r => r.id === id);
-function node(tag, className, text) { const n = document.createElement(tag); if (className) n.className = className; if (text !== undefined) n.textContent = text; return n; }
+function node(tag, className, text) { const n = document.createElement(tag); if (className) n.className = className; if (text !== undefined) n.textContent = text;
+ if(/(?:^|\s)(?:file-card|layer-card)(?:\s|$)/.test(className||'')){n.tabIndex=0;n.setAttribute('role','button');n.setAttribute('aria-pressed',String(n.classList.contains('active')));n.addEventListener('keydown',event=>{if(event.target===n&&['Enter',' '].includes(event.key)){event.preventDefault();const list=n.parentElement;n.click();list?.querySelector('[aria-pressed=true]')?.focus({preventScroll:true});}});}
+ return n; }
 function selectedLayer(index) { contextProperties?.clear();containerEditor?.clearSelection?.();layoutEditor?.clearSelection?.();state.layerIndex = index; const l = layer(); state.chosen = l?.recordId || l?.suggestedId || null; state.checked = false; render();focusBoundLayer(); }
 function selectFile(index) { state.fileIndex = index; state.layerIndex = 0; state.chosen = layer()?.recordId || null; render(); fitView(); }
 function demo() {
@@ -120,7 +122,7 @@ function render() {
   $('bindCount').textContent=bound+' / '+all.length+' 已设置';$('layerCount').textContent=file()?.layers.length||0;
   $('checkCount').textContent=state.checked?'已检查 · 需实机复核':'待检查';
   $('files').replaceChildren();
-  if(!state.files.length)$('files').append(node('div','file-placeholder','尚未导入 PSD / PSB'));
+  if(!state.files.length)$('files').append(node('div','file-placeholder','尚未导入设计稿'));
   state.files.forEach((f,i)=>{const n=node('div','file-card'+(i===state.fileIndex?' active':''));n.append(node('b','', '▧  '+f.name),node('small','',`${f.width} × ${f.height} · ${f.layers.length} 个文字层${f.demo?' · 示例':''}`));const remove=node('button','remove-source','移除');remove.type='button';remove.title='从工作区移除 '+f.name+'，不删除本机文件';remove.setAttribute('aria-label','移除原稿 '+f.name);remove.onclick=e=>{e.stopPropagation();void removeSource(i);};remove.disabled=!!state.batchPreviewId;n.append(remove);n.onclick=()=>selectFile(i);$('files').append(n);});
   $('layers').replaceChildren();
   if(file()&&!file().layers.length)$('layers').append(node('p','hint','未发现一级文字层。请点击“批量查找替换”深度解析智能对象内文字。'));
@@ -131,7 +133,7 @@ function render() {
     $('canvasTitle').textContent=f.demo?'示例原稿':f.name;$('dimensions').textContent=f.width+' × '+f.height;
     $('previewNote').textContent=f.demo?'内置示例原稿 · 文案绑定不会改变此原图':'原 PSD / PSB 合成图 · 标记仅用于定位文字层';
   }
-  if(!f){$('canvasTitle').textContent='原稿预览';$('dimensions').textContent='';$('previewNote').textContent='导入 PSD / PSB 开始';const art=$('art');art.getContext('2d').clearRect(0,0,art.width,art.height);delete art.dataset.image;}
+  if(!f){$('canvasTitle').textContent='原稿预览';$('dimensions').textContent='';$('previewNote').textContent='导入 PSD / PSB / AI 开始';const art=$('art');art.getContext('2d').clearRect(0,0,art.width,art.height);delete art.dataset.image;}
   renderMarkers();
   $('docName').textContent=state.docName||'尚未导入文档';$('docInfo').textContent=state.records.length?state.records.length+' 条文案 · 内容只读'+(state.sourceDocument?.notices?.length?' · '+state.sourceDocument.notices.length+' 项来源提示':''):'支持 XLSX / DOCX / CSV / TSV / TXT';
   const structured = state.sourceDocument?.format==='xlsx'||/\.(csv|tsv)$/i.test(state.docName);

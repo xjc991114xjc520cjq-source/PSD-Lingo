@@ -1,0 +1,103 @@
+/* Shared control geometry, loaded after the legacy themes. Keep canvas coordinates intact. */
+:root{--control-radius:9px;--control-focus:#ffc196;--control-hover:#ffc19612}
+button:hover:not(:disabled){filter:none}
+button:disabled{cursor:not-allowed}
+:is(button,input,select,textarea,summary,[role=button]):focus-visible{outline:2px solid var(--control-focus);outline-offset:2px}
+:is(.panel,dialog,.work-records) :is(button,input,select,textarea){max-width:100%}
+:is(.panel,dialog,.work-records) :is(input,textarea,select){min-width:0}
+:is(.panel,dialog,.work-records) :is(button,summary){line-height:1.5}
+summary{cursor:pointer}
+summary:hover{color:#ffdabd}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#9d8e8466;border:2px solid transparent;background-clip:padding-box;border-radius:8px}
+*::-webkit-scrollbar-thumb:hover{background-color:#bda59099}
+
+/* File title, actions and empty copy each get their own row. */
+.files-panel .panel-title{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:16px 12px 12px}
+.files-panel .panel-title h2{min-width:0;line-height:1.5}
+.files-panel .panel-title .import-actions{width:100%;margin:0;justify-content:space-between;gap:8px}
+.files-panel .import-actions .counter{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px}
+.files-panel .import-actions button{min-height:30px;padding:4px 10px}
+.files-panel .drop-hint{margin:12px 12px 8px;line-height:1.8}
+.files-panel .file-placeholder{padding:10px 6px;line-height:1.7}
+.files-panel .subheading{align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px}
+.files-panel .divider{margin-block:8px}
+.file-card,.layer-card{transition:background-color 140ms,border-color 140ms}
+.file-card:hover,.layer-card:hover{background:var(--control-hover);border-color:#ffc19630}
+.file-card.active,.layer-card.active{background:#ffb47712;border-color:#ffb47766}
+.file-card:focus-visible,.layer-card:focus-visible{outline-offset:-2px}
+.file-card small{line-height:1.6}
+.layer-card{align-items:center;min-height:48px}
+.layer-status{flex-shrink:0}
+.panel-foot{line-height:1.7}
+
+/* Document name and format hints stay above a complete row of actions. */
+.binding-step .doc-source{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:2px 0}
+.doc-source>div:first-child{width:100%;min-width:0}
+.doc-source b{display:block;line-height:1.6;overflow-wrap:anywhere}
+.doc-source small{display:block;line-height:1.7}
+.doc-source .import-actions{display:flex;flex-wrap:wrap;width:100%;margin:0;gap:8px}
+.doc-source .import-actions button{flex:1 1 100px;min-height:34px;padding:6px 9px}
+.document-tools{padding-bottom:14px;margin-bottom:14px}
+.document-tools>.option-group{margin-top:10px}
+.split-controls>div{flex-wrap:wrap;gap:8px}
+.split-controls select{flex:1 1 140px}
+.split-controls button{flex:0 0 auto}
+.inspector-context[data-empty=true] :is(.muted,.original-text,.skip-current){display:none}
+.inspector-context[data-empty=true]{padding-block:12px}
+.inspector-context[data-empty=true] .binding-state{margin-top:6px;max-height:none}
+.inspector-selection-heading b{min-width:0;overflow-wrap:anywhere;line-height:1.5}
+.binding-panel .inspector-quick-actions{gap:8px;padding-block:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.binding-panel{overflow-y:auto;overscroll-behavior:contain}
+.binding-panel>*{flex-shrink:0}
+.binding-panel .binding-content{flex:1 0 200px}
+.inspector-quick-actions button{border-radius:var(--control-radius);min-height:34px}
+.binding-panel .binding-tabs{margin:0 12px 10px;padding:4px;gap:4px;min-height:42px;border:1px solid #ffffff18;border-radius:12px;background:#24252b}
+.binding-tabs button{min-height:32px;border-radius:8px;padding:5px 8px}
+.binding-tabs button[aria-selected=true]{background:#765541;color:#fff0e4;box-shadow:inset 0 1px #ffd1ad33}
+.binding-tabs button[aria-selected=true]::after{display:none}
+.binding-panel .label-row{flex-wrap:wrap;gap:8px}
+.binding-panel .copy-apply-actions{gap:8px;padding-block:10px;background:#353638;flex-wrap:wrap}
+.binding-panel .binding-actions{flex-wrap:wrap;row-gap:6px;padding-block:10px}
+.binding-actions #nextUnbound{margin-left:auto}
+.canvas-toolbar .tool-group{flex-wrap:wrap;row-gap:6px}
+.canvas-toolbar>div:first-child{min-width:0;overflow-wrap:anywhere}
+.canvas-info{flex-wrap:wrap;gap:6px;line-height:1.6}
+.canvas-bottom{flex-wrap:wrap;gap:6px;line-height:1.6}
+.canvas-bottom>span{min-width:0;overflow-wrap:anywhere}
+.bottom-bar{flex-wrap:wrap;row-gap:8px}
+.bottom-actions{flex-wrap:wrap;justify-content:flex-end;row-gap:8px}
+
+/* Dialog groups wrap as complete controls rather than clipping labels. */
+:is(.sku-dialog>header,.bulk-head,.agent-head){height:auto;min-height:68px;flex-shrink:0;flex-wrap:wrap;gap:12px}
+:is(.sku-dialog>header,.bulk-head)>div{min-width:0;flex:1 1 260px}
+:is(.sku-dialog>header,.bulk-head)>button{flex-shrink:0}
+:is(.sku-dialog>header,.bulk-head) h2{line-height:1.4;overflow-wrap:anywhere}
+.agent-brand{flex-shrink:0;letter-spacing:.3px}
+.agent-head-actions{flex-wrap:wrap;justify-content:flex-end;row-gap:8px}
+.agent-head-actions button{min-height:32px}
+.path-picker,.api-model-picker{flex-wrap:wrap}
+.path-picker input,.api-model-picker select{flex:1 1 180px}
+.service-list>div{gap:16px;align-items:flex-start}
+.service-list b{min-width:0;overflow-wrap:anywhere;text-align:right;line-height:1.6}
+.batch-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+.batch-options>label{display:grid;gap:8px;min-width:0}
+.batch-options :is(input,select){width:100%;min-height:34px}
+.workbook-range{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:end}
+.workbook-range>label:first-child{grid-column:1/-1}
+.workbook-range>label{line-height:1.6;min-width:0}
+.workbook-range>button{justify-self:end}
+.workbook-range input[type=checkbox]{width:18px;height:18px;justify-self:start}
+.sku-form :is(input:not([type=checkbox]):not([type=radio]),select){min-height:34px}
+.bulk-controls :is(input:not([type=checkbox]):not([type=radio]),select){min-height:34px}
+:is(.bulk-controls,.sku-form) summary{padding-block:8px;line-height:1.6}
+.floating-panel-header{min-height:44px;gap:10px;flex-wrap:wrap}
+.floating-panel-header>strong{min-width:0;overflow-wrap:anywhere}
+.floating-panel-actions{display:flex;flex-wrap:wrap;gap:6px}
+.work-record-row{border-radius:10px;margin-block:3px;border-bottom-color:transparent}
+.work-record-row:hover{background:#ffc1960b}
+.work-record-row.is-selected{background:#ffb47714;box-shadow:inset 0 0 0 1px #ffb47755}
+@media(max-width:1100px){.workbook-range{grid-template-columns:repeat(2,minmax(0,1fr))}.agent-head{padding:16px 20px}.agent-brand{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.file-card,.layer-card{transition:none}}
+.spark-reduce-motion :is(.file-card,.layer-card){transition:none}

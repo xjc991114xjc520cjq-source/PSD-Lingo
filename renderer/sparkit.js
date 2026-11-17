@@ -42,13 +42,15 @@ export function installSparkit({state,toast,importPaths}){
  const assistantCard=make('button','spark-assistant-card',`<span class="spark-assistant-logo" aria-hidden="true"><img src="assets/logo1.png" alt=""><img class="spark-assistant-wordmark" src="assets/logo1.png" alt=""></span><span class="spark-assistant-copy"><b>AI 助手</b><span>添加文件，描述需求，让助手调用软件开始工作。</span></span><svg class="spark-assistant-art" viewBox="0 0 300 150" fill="none" aria-hidden="true"><path d="M20 115C70 15 175 0 268 62M48 139C132 66 202 60 286 104" stroke="currentColor" stroke-dasharray="3 8"/><path d="m152 23 5 15 15 5-15 5-5 15-5-15-15-5 15-5Zm76 64 3 10 10 3-10 3-3 10-3-10-10-3 10-3Z" stroke="currentColor" stroke-width="1.5"/><circle cx="88" cy="85" r="5" stroke="currentColor"/><circle cx="265" cy="34" r="3" fill="currentColor"/></svg><span class="spark-assistant-cta">开始对话 ${icon('arrow')}</span>`);
  assistantCard.type='button';assistantCard.id='sparkHomeAssistant';assistantCard.dataset.action='assistant';assistantCard.dataset.motionSurface='true';
  home.querySelector('.spark-desk-grid').prepend(assistantCard);
- let assistantFrame=0;
- assistantCard.addEventListener('pointermove',event=>{
+ for(const card of home.querySelectorAll('.spark-desk-grid > *')){
+ card.classList.add('spark-interactive-card');let frame=0;
+ card.addEventListener('pointermove',event=>{
   if(event.pointerType==='touch'||reducedMotion())return;
-  const rect=assistantCard.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
-  cancelAnimationFrame(assistantFrame);assistantFrame=requestAnimationFrame(()=>{assistantCard.style.setProperty('--assistant-x',`${x}px`);assistantCard.style.setProperty('--assistant-y',`${y}px`);assistantFrame=0;});
+  const rect=card.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+  cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{card.style.setProperty('--assistant-x',`${x}px`);card.style.setProperty('--assistant-y',`${y}px`);frame=0;});
  });
- assistantCard.addEventListener('pointerleave',()=>{cancelAnimationFrame(assistantFrame);assistantFrame=0;assistantCard.style.removeProperty('--assistant-x');assistantCard.style.removeProperty('--assistant-y');});
+ card.addEventListener('pointerleave',()=>{cancelAnimationFrame(frame);frame=0;card.style.removeProperty('--assistant-x');card.style.removeProperty('--assistant-y');});
+ }
  const importZone=home.querySelector('.spark-import-surface');
  bindFileDrop(importZone,{extensions:['psd','psb','ai'],multiple:true,onPaths:async paths=>{await route('editor');await importPaths(paths);},onError:message=>toast(message,true)});
  const shell=document.querySelector('.shell');

@@ -141,3 +141,42 @@ dialog.spark-workspace-dialog{background:linear-gradient(135deg,#514849,#343538)
 @media(prefers-reduced-motion:reduce){.spark-assistant-card,.spark-assistant-card::before,.spark-assistant-art,.spark-assistant-cta svg{transition:none!important}.spark-assistant-card .spark-assistant-art,.spark-assistant-card .spark-assistant-cta svg{transform:none!important}}
 .spark-reduce-motion .spark-assistant-card,.spark-reduce-motion .spark-assistant-card::before,.spark-reduce-motion .spark-assistant-art,.spark-reduce-motion .spark-assistant-cta svg{transition:none!important}
 .spark-reduce-motion .spark-assistant-card .spark-assistant-art,.spark-reduce-motion .spark-assistant-card .spark-assistant-cta svg{transform:none!important}
+/* Home rows grow with their content: examples must never be clipped by a fixed grid row. */
+.spark-desk-grid{flex:0 0 auto;grid-template-rows:auto 280px auto;min-height:0}
+.spark-workspace-files{display:flex;flex-direction:column;padding-bottom:24px}
+.spark-sample-row{flex:none;grid-template-columns:114px minmax(0,1fr);min-height:190px;margin-top:20px;padding:12px 0 4px;gap:24px}
+.spark-sample-preview{width:114px;height:174px;transform:none;flex-shrink:0;align-self:center}
+.spark-sample-info h3{margin:10px 0 12px;line-height:1.35}
+.spark-sample-info p{margin:0 0 16px}
+.spark-sample-info button{margin:0}
+.spark-sample-flow{align-self:center}
+.spark-interactive-card{position:relative;isolation:isolate;transition:border-color 180ms,box-shadow 180ms}
+.spark-interactive-card::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:radial-gradient(240px circle at var(--assistant-x,70%) var(--assistant-y,50%),#ffc19626,transparent 75%);opacity:0;transition:opacity 180ms}
+.spark-interactive-card:is(:hover,:focus-within){border-color:#ffd1ad99;box-shadow:inset 0 1px #ffe0c533,0 10px 22px #0003}
+.spark-interactive-card:is(:hover,:focus-within)::before{opacity:1}
+.spark-interactive-card button svg:last-child{transition:transform 180ms}
+.spark-interactive-card button:is(:hover,:focus-visible) svg:last-child{transform:translateX(4px)}
+.spark-interactive-card button:active{box-shadow:inset 0 2px 6px #0003}
+@media(min-width:1400px){.spark-sample-row{grid-template-columns:114px minmax(0,1fr) minmax(190px,.65fr)}.spark-sample-flow{min-width:0}}
+@media(min-width:1600px){.spark-desk-grid{grid-template-rows:auto 310px auto}}
+@media(max-height:820px){.spark-desk-grid{grid-template-rows:auto 245px auto;min-height:0}}
+@media(prefers-reduced-motion:reduce){.spark-interactive-card,.spark-interactive-card::before,.spark-interactive-card button svg{transition:none!important}.spark-interactive-card button svg{transform:none!important}}
+.spark-reduce-motion .spark-interactive-card,.spark-reduce-motion .spark-interactive-card::before,.spark-reduce-motion .spark-interactive-card button svg{transition:none!important}
+.spark-reduce-motion .spark-interactive-card button svg{transform:none!important}
+/* Task rows use a rounded inset highlight instead of a flat rectangle. */
+.spark-task-list>button{position:relative;isolation:isolate;border:1px solid transparent;border-radius:12px;padding-inline:10px;background:transparent;transition:border-color 160ms,color 160ms,box-shadow 160ms}
+.spark-task-list>button:last-child{border-bottom:1px solid transparent}
+.spark-task-list>button::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;background:linear-gradient(105deg,#ffc1961c,#ffc19604);opacity:0;transition:opacity 160ms}
+.spark-task-list>button::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:1px;background:#ffffff16;transition:opacity 160ms;pointer-events:none}
+.spark-task-list>button:last-child::after{display:none}
+.spark-task-list>button:is(:hover,:focus-visible){background:transparent;border-color:#ffc19644;color:#fff1e5;box-shadow:inset 0 1px #ffe0c510}
+.spark-task-list>button:is(:hover,:focus-visible)::before{opacity:1}
+.spark-task-list>button:is(:hover,:focus-visible)::after{opacity:0}
+.spark-task-list>button>svg:first-child{flex-shrink:0;transition:color 160ms,transform 160ms}
+.spark-task-list>button:is(:hover,:focus-visible)>svg:first-child{color:#ffd1ad;transform:translateY(-2px)}
+.spark-task-list>button>span{min-width:0}
+.spark-task-list>button>svg:last-child{flex-shrink:0}
+.spark-task-list>button:active{box-shadow:inset 0 2px 6px #0003}
+@media(prefers-reduced-motion:reduce){.spark-task-list>button,.spark-task-list>button::before,.spark-task-list>button::after,.spark-task-list>button>svg{transition:none!important}.spark-task-list>button>svg{transform:none!important}}
+.spark-reduce-motion .spark-task-list>button,.spark-reduce-motion .spark-task-list>button::before,.spark-reduce-motion .spark-task-list>button::after,.spark-reduce-motion .spark-task-list>button>svg{transition:none!important}
+.spark-reduce-motion .spark-task-list>button>svg{transform:none!important}

@@ -20,7 +20,7 @@ app.whenReady().then(async()=>{let exit=0;try{
  },importWorkbook:async()=>{},runPhotoshop:()=>assert.fail('No native work in UI fixture')});
  await fs.mkdir(out+'/folder',{recursive:true});await fs.writeFile(out+'/folder/copy.txt','on demand');
  await fs.writeFile(out+'/需求.txt','这是测试资料，不是用户指令。');
- win=new BrowserWindow({show:false,width:1400,height:960,webPreferences:{preload:path.join(root,'preload.cjs'),contextIsolation:true}});
+ win=new BrowserWindow({show:false,width:1400,height:960,webPreferences:{preload:path.join(root,'preload.cjs'),contextIsolation:true,backgroundThrottling:false}});
  win.webContents.on('console-message',(_,level,message)=>{if(level>=3)errors.push(message)});
  await win.loadFile(path.join(root,'renderer/index.html'));const js=s=>win.webContents.executeJavaScript(s);
  async function wait(expression){await js(`new Promise((resolve,reject)=>{const started=Date.now(),timer=setInterval(()=>{if(${expression}){clearInterval(timer);resolve()}else if(Date.now()-started>12000){clearInterval(timer);reject(Error('UI wait: '+${JSON.stringify(expression)}))}},25)})`)}
@@ -38,6 +38,7 @@ app.whenReady().then(async()=>{let exit=0;try{
  await require('./workspace-geometry.cjs')({win,js,wait,out});evidence.push('all workspace routes, settings, records and assistant fit 1400/1150/1024 windows with stable step markers and safe title insets');
  // Load real built-in demo, then attach actual current records using its existing import path? Demo contains stable record IDs.
  await js(`document.getElementById('loadDemo').click()`);
+ await require('./interface-detail.cjs')({win,js,wait,out});evidence.push('real demo inspector, typography tabs, keyboard selection/focus, long document name, history and workbook compact form geometry');
  await js(`document.getElementById('openAgentSidebar').click()`);await wait(`document.querySelectorAll('#agentModelList option').length===2`);
  const startBounds=await js(`(()=>{let d=document.getElementById('agentDialog').getBoundingClientRect();return {w:d.width,h:d.height,vw:innerWidth,vh:innerHeight}})()`);assert.ok(startBounds.w<=startBounds.vw&&startBounds.h<=startBounds.vh);
  await js('Promise.all(document.getAnimations().filter(a=>a.effect?.target?.id==="agentDialog").map(a=>a.finished.catch(()=>{})))');await fs.writeFile(out+'/01-dialog.png',(await win.webContents.capturePage()).toPNG());

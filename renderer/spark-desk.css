@@ -124,3 +124,20 @@ dialog.spark-workspace-dialog{background:linear-gradient(135deg,#514849,#343538)
 @media(min-width:1600px){.spark-desk-grid{grid-template-rows:auto 310px minmax(330px,1fr)}}
 @media(max-height:820px){.spark-desk-grid{grid-template-rows:auto 245px minmax(290px,1fr);min-height:720px}.spark-assistant-card{min-height:132px;padding-block:22px}}
 @media(max-width:1100px){.spark-assistant-card{gap:18px;padding-inline:22px}.spark-assistant-card>img{width:48px;height:48px}.spark-assistant-copy>b{font-size:24px}.spark-assistant-copy>span{font-size:12px}.spark-assistant-cta{font-size:12px}}
+/* Preserve the orange symbol; only the original wordmark is rendered in white. */
+.spark-assistant-logo{position:relative;display:block;width:64px;height:64px;flex-shrink:0}
+.spark-assistant-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;clip-path:inset(0 0 20% 0)}
+.spark-assistant-logo .spark-assistant-wordmark{clip-path:inset(80% 0 0 0);filter:brightness(0) invert(1)}
+.spark-assistant-card{position:relative;isolation:isolate;overflow:hidden;transition:border-color 180ms,box-shadow 180ms,background-color 180ms}
+.spark-assistant-card::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(240px circle at var(--assistant-x,70%) var(--assistant-y,50%),#ffc19626,transparent 75%);opacity:0;transition:opacity 180ms}
+.spark-assistant-art{position:absolute;right:110px;top:0;width:300px;height:100%;color:#ffc196;opacity:.24;z-index:-1;pointer-events:none;transition:opacity 180ms,transform 180ms}
+.spark-assistant-card:is(:hover,:focus-visible){border-color:#ffd1ad;box-shadow:inset 0 1px #ffe0c533,0 10px 22px #0003}
+.spark-assistant-card:is(:hover,:focus-visible)::before{opacity:1}
+.spark-assistant-card:is(:hover,:focus-visible) .spark-assistant-art{opacity:.5;transform:translate(-4px,-3px)}
+.spark-assistant-cta svg{transition:transform 180ms}
+.spark-assistant-card:is(:hover,:focus-visible) .spark-assistant-cta svg{transform:translateX(5px)}
+.spark-assistant-card:active{box-shadow:inset 0 2px 6px #0003}
+@media(max-width:1100px){.spark-assistant-logo{width:48px;height:48px}.spark-assistant-art{right:70px;width:220px;opacity:.18}}
+@media(prefers-reduced-motion:reduce){.spark-assistant-card,.spark-assistant-card::before,.spark-assistant-art,.spark-assistant-cta svg{transition:none!important}.spark-assistant-card .spark-assistant-art,.spark-assistant-card .spark-assistant-cta svg{transform:none!important}}
+.spark-reduce-motion .spark-assistant-card,.spark-reduce-motion .spark-assistant-card::before,.spark-reduce-motion .spark-assistant-art,.spark-reduce-motion .spark-assistant-cta svg{transition:none!important}
+.spark-reduce-motion .spark-assistant-card .spark-assistant-art,.spark-reduce-motion .spark-assistant-card .spark-assistant-cta svg{transform:none!important}

@@ -1,13 +1,16 @@
 // A surface keeps its trigger through its entire lifetime, including dismissal.
 const origins=new WeakMap(),running=new WeakMap();
 let trigger=null;
+let explicitTrigger=null;
+export function withMotionTrigger(element,open){const previous=explicitTrigger;explicitTrigger=element;try{return open();}finally{explicitTrigger=previous;}}
 export function setMotionTrigger(element){if(element?.isConnected)trigger=element;}
 export const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement.classList.contains('spark-reduce-motion');
 export function sourceTransform(surface,source){
  const r=surface.getBoundingClientRect(),s=source?.isConnected?source.getBoundingClientRect():null;
  if(!s||!s.width||!r.width)return {transform:'translateY(45px) scale(.92)',origin:'50% 100%',source:null};
  const dx=s.left+s.width/2-r.left-r.width/2,dy=s.top+s.height/2-r.top-r.height/2;
- return {transform:`translate(${dx}px,${dy}px) scale(${Math.max(.06,Math.min(.46,s.width/r.width))},${Math.max(.06,Math.min(.3,s.height/r.height))})`,origin:'50% 50%',source:{x:s.x,y:s.y,width:s.width,height:s.height}};
+ const surfaceSource=source.dataset?.motionSurface==='true';
+ return {transform:`translate(${dx}px,${dy}px) scale(${Math.max(.06,Math.min(surfaceSource?2:.46,s.width/r.width))},${Math.max(.06,Math.min(surfaceSource?2:.3,s.height/r.height))})`,origin:'50% 50%',source:{x:s.x,y:s.y,width:s.width,height:s.height}};
 }
 export function installDialogMotion(){
  document.addEventListener('click',event=>{const b=event.target.closest('button,summary,select');if(b&&event.bubbles&&b.getClientRects().length)setMotionTrigger(b);},true);
@@ -21,7 +24,7 @@ export function installDialogMotion(){
    if(interrupted){const a=this.animate([interrupted,{opacity:1,transform:'none'}],{duration:reducedMotion()?90:180,easing:'cubic-bezier(.16,1,.3,1)'});running.set(this,a);a.finished.then(()=>{if(running.get(this)===a){running.delete(this);this.style.willChange='';}}).catch(()=>{});}
    return;
   }
-  const source=trigger||document.activeElement;show.call(this);this.style.willChange='transform,opacity';
+  const source=explicitTrigger||trigger||document.activeElement;show.call(this);this.style.willChange='transform,opacity';
   const origin=sourceTransform(this,source);origins.set(this,{...origin,element:source});
   this.style.transformOrigin=origin.origin;
   this.dataset.motionSource=source?.id||source?.dataset?.route||'control';

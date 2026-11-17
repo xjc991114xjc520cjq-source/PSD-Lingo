@@ -1,0 +1,4 @@
+// Shipped with the application; shared by navigation and the local Codex contract.
+const navigation={home:{label:'首页',route:'home'},multilingual:{label:'多语言制作',children:[{label:'模板制作',route:'editor'},{label:'批量修改',route:'batch'}]}};
+const assistantGuide='软件导航：首页保留原有导入与任务入口；多语言制作包含模板制作（原文案工作台，内部route=editor）和批量修改（原多语言制作/批量多语言，内部route=batch，按钮openBatch，窗口batchDialog）。模板制作继续使用workspace、import_source、import_document、bind_copy、edit_text、design_layout、preview、export_files等现有业务工具；UI改名不会改变工具名、文件ID或计划。批量修改用于复用已确认的绑定与排版制作其他语言；不要把多图改字/SKU工具当作批量语言工具，不得假称打开页面等于执行成功。向用户指路时使用新名称。workspace返回当前随软件打包的navigation入口说明。';
+module.exports={navigation,assistantGuide};

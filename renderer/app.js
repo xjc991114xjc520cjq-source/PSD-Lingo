@@ -1,3 +1,4 @@
+import {installDiagnostics} from './diagnostics.js';
 import {restoreError} from '../services/operation-error.cjs';
 import {validateMixedEdits} from '../mixed-text.cjs';
 import {installWorkRecords,readWorkControls,writeWorkControls} from './work-records.js';
@@ -235,7 +236,7 @@ async function makePlan({allowEmpty=false,fileIndices}={}){
   if(!files.length&&!allowEmpty)throw new Error('没有可执行的文字层；所有绑定层已跳过或尚未绑定。');
   return {version:1,createdAt:new Date().toISOString(),docName:state.docName,docFingerprint:state.docFingerprint,records:state.records,files,skipped,copyAdjustments:selected.flatMap(f=>f.layers.filter(l=>l.copyAdjustment&&l.customText===l.copyAdjustment.text).map(l=>({file:f.name,boardNames:l.boardNames||[],layerId:l.id,layer:l.name,...l.copyAdjustment})))};
 }
-function task(fn){return async()=>{try{if(workRecords)await workRecords.runAction(fn);else await fn();}catch(e){if($('settingsDialog').open)$('savedKeyState').textContent=e.message;toast(e.message,true);}};}
+function task(fn){return async()=>{try{if(workRecords)await workRecords.runAction(fn);else await fn();}catch(e){if($('settingsDialog').open)$('savedKeyState').textContent=e.message;toast(e.message+(e.reportId?'\n错误编号：'+e.reportId:''),true);}};}
 $('loadDemo').onclick=task(demo);
 async function importOriginal(paths){
  const items=await call('importPsd',paths?{paths}:undefined);if(!items.length)return;
@@ -402,3 +403,5 @@ async function restoreWork(snapshot){
  skuUi.refreshWork?.();if(snapshot.dialog==='bulkReplaceDialog')await bulkUi.prepareReplay?.('restore');
 }
 workRecords=installWorkRecords({call,capture:captureWork,restore:restoreWork,prepareReplay:async action=>{await skuUi.prepareReplay?.(action);await bulkUi.prepareReplay?.(action);},toast,agent:()=>agentUi,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||!!state.batchPreviewId||aiLayout.isBusy?.()||skuUi.isBusy?.()||bulkUi.isBusy?.()||batchUi?.isBusy?.()});
+
+installDiagnostics();

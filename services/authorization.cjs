@@ -17,6 +17,7 @@ class Authorization {
   const signature=(await helper(this.helperPath,{op:'sign',value:Buffer.from(canonical(payload)).toString('base64')})).signature;
   return this.request(route,{lease:this.lease.envelope,payload,signature},1200000);
  }
+ uploadDiagnostics(reports){return this.signedLearning('/v1/diagnostics/batch',{reports});}
  uploadCase(record){return this.signedLearning('/v1/learning/case',{case:record});}
  learningReferences(query){return this.signedLearning('/v1/learning/references',{query});}
  uploadKnowledge(value){return this.signedLearning('/v1/learning/knowledge/publish',{knowledge:value});}

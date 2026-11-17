@@ -1,5 +1,7 @@
 # 灵搭 Sparkit 软件开发
 
+- 跨设备报错优先查询已部署的诊断库，入口及字段边界见 `docs/跨设备错误排查.md`。使用 `server/tools/query-diagnostics.cjs` 按错误编号、版本、设备或任务检索；管理员登录证明仅从仓库外私密目录读取，不打印或提交。旧客户端未上报的错误不能声称已获取，禁止仅凭截图推断原稿损坏。
+
 - 2026-11-17：用户明确授权发布0.3.88，包含全流程深查修复和多语言导航分组/内置助手入口映射。937项回归与相关Electron/原生独立小样已通过，正式包启动、窗口显示和重复实例退出通过。本机归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.88；正式公开状态以work/releases/0.3.88/public-verified.json及公开latest签名为准，不把准备发布当作已发布。
 
 - 2026-11-17：按用户指定，侧栏“首页”保留原内容；“多语言制作”下常驻“模板制作”（editor）和“批量修改”（batch）。稳定路由、按钮ID及业务工具不变；界面与助手共享随软件打包的workspace-navigation契约，提示词与workspace返回新入口映射，不依赖本机设置。937项回归、助手20项Electron界面检查和工作记录恢复通过；未发布。见practice-records/2026-11-17-multilingual-navigation/实施与验收.md。

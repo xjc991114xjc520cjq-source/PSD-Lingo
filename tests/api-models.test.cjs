@@ -48,7 +48,7 @@ test('timeout also bounds response body stalls',async()=>{
 });
 test('IPC resolves private credentials only in main and uses Electron system-proxy fetch',()=>{
  const main=fs.readFileSync(path.join(__dirname,'../main.cjs'),'utf8'),preload=fs.readFileSync(path.join(__dirname,'../preload.cjs'),'utf8');
- assert.match(main,/ipcMain\.handle\('list-api-models',safe\(input=>listApiModels\(input,\{settings:codexSettings,fetch:\(\.\.\.args\)=>net\.fetch\(\.\.\.args\)\}\)\)\)/);
+ assert.match(main,/ipcMain\.handle\('list-api-models',safeOperation\('list-api-models',input=>listApiModels\(input,\{settings:codexSettings,fetch:\(\.\.\.args\)=>net\.fetch\(\.\.\.args\)\}\)\)\)/);
  assert.match(preload,/listApiModels: value => ipcRenderer\.invoke\('list-api-models', value\)/);
 });
 test('model lookup uses unsaved or saved third-party base URL without exposing keys',async()=>{

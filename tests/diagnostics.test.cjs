@@ -1,0 +1,21 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const {diagnostic}=require('../services/diagnostic-schema.cjs');
+const {createDiagnosticCloud}=require('../services/diagnostic-cloud.cjs');
+test('partial server acknowledgement retains pending errors for retry',async()=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'diag-partial-'));let now=Date.now(),complete=false;
+ const q=createDiagnosticCloud({directory,version:'0.3.95',clock:()=>now,ready:()=>true,upload:async rows=>({accepted:complete?rows.map(r=>r.id):[]})});
+ try{await q.record({operation:'save',message:'test failure'});await q.flush();assert.equal((await q.status()).pending,1);complete=true;now+=180000;await q.flush();assert.equal((await q.status()).pending,0);}finally{await q.close();await fs.rm(directory,{recursive:true,force:true});}
+});
+test('diagnostic contract removes local paths, secrets and unapproved task contents',()=>{
+ const r=diagnostic({id:'a',at:1,version:'1',error:Error('failed C:/Users/Private/design.psb\nBearer abc123secret\npassword=secret'),prompt:'private copy',source:{format:'PSB',bytes:100,contents:'private'},environment:{os:'Windows',token:'secret'}});
+ assert(!JSON.stringify(r).includes('Private'));assert(!JSON.stringify(r).includes('abc123secret'));assert(!JSON.stringify(r).includes('private'));assert(!JSON.stringify(r).includes('=secret'));assert.deepEqual(diagnostic(r),r);
+});
+test('offline queue survives restart, deduplicates, retries and requires complete acknowledgement',async()=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'diagnostics-'));let now=Date.now(),online=false,calls=0;
+ const make=()=>createDiagnosticCloud({directory,version:'0.3.95',clock:()=>now,ready:()=>online,upload:async rows=>{calls++;if(calls===1)throw Error('offline');return {accepted:rows.map(r=>r.id)};}});
+ let q=make();try{const id=await q.record({operation:'import',error:Error('failed')});assert.equal(await q.record({operation:'import',error:Error('failed')}),id);assert.equal((await q.status()).recent[0].count,2);await q.flush();assert.equal(calls,0);await q.close();q=make();online=true;await q.flush();assert.equal((await q.status()).pending,1);now+=180000;await q.flush();assert.equal((await q.status()).pending,0);assert.equal((await q.status()).lastId,id);}finally{await q.close();await fs.rm(directory,{recursive:true,force:true});}
+});
+test('real worker authenticates diagnostic upload, isolates admin queries and handles idempotent counts',async()=>{
+ const {fixture}=require('./support/worker-fixture.cjs'),{Authorization}=require('../services/authorization.cjs');const f=await fixture();const directory=await fs.mkdtemp(path.join(os.tmpdir(),'diag-auth-'));const auth=new Authorization({config:{authorizationEnabled:true,appId:'PSDLingo',channel:'fixture',serverUrl:'https://fixture.invalid',leaseKeys:{'lease-1':f.key.publicKey}},version:'0.3.95',dataDir:directory,helperPath:path.resolve(__dirname,'../services/bin/psd-lingo-service.exe'),fetch:f.fetch});
+ try{await auth.init();await auth.activate((await f.create()).data.license);const row=diagnostic({id:crypto.randomUUID(),at:Date.now(),version:'0.3.95',operation:'import',message:'failure'});assert.deepEqual((await auth.uploadDiagnostics([row])).accepted,[row.id]);await auth.uploadDiagnostics([row]);await auth.uploadDiagnostics([{...row,count:3}]);assert.equal(f.db.prepare('SELECT count(*) AS n FROM diagnostic_reports').get().n,1);const response=await f.fetch('https://fixture.invalid/admin/diagnostics?id='+row.id,{headers:{Authorization:'Bearer '+f.token}});assert.equal(response.status,200);assert.equal((await response.json()).reports[0].payload.count,3);assert.equal((await f.fetch('https://fixture.invalid/admin/diagnostics')).status,401);await assert.rejects(auth.uploadDiagnostics([{...row,prompt:'forbidden'}]));}finally{auth.close();f.db.close();await fs.rm(directory,{recursive:true,force:true});}
+});

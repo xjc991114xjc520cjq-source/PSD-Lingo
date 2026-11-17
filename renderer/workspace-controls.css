@@ -101,3 +101,5 @@ summary:hover{color:#ffdabd}
 @media(max-width:1100px){.workbook-range{grid-template-columns:repeat(2,minmax(0,1fr))}.agent-head{padding:16px 20px}.agent-brand{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.file-card,.layer-card{transition:none}}
 .spark-reduce-motion :is(.file-card,.layer-card){transition:none}
+
+.diagnostics-panel{margin-block:16px;padding-block:12px;border-top:1px solid #ffffff18}.diagnostics-panel summary{font-weight:600}.diagnostics-panel dl{display:grid;gap:8px;margin-block:12px}.diagnostics-panel dt{color:#e9c7ad}.diagnostics-panel dd{margin:0;overflow-wrap:anywhere;user-select:text}.diagnostics-status{line-height:1.7}

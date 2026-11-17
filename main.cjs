@@ -37,6 +37,11 @@ const {createTemplate,validateTemplate,planForDocument}=require('./batch.cjs');
 let activeBatchTemplate=null,batchDocuments=new Map(),batchBusy=false,batchCancelled=false;
 let win, codexAbort, psBusy = false;
 const productConfig=require('./services/product-config.cjs');
+const diagnostics=require('./services/diagnostic-cloud.cjs').createDiagnosticCloud({directory:path.join(app.getPath('userData'),'diagnostics','cloud'),version:app.getVersion(),enabled:productConfig.authorizationEnabled,ready:()=>!!authorization?.status().active,upload:reports=>authorization.uploadDiagnostics(reports),environment:()=>({platform:process.platform,arch:process.arch,os:require('node:os').release()}),onChange:status=>{if(win&&!win.isDestroyed())win.webContents.send('diagnostic-status',status);}});
+const captureDiagnostic=input=>diagnostics.record(input).catch(()=> '');
+const reportAgentState=require('./services/diagnostic-cloud.cjs').createAgentDiagnostics(captureDiagnostic);
+process.on('uncaughtExceptionMonitor',error=>{try{const folder=path.join(app.getPath('userData'),'diagnostics');require('node:fs').mkdirSync(folder,{recursive:true});const value=require('./services/diagnostic-schema.cjs').diagnostic({error,id:require('node:crypto').randomUUID(),at:Date.now(),version:app.getVersion(),kind:'process-crash',operation:'main'});require('node:fs').writeFileSync(path.join(folder,'pending-fatal.json'),JSON.stringify(value));}catch{}});
+app.on('before-quit',()=>{void diagnostics.close();});
 const {Authorization}=require('./services/authorization.cjs');
 const {Updates}=require('./services/updates.cjs');
 let authorization,updates,knowledgeCloud;
@@ -54,11 +59,12 @@ async function importFilePath(value, extensions, label) {
   if(!stat.isFile())throw new Error('请拖入'+label+'文件，不能使用文件夹。');
   return selected;
 }
-function safe(handler) { return async (_, ...args) => { try { return {ok: true, value: await handler(...args)}; } catch (e) { return {ok: false, error: String(e.message || e),...require('./services/operation-error.cjs').errorDetails(e)}; } }; }
+function safeOperation(operation,handler){return safe(handler,operation);}
+function safe(handler,operation='ipc') { return async (_, ...args) => { try { return {ok: true, value: await handler(...args)}; } catch (e) { const reportId=e.diagnosticId||await captureDiagnostic({operation,error:e,environment:e.nativeEnvironment});return {ok: false, error: String(e.message || e),reportId,...require('./services/operation-error.cjs').errorDetails(e)}; } }; }
 async function readPsd(filePath,{preview=true}={}) {
   if(illustrator.isIllustrator(filePath)){
     if(psBusy||batchBusy)throw Error('原生文件任务正在运行，请稍后导入 AI');
-    psBusy=true;try{const fingerprint=await hashFile(filePath),result=await illustrator.readIllustrator(path.join(app.getPath('userData'),'previews','ai-'+Date.now()),filePath,{preview});if(await hashFile(filePath)!==fingerprint)throw Error('AI 原稿在读取期间发生变化，请重新导入');imported.set(filePath,fingerprint);importedMetadata.set(filePath,{fingerprint,metadata:structuredClone(result.metadata)});return {path:filePath,name:path.basename(filePath),fingerprint,format:'AI',...result};}finally{psBusy=false;}
+    psBusy=true;let sourceFingerprint;try{const fingerprint=sourceFingerprint=await hashFile(filePath),result=await illustrator.readIllustrator(path.join(app.getPath('userData'),'previews','ai-'+Date.now()),filePath,{preview});if(await hashFile(filePath)!==fingerprint)throw Error('AI 原稿在读取期间发生变化，请重新导入');for(const item of result.metadata.layers.filter(l=>l.metadataReadFailure)){void captureDiagnostic({kind:'native-object',operation:'import_source',message:item.metadataReadFailure.error,code:String(item.metadataReadFailure.number||''),phase:item.metadataReadFailure.stage,environment:result.metadata.nativeHost,source:{format:'AI',fingerprint}});}imported.set(filePath,fingerprint);importedMetadata.set(filePath,{fingerprint,metadata:structuredClone(result.metadata)});return {path:filePath,name:path.basename(filePath),fingerprint,format:'AI',...result};}catch(error){error.diagnosticId=await captureDiagnostic({kind:'native-import',operation:'import_source',error,environment:error.nativeEnvironment,source:{format:'AI',fingerprint:sourceFingerprint,bytes:await fs.stat(filePath).then(s=>s.size,()=>undefined)}});throw error;}finally{psBusy=false;}
   }
   const result=await require('./photoshop-import.cjs').readPhotoshopInput(filePath,{inspect:inspectFile,read:fs.readFile,checksum:hashFile,reserve:()=>{if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请等待当前任务完成后读取大文件。');psBusy=true;return ()=>{psBusy=false;};},native:async()=>{
     const directory=path.join(app.getPath('userData'),'previews','import-'+Date.now()),metadata=await readPhotoshopMetadata(directory,filePath,{helperPath}),image=preview?await createBackground(directory,filePath,[],{helperPath,scalePreview:true}):undefined;return {metadata,preview:image};
@@ -102,6 +108,7 @@ app.whenReady().then(async () => {
   codexSettings=new CodexSettings({dataDir:app.getPath('userData'),helperPath});
   const options={config:productConfig,version:app.getVersion(),dataDir:app.getPath('userData'),fetch:(...args)=>net.fetch(...args),onChange:changed};
   authorization=new Authorization({...options,helperPath});updates=new Updates(options);
+  diagnostics.start();void (async()=>{const file=path.join(app.getPath('userData'),'diagnostics','pending-fatal.json');try{const value=JSON.parse(await fs.readFile(file,'utf8'));await diagnostics.record(value);await fs.unlink(file);}catch{}})();
   knowledgeCloud=require('./services/knowledge-sync.cjs').createKnowledgeSync({directory:path.join(app.getPath('userData'),'localization-knowledge','library'),authorization,config:productConfig,enabled:productConfig.learningCloudEnabled===true&&productConfig.authorizationEnabled});knowledgeCloud.start();
   learningCloud=require('./services/learning-case-cloud.cjs').createCaseCloud({directory:learningDirectory(),enabled:productConfig.learningCloudEnabled===true&&productConfig.authorizationEnabled,ready:()=>!!authorization.lease&&authorization.status().active,upload:record=>authorization.uploadCase(record),encode:async bytes=>{let image=require('electron').nativeImage.createFromBuffer(bytes);if(image.isEmpty())throw Error('案例截图无法解码');const size=image.getSize();if(size.width>640||size.height>480)image=image.resize({width:Math.max(1,Math.round(size.width*Math.min(640/size.width,480/size.height))),quality:'best'});const result=image.toJPEG(70);if(result.length>100000)throw Error('案例截图压缩后仍过大，已保留本机待处理');return 'data:image/jpeg;base64,'+result.toString('base64');},summary:createLearningCloud({directory:learningDirectory(),enabled:productConfig.learningCloudEnabled===true&&productConfig.authorizationEnabled,ready:()=>!!authorization.lease&&authorization.status().active,upload:samples=>authorization.uploadLearning(samples)})});learningCloud.start();
   win = new BrowserWindow({width: 1510, height: 980, minWidth: 1150, minHeight: 760, show:false, title: '灵搭 Sparkit '+app.getVersion()+' · 文案与排版工作台', icon:path.join(__dirname,'renderer/assets/sparkit.ico'), backgroundColor: '#191a1e', titleBarStyle:'hidden', titleBarOverlay:{color:'#191a1e',symbolColor:'#eceae6',height:38}, autoHideMenuBar: true,
@@ -109,6 +116,7 @@ app.whenReady().then(async () => {
   watchWindowStartup(win,{onTimeout:()=>console.warn('主窗口首帧事件未触发，已启用启动显示保障')});
   windowsBrand.install({app,icon:path.join(__dirname,'renderer/assets/sparkit.ico'),isUpdating:()=>updates.phase==='restarting'});
   win.setMenu(null);
+  win.webContents.on('render-process-gone',(_,details)=>{void captureDiagnostic({kind:'renderer-crash',operation:'renderer',message:details.reason,code:String(details.exitCode)});});
   await updates.init();
   win.on('focus',()=>updates.check(false).catch(()=>{}));
   await win.loadFile(path.join(__dirname, 'renderer/index.html'));
@@ -121,10 +129,10 @@ app.on('window-all-closed', async () => { codexAbort?.abort();authorization?.clo
 let bulkEngine;
 function bulk(){return bulkEngine||(bulkEngine=new (require('./photoshop-bulk.cjs').PhotoshopBulk)(path.join(app.getPath('userData'),'bulk-previews'),{helperPath}));}
 async function bulkTask(action){if(psBusy||batchBusy)throw Error('原生文件任务正在运行，请稍后再试');psBusy=true;try{return await action();}finally{psBusy=false;win?.focus();}}
-ipcMain.handle('bulk-scan',safe(request=>bulkTask(async()=>{if(imported.get(request.path)!==request.fingerprint)throw Error('请先导入原稿');return bulk().scan(request.path,request.fingerprint);})));
-ipcMain.handle('bulk-preview',safe(request=>bulkTask(()=>bulk().preview(request.scanId,request.edits))));
-ipcMain.handle('bulk-cancel',safe(()=>bulk().cancel()));
-ipcMain.handle('bulk-export',safe(request=>bulkTask(async()=>{
+ipcMain.handle('bulk-scan',safeOperation('bulk-scan',request=>bulkTask(async()=>{if(imported.get(request.path)!==request.fingerprint)throw Error('请先导入原稿');return bulk().scan(request.path,request.fingerprint);})));
+ipcMain.handle('bulk-preview',safeOperation('bulk-preview',request=>bulkTask(()=>bulk().preview(request.scanId,request.edits))));
+ipcMain.handle('bulk-cancel',safeOperation('bulk-cancel',()=>bulk().cancel()));
+ipcMain.handle('bulk-export',safeOperation('bulk-export',request=>bulkTask(async()=>{
  protectedAction('psd-export');const {scan}=await bulk().validate(request.scanId,request.edits);
  const r=await dialog.showSaveDialog(win,{title:'导出可编辑修改副本（原稿和已有文件不覆盖）',defaultPath:path.basename(scan.input,path.extname(scan.input))+'-批量替换'+path.extname(scan.input),filters:[{name:'Photoshop',extensions:[path.extname(scan.input).slice(1)]}]});
  if(r.canceled)return null;return bulk().export(request.scanId,request.edits,r.filePath);
@@ -132,16 +140,16 @@ ipcMain.handle('bulk-export',safe(request=>bulkTask(async()=>{
 let skuEngine;const skuOutputFolders=new Set();
 function sku(){return skuEngine||(skuEngine=new (require('./sku-workflow.cjs').SkuWorkflow)(path.join(app.getPath('userData'),'sku-practice'),{helperPath,onProgress:p=>win?.webContents.send('sku-progress',p),visualProvider:async(manifest,rule,deps)=>{protectedAction('codex-match');if(codexAbort)throw Error('AI 正在处理，请等待或取消');const controller=new AbortController();codexAbort=controller;const abort=()=>controller.abort();deps.signal?.addEventListener('abort',abort,{once:true});try{const credentials=await codexSettings.credentials(),env=credentials.mode==='local'?await withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)):undefined;return await require('./sku-visual.cjs').recognizeTiles(manifest,rule,credentials,{...deps,signal:controller.signal,env,fetch:(...args)=>net.fetch(...args)});}finally{deps.signal?.removeEventListener('abort',abort);if(codexAbort===controller)codexAbort=null;}}}));}
 const productMappings=require('./services/sku-product-mappings.cjs').createProductMappings(()=>path.join(app.getPath('userData'),'sku-product-mappings'));
-ipcMain.handle('sku-product-workbook',safe(async()=>{const r=await dialog.showOpenDialog(win,{title:'选择产品文案表',properties:['openFile'],filters:[{name:'Excel',extensions:['xlsx']}]});return r.canceled?null:r.filePaths[0];}));
-ipcMain.handle('sku-product-analyze',safe(async input=>productMappings.analyze({...input,source:await importFilePath(input.source,['.psd','.psb'],'Photoshop 原稿'),workbook:await importFilePath(input.workbook,['.xlsx'],'产品文案表')})));
-ipcMain.handle('sku-product-approve',safe(input=>productMappings.approve(input)));
-ipcMain.handle('sku-product-read',safe(input=>productMappings.read(input.id)));
-ipcMain.handle('sku-product-list',safe(()=>productMappings.list()));
-ipcMain.handle('sku-choose-source',safe(async()=>{const r=await dialog.showOpenDialog(win,{title:'添加多图改字原稿（可多选）',properties:['openFile','multiSelections'],filters:[{name:'Photoshop',extensions:['psd','psb']}]});return r.canceled?null:r.filePaths;}));
-ipcMain.handle('sku-choose-output',safe(async()=>{const r=await dialog.showOpenDialog(win,{title:'选择新建结果文件夹的位置',properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];}));
-ipcMain.handle('sku-analyze',safe(request=>bulkTask(async()=>{if(request.method==='visual'){protectedAction('codex-match');await codexSettings.credentials();}const input=await importFilePath(request.path,['.psd','.psb'],'Photoshop 原稿');return sku().analyze(input,request.rule,{method:request.method||'traditional',visualConsent:request.visualConsent});})));
-ipcMain.handle('sku-run',safe(request=>bulkTask(async()=>{protectedAction('psd-export');const result=await sku().run(request.planId,request.parent,request.variantSelections||[],request.review);skuOutputFolders.add(result.directory);return result;})));
-ipcMain.handle('sku-repair-fonts',safe(request=>bulkTask(async()=>{
+ipcMain.handle('sku-product-workbook',safeOperation('sku-product-workbook',async()=>{const r=await dialog.showOpenDialog(win,{title:'选择产品文案表',properties:['openFile'],filters:[{name:'Excel',extensions:['xlsx']}]});return r.canceled?null:r.filePaths[0];}));
+ipcMain.handle('sku-product-analyze',safeOperation('sku-product-analyze',async input=>productMappings.analyze({...input,source:await importFilePath(input.source,['.psd','.psb'],'Photoshop 原稿'),workbook:await importFilePath(input.workbook,['.xlsx'],'产品文案表')})));
+ipcMain.handle('sku-product-approve',safeOperation('sku-product-approve',input=>productMappings.approve(input)));
+ipcMain.handle('sku-product-read',safeOperation('sku-product-read',input=>productMappings.read(input.id)));
+ipcMain.handle('sku-product-list',safeOperation('sku-product-list',()=>productMappings.list()));
+ipcMain.handle('sku-choose-source',safeOperation('sku-choose-source',async()=>{const r=await dialog.showOpenDialog(win,{title:'添加多图改字原稿（可多选）',properties:['openFile','multiSelections'],filters:[{name:'Photoshop',extensions:['psd','psb']}]});return r.canceled?null:r.filePaths;}));
+ipcMain.handle('sku-choose-output',safeOperation('sku-choose-output',async()=>{const r=await dialog.showOpenDialog(win,{title:'选择新建结果文件夹的位置',properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];}));
+ipcMain.handle('sku-analyze',safeOperation('sku-analyze',request=>bulkTask(async()=>{if(request.method==='visual'){protectedAction('codex-match');await codexSettings.credentials();}const input=await importFilePath(request.path,['.psd','.psb'],'Photoshop 原稿');return sku().analyze(input,request.rule,{method:request.method||'traditional',visualConsent:request.visualConsent});})));
+ipcMain.handle('sku-run',safeOperation('sku-run',request=>bulkTask(async()=>{protectedAction('psd-export');const result=await sku().run(request.planId,request.parent,request.variantSelections||[],request.review);skuOutputFolders.add(result.directory);return result;})));
+ipcMain.handle('sku-repair-fonts',safeOperation('sku-repair-fonts',request=>bulkTask(async()=>{
  protectedAction('codex-match');if(codexAbort)throw Error('AI 正在处理，请等待或取消');
  if(!Array.isArray(request.planIds)||request.planIds.length>100)throw Error('分析计划无效');const names=new Set();for(const id of request.planIds){const p=sku().plans.get(id);if(!p)throw Error('请重新分析文件');for(const m of [...p.matches,...(p.related||[]),...(p.fontResources||[])])for(const problem of m.problems||[]){if(problem.startsWith('缺少字体 '))names.add(problem.slice(5));}}
  if(!names.size)throw Error('当前计划没有已识别的缺失字体');const controller=new AbortController();codexAbort=controller;try{const credentials=await require('./services/font-repair.cjs').fontCredentials(codexSettings),directory=path.join(app.getPath('userData'),'font-repair',require('node:crypto').randomUUID());const env=credentials.mode==='local'?await withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)):undefined;
@@ -149,40 +157,40 @@ ipcMain.handle('sku-repair-fonts',safe(request=>bulkTask(async()=>{
  const report=await require('./services/font-repair.cjs').repairFonts([...names],credentials,{directory,helperPath:bridge,signal:controller.signal,env,fetch:(...args)=>net.fetch(...args)});if(report.installed.length&&!controller.signal.aborted)report.verification=await sku().recheckFonts(request.planIds,report.installed);await fs.writeFile(path.join(directory,'font-repair-result.json'),JSON.stringify(report,null,2));return report;
  }finally{if(codexAbort===controller)codexAbort=null;}
 })));
-ipcMain.handle('sku-pause',safe(()=>sku().pause()));
-ipcMain.handle('sku-resume',safe(()=>sku().resume()));
-ipcMain.handle('sku-open-reserve',safe(async()=>{await fs.mkdir(sku().reserveRoot,{recursive:true});const error=await require('electron').shell.openPath(sku().reserveRoot);if(error)throw Error(error);return true;}));
-ipcMain.handle('sku-cancel',safe(()=>{codexAbort?.abort();return sku().cancel();}));
-ipcMain.handle('sku-open-output',safe(async request=>{if(!skuOutputFolders.has(request.path))throw Error('结果目录尚未生成');const error=await require('electron').shell.openPath(request.path);if(error)throw Error(error);return true;}));
-ipcMain.handle('status', safe(async () => serviceStatus()));
-ipcMain.handle('record-layout-sample',safe(async sample=>learningStore().stage(sample)));
-ipcMain.handle('layout-memory-status',safe(async()=>learningStore().status()));
-ipcMain.handle('layout-memory-examples',safe(async query=>learningStore().retrieve(query||{})));
-ipcMain.handle('open-layout-memory',safe(async()=>{await fs.mkdir(learningDirectory(),{recursive:true});const message=await require('electron').shell.openPath(learningDirectory());if(message)throw new Error(message);return true;}));
-ipcMain.handle('activate-license',safe(async value=>authorization.activate(value)));
-ipcMain.handle('bootstrap-license',safe(async()=>authorization.bootstrap()));
-ipcMain.handle('renew-license',safe(async()=>authorization.renew()));
-ipcMain.handle('check-update',safe(async()=>updates.check(true)));
-ipcMain.handle('defer-update',safe(async skip=>updates.defer(!!skip)));
-ipcMain.handle('install-update',safe(async()=>{if(psBusy||batchBusy||codexAbort||agentIntegration.active())throw new Error('请等待当前 Photoshop 或 Codex 任务完成后更新');if(!app.isPackaged)throw new Error('自动安装仅在便携发布包中可用');const updateHelper=await fs.access(path.join(__dirname,'update-helper.exe')).then(()=>path.join(__dirname,'update-helper.exe'),()=>helperPath);return updates.install({appPath:app.getAppPath(),exe:process.execPath,helperPath:updateHelper,quit:()=>app.quit(),onProgress:p=>win.webContents.send('update-progress',p)});}));
-ipcMain.handle('service-ready',safe(async()=>{await require('./services/update-ack.cjs').acknowledgeStartup({argv:process.argv,dataDir:app.getPath('userData')});return true;}));
-ipcMain.handle('preview-background',safe(async request=>{
+ipcMain.handle('sku-pause',safeOperation('sku-pause',()=>sku().pause()));
+ipcMain.handle('sku-resume',safeOperation('sku-resume',()=>sku().resume()));
+ipcMain.handle('sku-open-reserve',safeOperation('sku-open-reserve',async()=>{await fs.mkdir(sku().reserveRoot,{recursive:true});const error=await require('electron').shell.openPath(sku().reserveRoot);if(error)throw Error(error);return true;}));
+ipcMain.handle('sku-cancel',safeOperation('sku-cancel',()=>{codexAbort?.abort();return sku().cancel();}));
+ipcMain.handle('sku-open-output',safeOperation('sku-open-output',async request=>{if(!skuOutputFolders.has(request.path))throw Error('结果目录尚未生成');const error=await require('electron').shell.openPath(request.path);if(error)throw Error(error);return true;}));
+ipcMain.handle('status',safeOperation('status',async () => serviceStatus()));
+ipcMain.handle('record-layout-sample',safeOperation('record-layout-sample',async sample=>learningStore().stage(sample)));
+ipcMain.handle('layout-memory-status',safeOperation('layout-memory-status',async()=>learningStore().status()));
+ipcMain.handle('layout-memory-examples',safeOperation('layout-memory-examples',async query=>learningStore().retrieve(query||{})));
+ipcMain.handle('open-layout-memory',safeOperation('open-layout-memory',async()=>{await fs.mkdir(learningDirectory(),{recursive:true});const message=await require('electron').shell.openPath(learningDirectory());if(message)throw new Error(message);return true;}));
+ipcMain.handle('activate-license',safeOperation('activate-license',async value=>authorization.activate(value)));
+ipcMain.handle('bootstrap-license',safeOperation('bootstrap-license',async()=>authorization.bootstrap()));
+ipcMain.handle('renew-license',safeOperation('renew-license',async()=>authorization.renew()));
+ipcMain.handle('check-update',safeOperation('check-update',async()=>updates.check(true)));
+ipcMain.handle('defer-update',safeOperation('defer-update',async skip=>updates.defer(!!skip)));
+ipcMain.handle('install-update',safeOperation('install-update',async()=>{if(psBusy||batchBusy||codexAbort||agentIntegration.active())throw new Error('请等待当前 Photoshop 或 Codex 任务完成后更新');if(!app.isPackaged)throw new Error('自动安装仅在便携发布包中可用');const updateHelper=await fs.access(path.join(__dirname,'update-helper.exe')).then(()=>path.join(__dirname,'update-helper.exe'),()=>helperPath);return updates.install({appPath:app.getAppPath(),exe:process.execPath,helperPath:updateHelper,quit:()=>app.quit(),onProgress:p=>win.webContents.send('update-progress',p)});}));
+ipcMain.handle('service-ready',safeOperation('service-ready',async()=>{await require('./services/update-ack.cjs').acknowledgeStartup({argv:process.argv,dataDir:app.getPath('userData')});return true;}));
+ipcMain.handle('preview-background',safeOperation('preview-background',async request=>{
   if(psBusy||batchBusy)throw new Error('原生文件任务正在运行，请等待当前任务完成后重试预览。');
   if(!request||imported.get(request.path)!==request.fingerprint||!Array.isArray(request.ids)||request.ids.length>500||request.ids.some(id=>!Number.isInteger(id)))throw new Error('预览请求无效，请重新导入 PSD');
   psBusy=true;try{if(await hashFile(request.path)!==request.fingerprint)throw new Error('源 PSD 已变化，请重新导入');const sourceMetadata=await actualMetadata(request);require('./mixed-text.cjs').validateMixedEdits(request.mixedTextEdits,{layers:sourceMetadata.layers,format:illustrator.isIllustrator(request.path)?'AI':'PSD'});if((request.mixedTextEdits||[]).some(e=>request.ids.includes(e.layerId)))throw Error('混合字符不能同时普通预览覆盖');validateTextActions(request.textActions,{layers:sourceMetadata.layers,jobs:request.ids.map(layerId=>({layerId}))});validateArtworkHides(request.artworkHides,{objects:sourceMetadata.artworkObjects||[],textActions:request.textActions,jobs:request.ids.map(layerId=>({layerId})),format:illustrator.isIllustrator(request.path)?'AI':'PSD'});if(request.containerEdits?.length||request.extractedContainers?.length){const m=await actualMetadata(request);validateExtractedContainers(request.extractedContainers,{width:m.width,height:m.height,fingerprint:request.fingerprint,layers:m.layers});validateContainerEdits(request.containerEdits,{width:m.width,height:m.height,textIds:request.ids,containers:[...(m.containers||[]),...extractedMetadata(request.extractedContainers)]});}else{validateExtractedContainers(request.extractedContainers);validateContainerEdits(request.containerEdits,{textIds:request.ids});}return await (illustrator.isIllustrator(request.path)?illustrator.createBackground:createBackground)(path.join(app.getPath('userData'),'previews',Date.now().toString()),request.path,request.ids,{helperPath,fingerprint:request.fingerprint,mixedTextEdits:request.mixedTextEdits,textActions:request.textActions,artworkHides:request.artworkHides,containerEdits:request.containerEdits,extractedContainers:request.extractedContainers});}finally{psBusy=false;if(win&&!win.isDestroyed())win.focus();}
 }));
-ipcMain.handle('inspect-artwork',safe(async request=>{
+ipcMain.handle('inspect-artwork',safeOperation('inspect-artwork',async request=>{
  if(psBusy||batchBusy)throw Error('原生程序正忙，请等待');
  if(!request||!illustrator.isIllustrator(request.path)||imported.get(request.path)!==request.fingerprint)throw Error('请先导入并验证 AI');
  if(await hashFile(request.path)!==request.fingerprint)throw Error('AI 原稿已变化');
  const metadata=await actualMetadata(request),object=metadata.artworkObjects?.find(o=>o.objectId===request.objectId);if(!object)throw Error('对象不存在或不受支持');
  psBusy=true;try{return await illustrator.inspectArtwork(path.join(app.getPath('userData'),'previews','artwork-'+Date.now()),request.path,object,{fingerprint:request.fingerprint});}finally{psBusy=false;}
 }));
-ipcMain.handle('installed-fonts',safe(async(format)=>{
+ipcMain.handle('installed-fonts',safeOperation('installed-fonts',async(format)=>{
   if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请稍后读取字体');
   psBusy=true;try{return await (format==='AI'?illustrator.installedFonts:installedFonts)(path.join(app.getPath('userData'),'fonts',Date.now().toString()));}finally{psBusy=false;if(win&&!win.isDestroyed())win.focus();}
 }));
-ipcMain.handle('import-psd', safe(async (options = {}) => {
+ipcMain.handle('import-psd',safeOperation('import-psd',async (options = {}) => {
   let paths;
   if(options && Object.hasOwn(options,'paths')){
     if(!Array.isArray(options.paths)||!options.paths.length||options.paths.length>100)throw new Error('一次请拖入 1 至 100 个 PSD / PSB / AI 文件。');
@@ -194,7 +202,7 @@ ipcMain.handle('import-psd', safe(async (options = {}) => {
   const selected=[];for(const p of paths)selected.push(await importFilePath(p,['.psd','.psb','.ai'],'PSD / PSB / AI'));
   const list = []; for (const p of [...new Set(selected)]) list.push(await readPsd(p)); return list;
 }));
-ipcMain.handle('import-document', safe(async (options = {}) => {
+ipcMain.handle('import-document',safeOperation('import-document',async (options = {}) => {
   let selected;
   if(options && Object.hasOwn(options,'path'))selected=options.path;
   else{const r = await dialog.showOpenDialog(win, {title: '导入唯一目标文案来源', properties: ['openFile'], filters: [{name: '文案文档', extensions: options.workbookOnly?['xlsx']:['xlsx', 'docx', 'csv', 'tsv', 'txt']}]});
@@ -211,14 +219,14 @@ ipcMain.handle('import-document', safe(async (options = {}) => {
   if (!records.length) throw new Error('文档没有可用文案，请检查文档内容及拆分方式。');
   return {name, fingerprint: hash(buffer), records, rawText, format: ext.slice(1), splitMode};
 }));
-ipcMain.handle('resplit-document', safe(async request => {
+ipcMain.handle('resplit-document',safeOperation('resplit-document',async request => {
   if (!request || !['line', 'paragraph'].includes(request.splitMode)) throw new Error('无效的文案拆分方式');
   if (typeof request.rawText === 'string') {
     return recordsFromText(request.rawText, request.name, request.splitMode);
   }
   return resplitRecords(request.records, request.splitMode);
 }));
-ipcMain.handle('save-project', safe(async project => {
+ipcMain.handle('save-project',safeOperation('save-project',async project => {
   const r = await dialog.showSaveDialog(win, {defaultPath: '文案绑定.psdlingo.json', filters: [{name: 'PSD Lingo 项目', extensions: ['json']}]});
   if (r.canceled) return null;
   await fs.writeFile(r.filePath, JSON.stringify(project, null, 2), 'utf8'); return r.filePath;
@@ -236,7 +244,7 @@ async function hydrateSavedProject(data,{readCache=new Map(),onProgress=()=>{}}=
   }
   return {...data, files};
 }
-ipcMain.handle('load-project', safe(async (options = {}) => {
+ipcMain.handle('load-project',safeOperation('load-project',async (options = {}) => {
   let selected;
   if(options && Object.hasOwn(options,'path'))selected=options.path;
   else{const r=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'PSD Lingo 项目',extensions:['json']}]});if(r.canceled)return null;selected=r.filePaths[0];}
@@ -244,7 +252,7 @@ ipcMain.handle('load-project', safe(async (options = {}) => {
   const data = JSON.parse(await fs.readFile(projectPath, 'utf8'));
   return hydrateSavedProject(data);
 }));
-ipcMain.handle('export-plan', safe(async plan => {
+ipcMain.handle('export-plan',safeOperation('export-plan',async plan => {
   protectedAction('psd-export');
   await checkPlan(plan);
   if(plan.files.some(illustrator.isIllustrator))throw Error('AI 文件请使用“生成修改后的文件”直接输出可编辑 AI；Photoshop 脚本仅适用于 PSD / PSB');
@@ -306,7 +314,7 @@ async function finalizeLanguageBatchLearning(tasks,documents,{cancelled=false,un
   }
   return {...await learningStore().status(),confirmed,unmatched,started,operationComplete:started&&confirmed>0&&!widespreadError&&!incomplete,widespreadError,cancelled,incomplete,errorCount,totalCount,errorRatio};
 }
-ipcMain.handle('run-photoshop',safe(async plan=>{if(batchBusy)throw new Error('批量任务正在运行');const r=await dialog.showOpenDialog(win,{title:'选择修改后 PSD / PSB / AI 的保存文件夹',properties:['openDirectory','createDirectory']});if(r.canceled)return null;return runPhotoshop(plan,r.filePaths[0]);}));
+ipcMain.handle('run-photoshop',safeOperation('run-photoshop',async plan=>{if(batchBusy)throw new Error('批量任务正在运行');const r=await dialog.showOpenDialog(win,{title:'选择修改后 PSD / PSB / AI 的保存文件夹',properties:['openDirectory','createDirectory']});if(r.canceled)return null;return runPhotoshop(plan,r.filePaths[0]);}));
 async function readLanguageDocument(p,splitMode){
   const name=path.basename(p),ext=path.extname(p).toLowerCase(),buffer=await fs.readFile(p);
   let records;
@@ -317,7 +325,7 @@ async function readLanguageDocument(p,splitMode){
   if(!records.length||records.length>2000)throw new Error('文案为空或超过 2000 条');
   return {name,path:p,fingerprint:hash(buffer),records};
 }
-ipcMain.handle('save-batch-template',safe(async request=>{
+ipcMain.handle('save-batch-template',safeOperation('save-batch-template',async request=>{
   if(batchBusy)throw new Error('请等待批量任务完成');
   await checkPlan(request.plan);
   const template=createTemplate(request.plan,request);
@@ -325,7 +333,7 @@ ipcMain.handle('save-batch-template',safe(async request=>{
   if(r.canceled)return null;
   await fs.writeFile(r.filePath,JSON.stringify(template,null,2),'utf8');activeBatchTemplate=template;batchDocuments.clear();return {template,path:r.filePath};
 }));
-ipcMain.handle('load-batch-template',safe(async(options={})=>{
+ipcMain.handle('load-batch-template',safeOperation('load-batch-template',async(options={})=>{
   if(batchBusy)throw new Error('请等待批量任务完成');
   let selected;
   if(options && Object.hasOwn(options,'path'))selected=options.path;
@@ -336,7 +344,7 @@ ipcMain.handle('load-batch-template',safe(async(options={})=>{
   for(const file of template.plan.files){const actual=await readPsd(file.path,{preview:false});if(actual.fingerprint!==file.fingerprint)throw new Error('模板原 PSD 已变化，请重新导入原稿并制作模板：'+file.name);}
   await checkPlan(template.plan);activeBatchTemplate=template;batchDocuments.clear();return {template,path:templatePath};
 }));
-ipcMain.handle('choose-language-folder',safe(async()=>{
+ipcMain.handle('choose-language-folder',safeOperation('choose-language-folder',async()=>{
   if(batchBusy)throw new Error('请等待批量任务完成');if(!activeBatchTemplate)throw new Error('请先保存或打开排版模板');
   const r=await dialog.showOpenDialog(win,{title:'选择语言文档文件夹（读取顶层 DOCX / TXT / CSV / TSV）',properties:['openDirectory']});if(r.canceled)return null;
   const folder=r.filePaths[0],entries=(await fs.readdir(folder,{withFileTypes:true})).filter(e=>e.isFile()&&!e.name.startsWith('~$')&&/\.(docx|txt|csv|tsv)$/i.test(e.name)).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true}));
@@ -349,36 +357,36 @@ let referenceLanguageFlow;
 function languageReference(){return referenceLanguageFlow||(referenceLanguageFlow=new (require('./language-reference.cjs').LanguageReferenceWorkflow)(path.join(app.getPath('userData'),'language-reference'),{onProgress:p=>win?.webContents.send('language-reference-progress',p)}));}
 let recipeLanguageFlow;
 function languageRecipe(){return recipeLanguageFlow||(recipeLanguageFlow=new (require('./language-recipe.cjs').LanguageRecipeWorkflow)(path.join(app.getPath('userData'),'language-recipes'),{onProgress:p=>win?.webContents.send('language-reference-progress',p)}));}
-ipcMain.handle('list-language-recipes',safe(async()=>languageRecipe().list()));
-ipcMain.handle('load-language-recipe',safe(request=>bulkTask(async()=>{
+ipcMain.handle('list-language-recipes',safeOperation('list-language-recipes',async()=>languageRecipe().list()));
+ipcMain.handle('load-language-recipe',safeOperation('load-language-recipe',request=>bulkTask(async()=>{
  if(!request?.source||!imported.has(request.source))throw Error('请先导入 AI 原稿');
  let file;if(request.savedId)file=languageRecipe().savedPath(request.savedId);else{const choice=await dialog.showOpenDialog(win,{title:'选择本机已学习的多语言排版方案',properties:['openFile'],filters:[{name:'排版方案',extensions:['json']}]});if(choice.canceled)return null;file=choice.filePaths[0];}
  return languageRecipe().load(request.source,file);
 })));
-ipcMain.handle('run-language-recipe',safe(request=>bulkTask(async()=>{
+ipcMain.handle('run-language-recipe',safeOperation('run-language-recipe',request=>bulkTask(async()=>{
  protectedAction('psd-export');const choice=await dialog.showOpenDialog(win,{title:'选择新文件夹，保存关系排版AI副本和JPG',properties:['openDirectory','createDirectory']});if(choice.canceled)return null;
  return languageRecipe().run(request.planId,choice.filePaths[0],{exportJpg:request.exportJpg!==false});
 })));
-ipcMain.handle('analyze-language-reference',safe(request=>bulkTask(async()=>{
+ipcMain.handle('analyze-language-reference',safeOperation('analyze-language-reference',request=>bulkTask(async()=>{
  if(!request?.source||!imported.has(request.source))throw Error('请先导入 AI 原稿');
  const choice=await dialog.showOpenDialog(win,{title:'选择用户已确认的目标语言 AI 成稿（文字与排版依据）',properties:['openFile'],filters:[{name:'Illustrator',extensions:['ai']}]});if(choice.canceled)return null;
  return languageReference().analyze(request.source,choice.filePaths[0]);
 })));
-ipcMain.handle('run-language-reference',safe(request=>bulkTask(async()=>{
+ipcMain.handle('run-language-reference',safeOperation('run-language-reference',request=>bulkTask(async()=>{
  protectedAction('psd-export');const choice=await dialog.showOpenDialog(win,{title:'另存多语言工作副本到新文件夹',properties:['openDirectory','createDirectory']});if(choice.canceled)return null;
  const data=await languageReference().run(request.planId,request.mappings,choice.filePaths[0],{overrides:request.overrides||[],adjustments:request.adjustments||[]});if(request.exportJpg){const verification=await languageReference().verifyAndExport(data);data.jpgFiles=verification.files;data.reopenVerified=verification.reopenVerified;}return data;
 })));
-ipcMain.handle('add-workbook-language',safe(async request=>{
+ipcMain.handle('add-workbook-language',safeOperation('add-workbook-language',async request=>{
  if(batchBusy)throw Error('请等待批量任务完成');if(!activeBatchTemplate)throw Error('请先保存或打开排版模板');
  const p=await importFilePath(request?.path,['.xlsx'],'翻译表'),doc=await importWorkbook(p,{fingerprint:request.fingerprint,selection:request.selection});
  if(doc.selectionRequired)throw Error('请先选择并预览表格范围');
  const id=require('node:crypto').randomUUID();doc.name=doc.name.replace(/\.xlsx$/i,'')+'-'+doc.sheet+'-'+doc.selection.segments.map(s=>s.targetColumns+s.rowStart+'-'+s.rowEnd).join('_');batchDocuments.set(id,doc);return {...doc,id};
 }));
-ipcMain.handle('restore-work-batch',safe(async saved=>{
+ipcMain.handle('restore-work-batch',safeOperation('restore-work-batch',async saved=>{
  if(psBusy||batchBusy)throw Error('请先完成当前原生任务');const template=validateTemplate(saved.template);await checkPlan(template.plan);const restored=[],next=new Map();for(const d of saved.documents||[]){if(d.error){restored.push(d);continue;}const doc=/\.xlsx$/i.test(d.path)?await importWorkbook(d.path,{fingerprint:d.fingerprint,selection:d.selection}):await readLanguageDocument(d.path,template.splitMode);if(doc.fingerprint!==d.fingerprint)throw Error('语言文档已变化：'+d.name);const id=require('node:crypto').randomUUID();next.set(id,doc);restored.push({...d,...doc,id,selected:d.selected});}activeBatchTemplate=template;batchDocuments=next;return {template,documents:restored};
 }));
-ipcMain.handle('cancel-language-batch',safe(async()=>{batchCancelled=true;return {message:'将在当前语言完成后停止，其余文档不执行'};}));
-ipcMain.handle('prepare-batch-preview',safe(async request=>{
+ipcMain.handle('cancel-language-batch',safeOperation('cancel-language-batch',async()=>{batchCancelled=true;return {message:'将在当前语言完成后停止，其余文档不执行'};}));
+ipcMain.handle('prepare-batch-preview',safeOperation('prepare-batch-preview',async request=>{
   if(batchBusy)throw new Error('请等待批量任务完成');if(!activeBatchTemplate)throw new Error('请先打开排版模板');
   const doc=batchDocuments.get(request?.id);if(!doc)throw new Error('语言文档尚未加载，请重新选择文件夹');
   if(hash(await fs.readFile(doc.path))!==doc.fingerprint)throw new Error('语言文档已变化，请重新选择文件夹');
@@ -387,7 +395,7 @@ ipcMain.handle('prepare-batch-preview',safe(async request=>{
   for(const f of plan.files){const item=await readPsd(f.path);if(item.fingerprint!==f.fingerprint)throw new Error('模板原稿已变化，请重新制作模板');items.push(item);}
   return {items,plan};
 }));
-ipcMain.handle('run-language-batch',safe(async request=>{
+ipcMain.handle('run-language-batch',safeOperation('run-language-batch',async request=>{
   protectedAction('psd-export');if(batchBusy)throw new Error('批量任务正在运行');if(!activeBatchTemplate)throw new Error('模板尚未准备');
   if(!request||!Array.isArray(request.documents)||!request.documents.length||request.documents.length>100)throw new Error('请选择要处理的语言文档');
   batchBusy=true;batchCancelled=false;let done=0;
@@ -408,17 +416,17 @@ ipcMain.handle('run-language-batch',safe(async request=>{
   const report=path.join(outputDir,'PSD-Lingo-batch-'+Date.now()+'.json');await fs.writeFile(report,JSON.stringify(summary,null,2));return {...summary,report};
   }finally{batchBusy=false;win.webContents.send('batch-progress',{total:request.documents.length,done,running:false});}
 }));
-ipcMain.handle('load-codex-settings',safe(()=>codexSettings.get()));
-ipcMain.handle('save-codex-settings',safe(value=>codexSettings.save(value)));
-ipcMain.handle('clear-codex-settings',safe(()=>codexSettings.clear()));
-ipcMain.handle('list-api-models',safe(input=>listApiModels(input,{settings:codexSettings,fetch:(...args)=>net.fetch(...args)})));
-ipcMain.handle('discover-codex',safe(async()=>{let savedPath='';try{savedPath=(await codexSettings.get()).executable;}catch{}return discoverCodex({savedPath});}));
-ipcMain.handle('choose-codex', safe(async () => {
+ipcMain.handle('load-codex-settings',safeOperation('load-codex-settings',()=>codexSettings.get()));
+ipcMain.handle('save-codex-settings',safeOperation('save-codex-settings',value=>codexSettings.save(value)));
+ipcMain.handle('clear-codex-settings',safeOperation('clear-codex-settings',()=>codexSettings.clear()));
+ipcMain.handle('list-api-models',safeOperation('list-api-models',input=>listApiModels(input,{settings:codexSettings,fetch:(...args)=>net.fetch(...args)})));
+ipcMain.handle('discover-codex',safeOperation('discover-codex',async()=>{let savedPath='';try{savedPath=(await codexSettings.get()).executable;}catch{}return discoverCodex({savedPath});}));
+ipcMain.handle('choose-codex',safeOperation('choose-codex',async () => {
   const r = await dialog.showOpenDialog(win, {title: '选择官方 Codex CLI 可执行文件', properties: ['openFile'], filters: [{name: 'Codex CLI', extensions: ['exe']}]});
   return r.canceled ? null : r.filePaths[0];
 }));
-ipcMain.handle('cancel-codex', safe(async () => { codexAbort?.abort(); return true; }));
-ipcMain.handle('codex-layout', safe(async request => {
+ipcMain.handle('cancel-codex',safeOperation('cancel-codex',async () => { codexAbort?.abort(); return true; }));
+ipcMain.handle('codex-layout',safeOperation('codex-layout',async request => {
   protectedAction('codex-match');
   if(codexAbort)throw new Error('AI 正在处理，请等待或取消。');
   const controller=new AbortController();codexAbort=controller;
@@ -440,7 +448,7 @@ ipcMain.handle('codex-layout', safe(async request => {
     return result;
   }finally{clearTimeout(timeout);if(codexAbort===controller)codexAbort=null;}
 }));
-ipcMain.handle('codex-suggest', safe(async request => {
+ipcMain.handle('codex-suggest',safeOperation('codex-suggest',async request => {
   protectedAction('codex-match');
   if(codexAbort)throw new Error('AI 正在处理，请等待或取消。');
   const controller=new AbortController();codexAbort=controller;
@@ -466,4 +474,9 @@ async function runArtboards({source,plan,directory,prepared,onProgress,previewBo
  if(imported.get(source.path)!==source.fingerprint||!templateInput&&!templateInputs&&!plan?.productTemplate&&await hashFile(source.path)!==source.fingerprint)throw Error('画板模板未导入或已经变化，请重新导入');
  psBusy=true;try{let metadata=await actualMetadata(source);if(!metadata.artboards||metadata.layers.some(l=>!l.nativePath)){metadata=await readPhotoshopMetadata(path.join(app.getPath('userData'),'artboard-metadata',require('node:crypto').randomUUID()),source.path,{helperPath});if(await hashFile(source.path)!==source.fingerprint)throw Error('读取画板期间源文件已变化');importedMetadata.set(source.path,{fingerprint:source.fingerprint,metadata});}if(metadataOnly){if(nativeText)return nativeTextEngine.inspect({source,metadata,boardIds});if(productMapping){const mapping=await productMappings.read(productMapping);if(!mapping.approved||path.resolve(mapping.source.path).toLowerCase()!==path.resolve(source.path).toLowerCase())throw Error('产品对应确认与原稿不一致');if(templateInput||templateInputs){if(templateAction==='configure_product_template')return productTemplateEngine.configure({source,mapping,metadata,template:templateInput,templates:templateInputs,args:templateArgs});if(!templateInput)throw Error('inspect_product_template每次检查一个模板，请分别检查后统一配置');const scan=await productTemplateEngine.inspect({source,mapping,metadata,template:templateInput});const report=require('./services/sku-product-template-engine.cjs').templateReport(scan,templateArgs);if((templateArgs?.offset||0)===0){const image=await fs.readFile(scan.templateImage);if(require('node:crypto').createHash('sha256').update(image).digest('hex')!==scan.templateImageHash)throw Error('模板参考图已变化，请重新检查');report.images=['data:image/jpeg;base64,'+image.toString('base64')];report.imageContext='外部模板原始参考图，仅用于确认新文案块和视觉关系，不是原稿或修改后成果';}return report;}return productCopyEngine.inspect({source,mapping,metadata,regions});}return metadata;}if(!plan.productCopyScanId&&!plan.nativeTextScanId)require('./photoshop-artboard-plan.cjs').validateArtboardPlan(plan,metadata);if(plan.productTemplate&&prepared)await productTemplateEngine.validate({source,plan});if(prepared){if(await hashFile(prepared.output)!==prepared.fingerprint)throw Error('画板工作副本已变化，请更新计划后重新生成');for(const a of prepared.artifactFingerprints||[])if(await hashFile(a.path)!==a.hash)throw Error('画板核验图已变化，不能复用');return {...prepared,reused:true};}if(plan.nativeTextScanId)return await nativeTextEngine.run({source,plan,directory,onProgress});if(plan.productTemplate)return await productTemplateEngine.run({source,plan,directory,onProgress,previewBoardIds,reusableBoards});if(plan.productCopyScanId)return await productCopyEngine.run({source,plan,directory,onProgress});return await require('./photoshop-artboards.cjs').composeArtboards({source,plan,metadata,directory,helperPath,onProgress});}finally{psBusy=false;}
 }
-const agentIntegration=require('./services/agent-integration.cjs').installAgent({workRecords,ipcMain,dialog,window:()=>win,dataDirectory:()=>app.getPath('userData'),settings:()=>codexSettings,fetch:(...args)=>net.fetch(...args),localEnv:()=>withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)),guard:()=>protectedAction('codex-match'),isBusy:()=>psBusy||batchBusy||!!codexAbort,importWorkbook,runPhotoshop,runArtboards,productMappings,safe,cancelAi:()=>codexAbort?.abort()});
+const agentIntegration=require('./services/agent-integration.cjs').installAgent({workRecords,ipcMain,dialog,window:()=>win,dataDirectory:()=>app.getPath('userData'),settings:()=>codexSettings,fetch:(...args)=>net.fetch(...args),localEnv:()=>withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url)),guard:()=>protectedAction('codex-match'),isBusy:()=>psBusy||batchBusy||!!codexAbort,importWorkbook,runPhotoshop,runArtboards,productMappings,safe,cancelAi:()=>codexAbort?.abort(),reportState:reportAgentState});
+
+ipcMain.handle('diagnostic-status',safeOperation('diagnostic-status',()=>diagnostics.status(),'diagnostic-status'));
+ipcMain.handle('diagnostic-flush',safeOperation('diagnostic-flush',()=>diagnostics.flush(),'diagnostic-flush'));
+ipcMain.handle('diagnostic-copy',safeOperation('diagnostic-copy',async()=>{const status=await diagnostics.status();require('electron').clipboard.writeText(status.lastId||'暂无错误记录');return status.lastId;},'diagnostic-copy'));
+ipcMain.handle('diagnostic-renderer',safeOperation('diagnostic-renderer',value=>captureDiagnostic({kind:'renderer',operation:typeof value?.operation==='string'?value.operation:'renderer',message:value?.message,stack:value?.stack,code:value?.code}),'diagnostic-renderer'));

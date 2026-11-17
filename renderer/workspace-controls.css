@@ -103,3 +103,7 @@ summary:hover{color:#ffdabd}
 .spark-reduce-motion :is(.file-card,.layer-card){transition:none}
 
 .diagnostics-panel{margin-block:16px;padding-block:12px;border-top:1px solid #ffffff18}.diagnostics-panel summary{font-weight:600}.diagnostics-panel dl{display:grid;gap:8px;margin-block:12px}.diagnostics-panel dt{color:#e9c7ad}.diagnostics-panel dd{margin:0;overflow-wrap:anywhere;user-select:text}.diagnostics-status{line-height:1.7}
+
+#diagnosticsDialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;box-sizing:border-box}#diagnosticsDialog .diagnostics-panel{border-top:0;margin:0;padding-block:8px 0}#diagnosticsDialog .editor-buttons{display:flex;flex-wrap:wrap;gap:10px;margin-block:18px}#diagnosticsDialog .dialog-top h2{margin:0}
+
+@media(max-height:820px){.spark-sidebar nav{gap:3px}.spark-sidebar nav button,.spark-sidebar nav .spark-language-heading,.spark-sidebar nav .spark-language-nav button:not(.spark-language-heading){min-height:32px;padding-block:6px}.spark-language-nav{gap:2px}}

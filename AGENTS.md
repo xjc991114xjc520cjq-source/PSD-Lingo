@@ -67,3 +67,5 @@
 - 2026-11-17：另一台电脑AI导入UKFG line96定位为文字读取，新增逐对象隔离/错误阶段、稳定原生文字快照及清理失败保护。942项Node和客户副本99文字/完整预览、原生UKFG故障注入后其他98文字一致通过，原稿哈希未变。未自然复现对端错误，不声称Adobe根因或客户成稿通过。依持续发布授权准备0.3.94；详见practice-records/2026-11-17-ai-text-import-isolation/实施与验收.md及work/releases/0.3.94/public-verified.json。
 
 - 2026-11-18：SKU助手需求日期缺少文档入口已补prepare_text_replacements，主进程校验本次用户来源，单行/多行沿原文换行与混合样式生成批准文案，不清空旧文档和绑定。951项回归、本机协议Electron及真实本机Codex两种版式原生计划配置通过；本机模型测试预算到达后停止，未调用Adobe/未导出客户稿。依持续授权准备0.3.97，详见practice-records/2026-11-18-request-copy-replacements/实施与验收.md，公开以work/releases/0.3.97/public-verified.json为准。
+
+- 2026-11-18：按用户顺序先正式发布0.3.97，再查询跨设备87a82f1b-3e3e-4d10-aa4e-4bc2ff7c99f2（0.3.96原生PS导入错误54）。新增逐层/逐字段文字读取隔离、完整原生描述回退与受限对象可见保留、明确只读失败收据及去重诊断；955项Node回归与生成JSX故障注入通过。未调用Adobe/客户原稿，不能声称对端自然复现或客户成稿验收。准备0.3.98，正式状态以work/releases/0.3.98/public-verified.json和公开latest签名为准；记录practice-records/2026-11-18-photoshop-text-read-isolation/实施与验收.md。

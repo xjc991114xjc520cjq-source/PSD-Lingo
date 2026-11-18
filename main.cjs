@@ -69,6 +69,7 @@ async function readPsd(filePath,{preview=true}={}) {
   const result=await require('./photoshop-import.cjs').readPhotoshopInput(filePath,{inspect:inspectFile,read:fs.readFile,checksum:hashFile,reserve:()=>{if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请等待当前任务完成后读取大文件。');psBusy=true;return ()=>{psBusy=false;};},native:async()=>{
     const directory=path.join(app.getPath('userData'),'previews','import-'+Date.now()),metadata=await readPhotoshopMetadata(directory,filePath,{helperPath}),image=preview?await createBackground(directory,filePath,[],{helperPath,scalePreview:true}):undefined;return {metadata,preview:image};
   }});
+  const readProblems=new Set();for(const item of result.metadata?.layers||[]){for(const problem of [item.metadataReadFailure,...(item.metadataReadWarnings||[])].filter(Boolean)){const key=JSON.stringify([problem.stage,problem.number,problem.error]);if(readProblems.has(key))continue;readProblems.add(key);void captureDiagnostic({kind:'native-object',operation:'import_source',message:problem.error,code:String(problem.number||''),phase:problem.stage,environment:result.metadata.nativeHost,source:{format:result.format||path.extname(filePath).slice(1).toUpperCase(),fingerprint:result.fingerprint}});}}
   imported.set(filePath,result.fingerprint);if(result.metadata)importedMetadata.set(filePath,{fingerprint:result.fingerprint,metadata:structuredClone(result.metadata)});else importedMetadata.delete(filePath);
   return {path:filePath,name:path.basename(filePath),...result};
 }

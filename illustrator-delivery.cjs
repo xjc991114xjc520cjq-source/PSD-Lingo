@@ -30,15 +30,14 @@ async function verifyDelivery(result,{nativeImage=require('electron').nativeImag
  result.delivery.nativeHash=await hashFile(result.output);result.delivery.verified=true;return result;
 }
 async function deliveryVisual(result,{boardName,crop},{nativeImage=require('electron').nativeImage}={}){
- if(!result.delivery?.verified||await hashFile(result.output)!==result.delivery.nativeHash)throw Error('原生交付文件已变化，不能复用最终审验');
- const b=result.delivery.boards.find(b=>b.name===boardName);if(!b||await hashFile(b.path)!==b.hash)throw Error('最终JPG缺失或已变化');
+ if(!result.delivery?.verified)throw Error('交付副本尚未核验');
+ const b=result.delivery.boards.find(b=>b.name===boardName);if(!b)throw Error('最终JPG缺失或已变化');const imageBytes=await fs.readFile(b.path);if(require('node:crypto').createHash('sha256').update(imageBytes).digest('hex')!==b.hash)throw Error('最终JPG缺失或已变化');
  crop=crop||b.crop;if(!Array.isArray(crop)||crop.length!==4||!crop.every(Number.isFinite)||crop[2]<=0||crop[3]<=0||crop[0]<b.crop[0]||crop[1]<b.crop[1]||crop[0]+crop[2]>b.crop[0]+b.crop[2]+.01||crop[1]+crop[3]>b.crop[1]+b.crop[3]+.01)throw Error('最终JPG审验范围越界');
- let image=nativeImage.createFromPath(b.path);if(image.isEmpty())throw Error('最终JPG解码失败');
+ let image=nativeImage.createFromBuffer(imageBytes);if(image.isEmpty())throw Error('最终JPG解码失败');
  const x=Math.max(0,Math.floor((crop[0]-b.crop[0])*b.width/b.crop[2])),y=Math.max(0,Math.floor((crop[1]-b.crop[1])*b.height/b.crop[3]));
  image=image.crop({x,y,width:Math.min(b.width-x,Math.max(1,Math.ceil(crop[2]*b.width/b.crop[2]))),height:Math.min(b.height-y,Math.max(1,Math.ceil(crop[3]*b.height/b.crop[3])))});
- const s=image.getSize(),scale=Math.min(1,1600/s.width,1800/s.height);if(scale<1)image=image.resize({width:Math.max(1,Math.round(s.width*scale)),height:Math.max(1,Math.round(s.height*scale)),quality:'best'});
- let bytes=image.toPNG();while(bytes.length>1000000&&image.getSize().width>160){image=image.resize({width:Math.max(1,Math.floor(image.getSize().width*.75)),quality:'best'});bytes=image.toPNG();}if(bytes.length>1000000)throw Error('最终图审验预览过大');
+ const encoded=require('./services/design-visual-image.cjs').encodeDesignImage(image,{delivered:true,jpegBytes:crop.every((n,i)=>n===b.crop[i])?imageBytes:undefined});
  const identity=result.delivery.nativeHash+'|'+b.hash;
- return {stage:'current',quality:'native-background',origin:'exported-jpeg',crop:[...crop],dataURL:'data:image/png;base64,'+bytes.toString('base64'),provenance:{backgroundKey:identity,expectedBackgroundKey:identity,renderRevision:b.hash,expectedRenderRevision:b.hash},deliveryEvidence:{nativePath:result.output,nativeHash:result.delivery.nativeHash,jpegPath:b.path,jpegHash:b.hash,board:b.name,reopened:true}};
+ return {stage:'current',quality:'native-background',origin:'exported-jpeg',crop:[...crop],...encoded,provenance:{backgroundKey:identity,expectedBackgroundKey:identity,renderRevision:b.hash,expectedRenderRevision:b.hash},deliveryEvidence:{nativePath:result.output,nativeHash:result.delivery.nativeHash,jpegPath:b.path,jpegHash:b.hash,board:b.name,reopened:true}};
 }
 module.exports={nativeDelivery,validateBoards,verifyDelivery,deliveryVisual};

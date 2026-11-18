@@ -1,3 +1,4 @@
+import {installAdvancedReview} from './advanced-review.js';
 import {installDiagnostics} from './diagnostics.js';
 import {restoreError} from '../services/operation-error.cjs';
 import {validateMixedEdits} from '../mixed-text.cjs';
@@ -380,6 +381,7 @@ const skuUi=installSkuWorkflow({$,file,call,toast,prepareAssistant:draft=>agentU
 import {installSparkit} from './sparkit.js';
 installSparkit({state,toast,importPaths:paths=>runFileImport(()=>importOriginal(paths))});
 const agentUi=installAgentUi({call,openSettings,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||state.batchPreviewId||aiLayout.isBusy?.()||!!document.querySelector('dialog[open]:not(#agentDialog)'),execute:createAgentWorkspace({state,call,resetWorkspace:()=>{layoutEditor.resetImportedPreview();layoutEditor.clearSelection();Object.assign(state,{files:[],records:[],docName:'',docFingerprint:'',sourceDocument:null,fileIndex:0,layerIndex:0,chosen:null,checked:false});history.refresh();render();},importOriginal:paths=>runFileImport(()=>importOriginal(paths)),render,history,fitText,buildRequest:buildDesignLayoutRequest,getVisual:options=>layoutEditor.readyDesignVisuals(options),makePlan,selectFile,selectedLayer})});
+installAdvancedReview({call,agentUi,isBusy:()=>importingFiles||pendingWorkspaceCalls.size||aiLayout.isBusy?.()});
 
 if(window.desktop)call('serviceReady').catch(e=>toast(e.message,true));
 

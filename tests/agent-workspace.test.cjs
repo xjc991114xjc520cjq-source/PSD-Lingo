@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),path=require('node:path'),esbuild=require('esbuild');
 const compiled=esbuild.buildSync({entryPoints:[path.resolve(__dirname,'../renderer/agent-workspace.js')],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
-const mod={exports:{}};vm.runInNewContext(compiled,{module:mod,exports:mod.exports,require,structuredClone,console});
+const mod={exports:{}};vm.runInNewContext(compiled,{module:mod,exports:mod.exports,require,structuredClone,console,TextEncoder,crypto:require('node:crypto').webcrypto});
 const {createAgentWorkspace}=mod.exports;
 
 test('layout reuse commits once and invalidates for changes to task, model/rules, content, references and force flag',async()=>{

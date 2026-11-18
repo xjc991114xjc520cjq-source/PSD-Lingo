@@ -92,6 +92,7 @@ export function installSparkit({state,toast,importPaths}){
  }
  function route(destination,source){
   setMotionTrigger(source||document.querySelector('.spark-sidebar [data-route="'+destination+'"]'));
+  if(destination==='advanced-review'){$('openAdvancedAudit')?.click();return;}
   if(destination==='settings'){$('settings').dispatchEvent(new Event('click'));return;}
   if(['sku','batch','bulk'].includes(destination)){
    if(destination==='bulk'&&!state.files.some(f=>!f.demo&&/\.(psd|psb)$/i.test(f.path))){bulkEmpty.showModal();paintNav('bulk');return;}

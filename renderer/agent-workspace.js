@@ -195,7 +195,7 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   if(tool==='export_files'){
    const indices=args.fileIndices===undefined?state.files.map((_,i)=>i):args.fileIndices;if(!Array.isArray(indices)||!indices.length||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||!state.files[i]))throw Error('导出fileIndices无效，请查看workspace');
    const selected=indices.map(i=>state.files[i]);
-   if(selected.some(f=>f.artboardPlan)){if(selected.length!==1)throw Error('画板合成文件请单独用fileIndices导出，普通文件另外导出');const context=await cacheContext();return {...await exportArtboards({file:selected[0],records:state.records,call:agentCall,fitText,buildRequest,getVisual,isCurrent,cache:context?auditsCache:null,cacheIdentity:context,forceReview:args.reviewAgain===true}),fileIndices:indices,exportScope:indices.length===state.files.length?'all':'subset'};}
+   if(selected.some(f=>f.artboardPlan)){if(selected.length!==1)throw Error('画板合成文件请单独用fileIndices导出，普通文件另外导出');const context=await cacheContext();return {...await exportArtboards({file:selected[0],records:state.records,call:agentCall,fitText,buildRequest,getVisual,isCurrent,cache:context?auditsCache:null,cacheIdentity:context,reviewProfile:args.reviewProfile,forceReview:args.reviewAgain===true}),fileIndices:indices,exportScope:indices.length===state.files.length?'all':'subset'};}
    const blocked=selected.flatMap(f=>f.layers.filter(l=>l.recordId&&l.issues?.length&&!l.skipExport).map(l=>({file:f.name,layer:l.name,issues:l.issues})));
    if(blocked.length)return {blocked,exported:false,message:'受限文字未导出；请让用户确认处理方式，不能自行跳过'};
    const before=JSON.stringify({files:state.files,records:state.records}),audits=[],context=await cacheContext();
@@ -208,10 +208,11 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
    for(const index of indices){
     const f=current(index);if(!f.layers.some(l=>l.recordId&&!l.skipExport)&&!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length)continue;
     const auditCall=(name,value)=>agentCall(name,{...value,assistantReferenceIds:pageReferences.get(f.fingerprint+'|'+value.activeBoard?.name)||[]});
+    const callBatch=pages=>agentCall('suggestLayout',{phase:'audit-batch',pages:pages.map(p=>({...p,assistantReferenceIds:pageReferences.get(f.fingerprint+'|'+p.activeBoard?.name)||[]}))});
     const item=plan.files.find(p=>pathKey(p.path)===pathKey(f.path)),native=item&&result.results?.[plan.files.indexOf(item)],requireDelivery=true;
     deliveryStages.push({file:f.name,nativeSave:native?.output?'saved':'failed',nativeReopen:native?.delivery?.reopened?'passed':'not-verified',jpeg:native?.delivery?.verified?'passed':'not-verified',finalAudit:'pending'});
-    const actualVisual=async options=>{const source=(await getVisual({...options,requireCurrent:false,sourceOnly:true})).filter(v=>v.stage==='source');const b=native.delivery.boards.find(b=>options.crop&&options.crop[0]>=b.crop[0]&&options.crop[1]>=b.crop[1]&&options.crop[0]+options.crop[2]<=b.crop[0]+b.crop[2]+.01&&options.crop[1]+options.crop[3]<=b.crop[1]+b.crop[3]+.01);if(!b)throw Error('未找到对应画板的最终JPG');return [...source,await call('agentDeliveryVisual',{output:native.output,boardName:b.name,crop:options.crop})];};
-    try{if(requireDelivery&&(!native?.delivery?.verified||native.error))throw Error(native?.error||'没有经过保存重开与完整性核验的JPG，不使用工作区预览冒充最终审验');audits.push({fileIndex:index,file:f.name,...await auditDesignFile({file:f,records:state.records,fitText,buildRequest,getVisual:requireDelivery?actualVisual:getVisual,requireDelivery,call:auditCall,cache:context?auditsCache:null,cacheIdentity:context+'|'+JSON.stringify([...pageReferences]),forceReview:args.reviewAgain===true,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',{...p,label:(requireDelivery?'最终JPG / ':'')+p.label}).catch(()=>{});}})});}
+    const actualVisual=async options=>{const source=options.currentOnly?[]:(await getVisual({...options,requireCurrent:false,sourceOnly:true})).filter(v=>v.stage==='source');const b=native.delivery.boards.find(b=>options.crop&&options.crop[0]>=b.crop[0]&&options.crop[1]>=b.crop[1]&&options.crop[0]+options.crop[2]<=b.crop[0]+b.crop[2]+.01&&options.crop[1]+options.crop[3]<=b.crop[1]+b.crop[3]+.01);if(!b)throw Error('未找到对应画板的最终JPG');return [...source,await call('agentDeliveryVisual',{output:native.output,boardName:b.name,crop:options.crop})];};
+    try{if(requireDelivery&&(!native?.delivery?.verified||native.error))throw Error(native?.error||'没有经过保存重开与完整性核验的JPG，不使用工作区预览冒充最终审验');audits.push({fileIndex:index,file:f.name,...await auditDesignFile({file:f,records:state.records,fitText,buildRequest,getVisual:requireDelivery?actualVisual:getVisual,requireDelivery,call:auditCall,callBatch,cache:context?auditsCache:null,cacheIdentity:context+'|'+JSON.stringify([...pageReferences]),forceReview:args.reviewAgain===true,isCancelled:()=>!isCurrent(),onProgress:p=>{void call('agentToolProgress',{...p,label:(requireDelivery?'最终JPG / ':'')+p.label}).catch(()=>{});}})});}
     catch(e){if(!isCurrent())throw e;audits.push({fileIndex:index,file:f.name,passed:false,failures:['审阅未完成：'+e.message]});}
     deliveryStages.at(-1).finalAudit=audits.at(-1).passed?'passed':'failed';
     diagnoses.set(f.fingerprint,{identity:JSON.stringify([context,f,state.records]),boards:audits.at(-1).boards||[]});if(diagnoses.size>16)diagnoses.delete(diagnoses.keys().next().value);
@@ -224,6 +225,3 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   throw Error('未接入的软件工作区操作：'+tool);
  };
 }
-
-
-

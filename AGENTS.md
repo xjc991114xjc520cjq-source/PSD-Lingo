@@ -69,3 +69,7 @@
 - 2026-11-18：SKU助手需求日期缺少文档入口已补prepare_text_replacements，主进程校验本次用户来源，单行/多行沿原文换行与混合样式生成批准文案，不清空旧文档和绑定。951项回归、本机协议Electron及真实本机Codex两种版式原生计划配置通过；本机模型测试预算到达后停止，未调用Adobe/未导出客户稿。依持续授权准备0.3.97，详见practice-records/2026-11-18-request-copy-replacements/实施与验收.md，公开以work/releases/0.3.97/public-verified.json为准。
 
 - 2026-11-18：按用户顺序先正式发布0.3.97，再查询跨设备87a82f1b-3e3e-4d10-aa4e-4bc2ff7c99f2（0.3.96原生PS导入错误54）。新增逐层/逐字段文字读取隔离、完整原生描述回退与受限对象可见保留、明确只读失败收据及去重诊断；955项Node回归与生成JSX故障注入通过。未调用Adobe/客户原稿，不能声称对端自然复现或客户成稿验收。准备0.3.98，正式状态以work/releases/0.3.98/public-verified.json和公开latest签名为准；记录practice-records/2026-11-18-photoshop-text-read-isolation/实施与验收.md。
+
+- 2026-11-18：用户指定默认“成品检查”、任务前可选“完整设计审验”、左侧独立“高级审验”。已接入本机Codex同会话只读审图、模式持久化/恢复、6页流式窗口、紧凑联合问题清单、成品图独立审验与缓存；不读源工程、不自动裁图复审，JPG原字节传输。966项首轮回归、助手22项Electron及54图9批单会话协议/报告、大图传输通过；追加大型图单续做门禁回归。无Adobe/外部模型调用，未证明对端实际加速分钟数或客户视觉通过。沿用持续发布授权准备0.3.99；公开以work/releases/0.3.99/public-verified.json为准。见practice-records/2026-11-18-review-modes/实施与验收.md。
+
+- 0.3.99最终门禁：967项Node、22项助手Electron、54图独立高级审验及正式包启动全部通过。实际公开发布须查看该版本public-verified.json；不以本条记录代替公开签名证明。

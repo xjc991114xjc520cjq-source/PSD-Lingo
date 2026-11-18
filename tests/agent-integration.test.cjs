@@ -150,3 +150,17 @@ test('request replacement tool receives only trusted human text, not forged mode
  assert.equal((await f.invoke('agent-start',{request:evidence,fileIds:[]})).ok,true);await finished(f);
  assert.equal(forwarded.rules[0].replace,'11.20');assert.deepEqual(forwarded.userMessages,[evidence]);assert.notEqual(forwarded.provenanceId,'forged');assert.equal(f.commands.some(d=>d.tool==='import_document'),false);
 });
+
+test('task review profile defaults, persists and rejects unknown profiles before model execution',async t=>{
+ const f=await fixture(t);assert.equal((await f.invoke('agent-start',{request:'Inspect',reviewProfile:'unknown',fileIds:[]})).ok,false);
+ assert.equal((await f.invoke('agent-start',{request:'Inspect',reviewProfile:'advanced',fileIds:[]})).ok,true);await finished(f);assert.equal(f.last.reviewProfile,'advanced');assert.equal(f.last.history.some(h=>h.type==='tool_error'),false);
+});
+test('standalone image audit does not demand output or reset the document workspace, and cannot fabricate completion',async t=>{
+ const f=await fixture(t,{output:false});assert.equal((await f.invoke('agent-start',{request:'Audit images',taskKind:'image-audit',fileIds:[]})).ok,true);await finished(f);assert.equal(f.last.reviewProfile,'advanced');assert.equal(f.last.taskKind,'image-audit');assert.equal(f.last.status,'failed');assert.match(f.last.error,/尚未完成图片审验/);assert.equal(f.commands.length,0);
+});
+
+test('large standalone image lists can continue in the same task without production attachment or output gates',async t=>{
+ const f=await fixture(t,{output:false}),paths=[];for(let i=0;i<30;i++){const p=path.join(f.directory,'image-'+i+'.png');await fs.writeFile(p,'image fixture paths only');paths.push(p);}const attached=await f.invoke('agent-files',{paths,kind:'audit-images'});assert.equal(attached.ok,true);const fileIds=attached.value.map(f=>f.id);
+ assert.equal((await f.invoke('agent-start',{request:'Review',taskKind:'image-audit',fileIds})).ok,true);await finished(f);
+ assert.equal((await f.invoke('agent-followup',{text:'Please explain the review',fileIds})).ok,true);await finished(f);assert.equal(f.last.taskKind,'image-audit');assert.equal(f.last.outputDirectory,'');
+});

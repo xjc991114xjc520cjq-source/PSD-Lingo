@@ -1,6 +1,8 @@
 // Completion is derived from the final software result, never from old errors
 // or a model-written paragraph. Keep the original history available in details.
 function completionFor(task){
+ if(task.taskKind==='image-audit'){const r=[...(task.history||[])].reverse().find(h=>h.type==='tool_result'&&h.tool==='audit_images'&&h.result?.auditCompleted)?.result;return {title:'审验已完成',tone:'success',summary:r?`已检查 ${r.total} 张图片 · ${r.needsChanges} 张有修改建议`:'图片审验已结束',verification:'仅检查成品图，未修改原文件',outputDirectory:'',hasOutputs:false};}
+
  const deliveries=require('./agent-delivery-scope.cjs').latestDeliveries(task.history),results=[...new Set(deliveries.map(d=>d.result))];
  const entries=[...new Map(deliveries.filter(d=>d.entry?.output).map(d=>[d.entry.output,d.entry])).values()];
  const outputs=entries.map(r=>r.output);

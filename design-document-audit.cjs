@@ -3,7 +3,7 @@ const {boardGroups}=require('./design-layout-planner.cjs');
 const {validateAudit}=require('./services/design-page-audit.cjs');
 // Geometry selects what to look at; only the rendered images decide acceptance.
 function detailCrops(request,audit,board){
- const failed=audit.checks.filter(c=>c.verdict!=='pass'),keys=new Set(failed.flatMap(c=>c.layerKeys));
+ const failed=audit.checks.filter(c=>c.verdict==='uncertain'),keys=new Set(failed.flatMap(c=>c.layerKeys));
  let boxes=request.layers.filter(l=>keys.has(l.layerKey)).map(l=>l.box);
  if(!boxes.length)boxes=request.layers.map(l=>l.box);
  const crop=b=>{const pad=Math.max(20,Math.min(b[2],b[3])*.6),x=Math.max(board[0],b[0]-pad),y=Math.max(board[1],b[1]-pad),right=Math.min(board[0]+board[2],b[0]+b[2]+pad),bottom=Math.min(board[1]+board[3],b[1]+b[3]+pad);return [x,y,right-x,bottom-y];};
@@ -23,12 +23,13 @@ function auditTargets(file,records){
  return {targets,hidden};
 }
 function deliveryBoardsFor(file,records){const {targets}=auditTargets(file,records);return boardGroups(file,targets).map(g=>({name:g.name,crop:g.crop}));}
-async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,callBatch,cache,cacheIdentity='',forceReview=false,requireDelivery=false,isCancelled=()=>false,onProgress=()=>{}}){
+async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call,callBatch,cache,cacheIdentity='',forceReview=false,reviewProfile='delivery',requireDelivery=false,isCancelled=()=>false,onProgress=()=>{}}){
  const {targets,hidden}=auditTargets(file,records);
  const groups=boardGroups(file,targets);if(!groups.length)return {passed:false,scope:'bound-artboards',boards:[],failures:['画板归属不明确，不能将总览视为整页验收']};
- const jobs=[],boards=[],failures=[];let reusedBoards=0;
- for(let i=0;i<groups.length;i++){
-  if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');const g=groups[i];onProgress({label:`整页审阅 ${i+1}/${groups.length}：${g.name}`,current:i,total:groups.length});
+ const boards=[],failures=[];let reusedBoards=0,completed=0;
+ const performance={pages:groups.length,imagePreparationMs:0,analysisMs:0,initialExchanges:0,detailExchanges:0,detailPages:0,cacheHits:0};
+ async function prepareJob(i){const started=Date.now();
+  if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');const g=groups[i];onProgress({label:`准备审验图片 ${i+1}/${groups.length} · 已审 ${completed}/${groups.length}`,current:completed,total:groups.length});
   const intersects=b=>b[0]<g.crop[0]+g.crop[2]&&b[0]+b[2]>g.crop[0]&&b[1]<g.crop[1]+g.crop[3]&&b[1]+b[3]>g.crop[1];
   const belongs=l=>l.boardNames?.length?l.boardNames.includes(g.name):intersects(l.box);
   const scopedFile={...file,layers:file.layers.filter(belongs),containers:(file.containers||[]).filter(c=>intersects(c.box))};
@@ -47,48 +48,69 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   request.giftVisualReferences=file.composedBoards?.find(b=>b.name===g.name)?.giftVisualReferences||[];
   request.referenceLimits='图片锚点只帮助找候选资料，不证明归属。不能把共享锚点或未使用条目直接判作本页漏文案，也不能以绑定数作完整性证明。';
   Object.assign(request,{designReviewSources:require('./services/design-plugins/manifest.json').skills.map(s=>({...s,required:['design-critique','graphic-judgment'].includes(s.id)})),phase:'audit',designReviewVersion:1,designSkillIdentity:require('./services/design-skill-manifest.json'),activeBoard:{name:g.name,box:g.crop},selectedLayerKeys:g.ids.map(String),scope:'full'});
-  const visuals=await getVisual({file,layer,scope:'full',crop:g.crop,requireCurrent:true});
+  const visuals=await getVisual({file,layer,scope:'full',crop:g.crop,requireCurrent:true,currentOnly:requireDelivery});
   if(!visuals?.some(v=>v.stage==='current'))throw Error('整页审阅缺少实际当前画面');
-  if(requireDelivery){const current=visuals.find(v=>v.stage==='current');if(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened)throw Error('最终审验必须使用保存重开后的实际JPG');if(!Array.isArray(current.crop)||current.crop.length!==4||current.crop.some((n,i)=>!Number.isFinite(n)||Math.abs(n-g.crop[i])>.01))throw Error('最终审验缺少对应画板的完整JPG，不能用局部裁图替代整页');request.finalDelivery=current.deliveryEvidence;}
-  request.visuals=visuals.filter(v=>['source','current'].includes(v.stage)).slice(0,2);
-  const cacheKey=cache&&JSON.stringify([cacheIdentity,file.fingerprint,request]);
+  if(requireDelivery){const current=visuals.find(v=>v.stage==='current');if(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened)throw Error('最终审验必须使用保存重开后的实际JPG');if(!Array.isArray(current.crop)||current.crop.length!==4||current.crop.some((n,i)=>!Number.isFinite(n)||Math.abs(n-g.crop[i])>.01))throw Error('最终审验缺少对应画板的完整JPG，不能用局部裁图替代整页');request.finalDelivery={jpegPath:current.deliveryEvidence.jpegPath||current.deliveryEvidence.imagePath,jpegHash:current.deliveryEvidence.jpegHash,board:g.name,reopened:true};request.compactAuditVersion=1;request.reviewProfile=require('./services/review-profile.cjs').normalize(reviewProfile);}
+  request.visuals=visuals.filter(v=>requireDelivery?v.stage==='current':['source','current'].includes(v.stage)).slice(0,2);
+  const cacheKey=cache&&await auditDigest(JSON.stringify([cacheIdentity,file.fingerprint,request]));
   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
-  jobs.push({g,layer,request,cacheKey});
+  performance.imagePreparationMs+=Date.now()-started;return {g,layer,request,cacheKey};
  }
- const initialResults=new Map();
- for(let i=0;i<jobs.length;i++){
-  const {g,layer,request,cacheKey}=jobs[i];
-  if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
-  onProgress({label: `整页审阅 ${i+1}/${jobs.length}：${g.name}`,current:i,total:jobs.length});
-  const pluginFailures=a=>(a.skillReviews||[]).filter(c=>['revise','uncertain'].includes(c.verdict)).map(c=>g.name+' / skill:'+c.id+'：'+c.evidence);
-  const saved=cacheKey&&!forceReview&&cache.get(cacheKey);if(saved){const audit=structuredClone(saved);boards.push(audit);failures.push(...pluginFailures(audit));for(const c of audit.checks)if(c.verdict!=='pass')failures.push(`${g.name} / ${c.id} / ${c.verdict}：${c.evidence}`);for(const c of audit.designChecks||[])if(c.verdict!=='accept')failures.push(`${g.name} / design:${c.id} / ${c.verdict}：${c.evidence}`);reusedBoards++;continue;}
-  if(callBatch&&!initialResults.has(i)){
-   const batch=[];for(let j=i;j<jobs.length&&batch.length<3;j++)if(!initialResults.has(j)&&!(jobs[j].cacheKey&&!forceReview&&cache.get(jobs[j].cacheKey)))batch.push(j);
-   const result=batch.length===1?{pages:[await call('suggestLayout',jobs[batch[0]].request)]}:await callBatch(batch.map(j=>jobs[j].request));
+ async function analyze(jobs,detail=false){
+  for(const batch of require('./services/design-audit-policy.cjs').windows(jobs)){
+   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
+   onProgress({label:('审验'+(detail?'细节':'整页'))+' · 已审 '+completed+'/'+groups.length+' · 本批 '+batch.length+' 张',current:completed,total:groups.length});
+   const started=Date.now();
+   const result=callBatch&&batch.length>1?await callBatch(batch.map(j=>j.request)):{pages:await Promise.all(batch.map(j=>call('suggestLayout',j.request)))};
+   performance.analysisMs+=Date.now()-started;performance[detail?'detailExchanges':'initialExchanges']+=callBatch&&batch.length>1?1:batch.length;
    if(!Array.isArray(result?.pages)||result.pages.length!==batch.length)throw Error('合并审验返回画板数量不一致');
-   batch.forEach((j,k)=>initialResults.set(j,result.pages[k]));
+   batch.forEach((job,k)=>{job.result=result.pages[k];job.audit=validateAudit(job.result.audit,{...job.request,repairGuidanceVersion:job.result.repairGuidanceVersion});});
   }
-  let result=initialResults.has(i)?initialResults.get(i):await call('suggestLayout',request),audit=validateAudit(result.audit,{...request,repairGuidanceVersion:result.repairGuidanceVersion});
-  const initialAudit=structuredClone(audit);
-  if([...audit.checks,...(audit.designChecks||[]),...(audit.skillReviews||[])].some(c=>c.verdict==='uncertain')){
-   const details=[];
+ }
+ // Prepare a bounded window, review it, then release its image payloads.
+ // This does not create parallel Codex sessions or omit any board.
+ const size=callBatch?require('./services/design-audit-policy.cjs').MAX_PAGES:1;
+ for(let offset=0;offset<groups.length;offset+=size){
+  const jobs=[];for(let i=offset;i<Math.min(groups.length,offset+size);i++)jobs.push(await prepareJob(i));
+  const pending=[];
+  for(const job of jobs){const saved=job.cacheKey&&!forceReview&&cache.get(job.cacheKey);if(saved){job.saved=structuredClone(saved);reusedBoards++;performance.cacheHits++;}else pending.push(job);}
+  await analyze(pending);
+  const details=[];
+  for(const job of pending){
+   const {request,audit,g,layer}=job;job.initialAudit=structuredClone(audit);
+   if(requireDelivery||!needsDetail(audit))continue;
+   const images=[];const started=Date.now();
    for(const crop of detailCrops(request,audit,g.crop)){
     if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
-    const images=await getVisual({file,layer,scope:'full',crop,requireCurrent:true}),current=images?.find(v=>v.stage==='current');
+    const visuals=await getVisual({file,layer,scope:'full',crop,requireCurrent:true,currentOnly:true}),current=visuals?.find(v=>v.stage==='current');
     if(!current||!Array.isArray(current.crop)||current.crop.some((n,i)=>Math.abs(n-crop[i])>.01))throw Error('细节审阅缺少对应区域的实际当前画面');
-    details.push(current);
+    if(requireDelivery&&(current.origin!=='exported-jpeg'||!current.deliveryEvidence?.reopened))throw Error('细节审阅必须使用同一交付JPG');images.push(current);
    }
-   request.visuals=[...request.visuals,...details];request.detailReview={previousChecks:initialAudit.checks,crops:details.map(v=>v.crop),instruction:'本轮包含同一当前画面的整页与局部细节。逐项重新判断；细节用于辨认小字、线条和留白，整页用于层级及视觉关系。可见真实缺陷仍fail，仍看不清则uncertain；不得仅因为有细节图就通过。没有可编辑背景线引用不等于文字必然无法避让，先考虑授权文字的整体位置、行数与同组关系。'};
-   request.detailReview.previousDesignChecks=initialAudit.designChecks;
-   request.detailReview.previousSkillReviews=initialAudit.skillReviews;request.detailReview.previousRepairPlan=initialAudit.repairPlan;
-   result=await call('suggestLayout',request);audit=validateAudit(result.audit,{...request,repairGuidanceVersion:result.repairGuidanceVersion});
+   performance.imagePreparationMs+=Date.now()-started;
+   request.visuals=[...request.visuals,...images];
+   request.detailReview={previousChecks:audit.checks,previousDesignChecks:audit.designChecks,previousSkillReviews:audit.skillReviews,previousRepairPlan:audit.repairPlan,crops:images.map(v=>v.crop),instruction:'本轮是同一交付图的完整画板与按不确定区域补充的局部。只为辨认当前不确定项补图，不重做已明确的问题；仍完整返回各项判定及联合修改清单，不能将已确认缺陷抹掉，也不能因有局部图就通过。缺资料或归属不明不能靠重复看图解决，应保留不确定和明确所需资料。'};
+   details.push(job);performance.detailPages++;
   }
-  if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');boards.push({board:g.name,crop:g.crop,reviewSources:result.designReviewSources,reviewTransport:result.reviewTransport,...audit,...(request.detailReview?{initialSkillReviews:initialAudit.skillReviews,initialRepairPlan:initialAudit.repairPlan,initialChecks:initialAudit.checks,initialDesignChecks:initialAudit.designChecks,detailCrops:request.detailReview.crops}:{})});
-  failures.push(...pluginFailures(audit));
-  for(const c of audit.checks)if(c.verdict!=='pass')failures.push(`${g.name} / ${c.id} / ${c.verdict}：${c.evidence}`);
-  for(const c of audit.designChecks||[])if(c.verdict!=='accept')failures.push(`${g.name} / design:${c.id} / ${c.verdict}：${c.evidence}`);
-  if(cacheKey){cache.set(cacheKey,structuredClone(boards.at(-1)));if(cache.size>16)cache.delete(cache.keys().next().value);}
+  await analyze(details,true);
+  for(const job of jobs){
+   if(isCancelled())throw Error('任务已变化，整页审阅结果已丢弃');
+   const {g,request,result,audit,initialAudit,cacheKey}=job;
+   const value=job.saved||{board:g.name,crop:g.crop,reviewSources:result.designReviewSources,reviewTransport:result.reviewTransport,...audit,...(request.detailReview?{initialSkillReviews:initialAudit.skillReviews,initialRepairPlan:initialAudit.repairPlan,initialChecks:initialAudit.checks,initialDesignChecks:initialAudit.designChecks,detailCrops:request.detailReview.crops}:{})};
+   boards.push(value);
+   failures.push(...(value.skillReviews||[]).filter(c=>['revise','uncertain'].includes(c.verdict)).map(c=>g.name+' / skill:'+c.id+'：'+c.evidence));
+   for(const c of value.checks)if(c.verdict!=='pass')failures.push(g.name+' / '+c.id+' / '+c.verdict+'：'+c.evidence);
+   for(const c of value.designChecks||[])if(c.verdict!=='accept')failures.push(g.name+' / design:'+c.id+' / '+c.verdict+'：'+c.evidence);
+   if(cacheKey&&!job.saved){cache.set(cacheKey,structuredClone(value));while(cache.size>Math.max(256,groups.length*2))cache.delete(cache.keys().next().value);}
+   completed++;onProgress({label:'已审 '+completed+'/'+groups.length+'：'+g.name,current:completed,total:groups.length});
+  }
  }
- return {passed:!failures.length,scope:'bound-artboards',boards,failures,reusedBoards};
+ return {passed:!failures.length,scope:'bound-artboards',boards,failures,reusedBoards,performance};
+}
+async function auditDigest(text){const bytes=new TextEncoder().encode(text);return Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');}
+function needsDetail(audit){
+ return [...audit.checks,...(audit.designChecks||[]),...(audit.skillReviews||[])].filter(c=>c.verdict==='uncertain').some(c=>{
+  const e=c.evidence||'';
+  return !(/缺少.*(资料|依据|表格|原稿|信息)|未提供.*(资料|文案|表格|原稿)|归属.*(不明|无法)|需要.*(用户确认|用户批准)/.test(e)&&!/看不清|辨认|模糊|分辨率|缩略|小字|像素|字形/.test(e));
+ });
 }
 module.exports={auditDesignFile,deliveryBoardsFor};

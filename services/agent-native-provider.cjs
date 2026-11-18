@@ -17,7 +17,7 @@ async function thinkNative(task,deps,{settings,env,directory,knowledgeDirectory,
  if(state&&(state.key!==key||state.app.closed)){closeNativeTask(task);state=null;}
  const latest=async()=>readKnowledge(knowledgeDirectory);
  const knowledge=await latest();await fs.mkdir(directory,{recursive:true});
- if(!state&&!task.history.length){const books=(task.files||[]).filter(f=>/\.xlsx$/i.test(f.path||''));await deps.runTool('read_batch',{queries:[{tool:'workspace',arguments:{}},...(books.length===1?[{tool:'read_document',arguments:{fileId:books[0].id}}]:[])]},'准备当前项目与已附加表格结构');deps.signal?.throwIfAborted();}
+ if(!state&&!task.history.length&&task.taskKind!=='image-audit'){const books=(task.files||[]).filter(f=>/\.xlsx$/i.test(f.path||''));await deps.runTool('read_batch',{queries:[{tool:'workspace',arguments:{}},...(books.length===1?[{tool:'read_document',arguments:{fileId:books[0].id}}]:[])]},'准备当前项目与已附加表格结构');deps.signal?.throwIfAborted();}
 
  if(!state){await validate(c.executable);state={key,cursor:0,usage:{inputTokens:0,cachedInputTokens:0,outputTokens:0},digest:null};
   state.app=createSession({executable:c.executable,env,onEvent:(method,params)=>{
@@ -42,7 +42,7 @@ async function thinkNative(task,deps,{settings,env,directory,knowledgeDirectory,
      if(state.exchange)throw Error('请先submit_analysis完成当前软件操作');
      if(!Array.isArray(args?.operations)||!args.operations.length||args.operations.length>6)throw Error('连续操作必须为1至6项');
      const parsed=args.operations.map(o=>require('./agent-task.cjs').parseStep({kind:'tool',tool:o.tool,arguments:o.arguments,message:o.message,questions:[]}));
-     const analysis=parsed.some(o=>['design_layout','auto_bind','export_files'].includes(o.tool));if(analysis&&parsed.length!==1)throw Error('包含视觉分析或导出的操作须单独调用');
+     const analysis=parsed.some(o=>['design_layout','auto_bind','export_files','audit_images'].includes(o.tool));if(analysis&&parsed.length!==1)throw Error('包含视觉分析或导出的操作须单独调用');
      if(analysis){const o=parsed[0];state.exchange=new AnalysisExchange(()=>deps.runTool(o.tool,o.args,o.message));task.analysisExchange=state.exchange;value=await state.exchange.next();if(state.exchange.finished){state.exchange=null;task.analysisExchange=null;}}
      else{const items=[];for(const o of parsed){if(state.signal.aborted||task.paused||task.stopping)break;const result=await deps.runTool(o.tool,o.args,o.message);items.push({tool:o.tool,result});if(result?.uncertain||require('./agent-operation-result.cjs').operationFailure(result,0,o.tool))break;}value={items,executed:items.length,remaining:parsed.length-items.length};}
     }else throw Error('未开放的软件工具');

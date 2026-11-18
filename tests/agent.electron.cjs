@@ -1,6 +1,6 @@
 // Real renderer + preload + IPC + task controller, deterministic provider. No Adobe documents opened.
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-project-ui';let win,integration,workRecords;
+const root=path.resolve(__dirname,'..'),out=path.join(root,'work/agent-project-ui-review');let win,integration,workRecords;
 app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let exit=0;try{
  await fs.mkdir(out,{recursive:true});await fs.rm(out+'/agent-project.json',{force:true});await fs.rm(out+'/verified.json',{force:true});const evidence=[],errors=[],requests=[];let round=0,updateChecks=0;

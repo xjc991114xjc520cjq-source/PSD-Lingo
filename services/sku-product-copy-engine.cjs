@@ -4,7 +4,7 @@ const {hashFile}=require('../photoshop-file-io.cjs');
 const {validateArtboardPlan}=require('../photoshop-artboard-plan.cjs');
 function createProductCopyEngine({engine,helperPath=engine.helperPath}){
  const scans=new Map();
- return {async inspect({source,mapping,metadata,regions}){
+ return {capture(ids){return {schema:1,scans:[...scans].filter(([id])=>ids.includes(id))};},restore(snapshot){if(snapshot?.schema!==1)return;for(const [id,scan] of snapshot.scans||[]){if(!scan?.source?.fingerprint||!scan?.metadata||!Array.isArray(scan.data?.matches))continue;scans.set(id,structuredClone(scan));}while(scans.size>8)scans.delete(scans.keys().next().value);},async inspect({source,mapping,metadata,regions}){
   if(!mapping.approved)throw Error('请先确认产品对应');if(regions!==undefined&&(!regions||typeof regions!=='object'||Array.isArray(regions)||Object.entries(regions).some(([id,r])=>!mapping.approved.boards.some(b=>String(b.boardId)===id&&b.action==='use')||!Array.isArray(r)||r.length!==4||!r.every(Number.isFinite)||r[0]<0||r[1]<0||r[2]<=0||r[3]<=0||r[0]+r[2]>1||r[1]+r[3]>1)))throw Error('底部文案块范围无效');
   const key=JSON.stringify([source.path,source.fingerprint,mapping.approved.approvalDigest,regions]);
   for(const scan of scans.values())if(scan.key===key)return scan.metadata;

@@ -1,0 +1,13 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const {capture,restoreFile}=require('../services/continuation-runtime.cjs');
+const {hashFile}=require('../photoshop-file-io.cjs');
+const {createNativeTextEngine}=require('../services/native-text-engine.cjs');
+test('restart restores verified structure and preview without opening Adobe; changed source and corrupt preview fall back',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'resume-runtime-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));const file={path:path.join(dir,'sample.psb'),name:'sample',preview:'data:image/png;base64,cHJldmlldw==',nativeTextScanId:'scan'};await fs.writeFile(file.path,'source');file.fingerprint=await hashFile(file.path);const meta={width:100,height:100,layers:[{id:'one'}]},metadata=new Map([[file.path,{fingerprint:file.fingerprint,metadata:meta}]]),nativeText={capture:ids=>({schema:1,ids}),restore:s=>assert.deepEqual(s.ids,['scan'])},productCopy={capture:()=>({schema:1}),restore:()=>{}};
+ const runtime=require('../services/work-records.cjs').compact(await capture({snapshot:{continuationInputs:{files:[file]}},metadata,nativeText,productCopy,directory:dir})),imported=new Map(),verifiedSources=new Map([[path.resolve(file.path).toLowerCase(),file.fingerprint]]);
+ assert.ok(!JSON.stringify(runtime).includes(file.preview));const restored=await restoreFile(file,{runtime,metadata:new Map(),imported,verifiedSources,nativeText,productCopy});assert.equal(restored.preview,file.preview);assert.deepEqual(restored.metadata,meta);assert.equal(imported.get(file.path),file.fingerprint);
+ assert.equal(await restoreFile(file,{runtime,verifiedSources:new Map()}),null);await fs.writeFile(runtime.imports[0].previewArtifact.path,'corrupt');assert.equal(await restoreFile(file,{runtime,verifiedSources}),null);
+});
+test('native scan survives serialization and reuses object ids after process recreation',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'scan-resume-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));const source={path:path.join(dir,'source.psb')};await fs.writeFile(source.path,'source');source.fingerprint=await hashFile(source.path);let reads=0;const engine={execute:async()=>{reads++;return {matches:[],issues:[],skipped:[]};}},first=createNativeTextEngine({engine}),metadata={artboards:[{id:1}],layers:[]};const scan=await first.inspect({source,metadata});const saved=JSON.parse(JSON.stringify(first.capture([scan.nativeTextScanId]))),next=createNativeTextEngine({engine});next.restore(saved);assert.equal((await next.inspect({source,metadata})).nativeTextScanId,scan.nativeTextScanId);assert.equal(reads,1);
+});

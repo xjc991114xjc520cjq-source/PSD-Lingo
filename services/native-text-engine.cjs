@@ -3,7 +3,7 @@ const {hashFile}=require('../photoshop-file-io.cjs');
 function styleRuns(e){const a=e.styles?.textStyleRange||e.aiStyles||[],out=[];for(let i=0;i<a.length;i++){const r=a[i],st=r.textStyle||r,from=r.from??i,to=Math.min(e.original.length,r.to??i+1);if(from>=to)continue;const signature=crypto.createHash('sha256').update(JSON.stringify(st)).digest('hex').slice(0,16),last=out.at(-1);if(last?.signature===signature&&last.to===from){last.to=to;continue;}out.push({from,to,font:st.fontPostScriptName||st.font,size:st.size?.value||st.size,color:st.color||st.fillColor,tracking:st.tracking,leading:st.leading?.value??st.leading,autoLeading:st.autoLeading,baselineShift:st.baselineShift?.value||st.baselineShift,signature});}return out;}
 function createNativeTextEngine({engine}){
  const scans=new Map();
- return {async inspect({source,metadata,boardIds}){
+ return {capture(ids){return {schema:1,scans:[...scans].filter(([id])=>ids.includes(id))};},restore(snapshot){if(snapshot?.schema!==1)return;for(const [id,scan] of snapshot.scans||[]){if(!scan?.source?.fingerprint||!scan?.metadata||!Array.isArray(scan.data?.matches))continue;scans.set(id,structuredClone(scan));}while(scans.size>8)scans.delete(scans.keys().next().value);},async inspect({source,metadata,boardIds}){
   if(!metadata.artboards?.length)throw Error('当前原生文字流程需要包含画板的PSD/PSB');
   const ids=boardIds||metadata.artboards.map(b=>b.id);if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||ids.some(id=>!metadata.artboards.some(b=>b.id===id)))throw Error('请使用当前原生画板ID');
   const key=JSON.stringify([source.path,source.fingerprint,ids]);for(const r of scans.values())if(r.key===key)return r.metadata;

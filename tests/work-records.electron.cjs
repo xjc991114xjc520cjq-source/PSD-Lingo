@@ -29,7 +29,7 @@ app.whenReady().then(async()=>{let code=0;try{
   await click(button);await wait('document.getElementById("workRecords").getAttribute("aria-busy")==="true"');
   assert.equal(await js('document.getElementById("workRecords").hidden'),false);
   assert.equal(await js('document.querySelectorAll(".work-record-actions button:disabled").length'),3);
-  await wait('document.getElementById("workRecordRecovery").textContent.includes("读取原稿")');
+  await wait('document.getElementById("workRecordRecovery").textContent.includes("恢复文件结构")');
   await fs.writeFile(out+'/'+button+'-waiting.png',(await win.webContents.capturePage()).toPNG());
   await click(button);assert.equal(hydrationCalls,before+1,'repeat click cannot enqueue restore');
   hydrationGate=null;if(fail)reject(Error('fixture source unavailable'));else release();

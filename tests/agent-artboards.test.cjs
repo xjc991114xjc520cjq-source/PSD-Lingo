@@ -15,7 +15,9 @@ test('actual operation routing samples two of nine, completes seven, then rebuil
  const input={source,plan,action:'preview'},preview=await operate(input,task);assert.deepEqual(preview.shownBoards,['SKU0','SKU1']);assert.equal(preview.remainingBoards.length,7);assert.equal(trace[0].made.length,2);
  const delivery=await operate({...input,action:'export'},task);assert.equal(delivery.boards.length,9);assert.equal(trace[1].made.length,7);assert.equal(trace[1].reused.length,2);
  const changed=structuredClone(plan);changed.productTemplate.requests.filter(r=>r.templateFileId==='t1').forEach(r=>r.actions.push({mode:'layout',x:10}));await operate({...input,plan:changed,action:'export'},task);assert.equal(trace[2].made.length,4);assert.equal(trace[2].reused.length,5);
- await operate({...input,plan:changed,action:'export'},task);assert.equal(trace.length,3,'repeat export must not recompose');await operate({...input,action:'export'},{...task,id:'task2'});assert.equal(trace[3].made.length,9,'independent tasks cannot borrow old results');
+ await operate({...input,plan:changed,action:'export'},task);assert.equal(trace.length,3,'repeat export must not recompose');
+ const snapshot=JSON.parse(JSON.stringify(operate.capture(task.id)));operate.restore(snapshot);await operate({...input,plan:changed,action:'export'},{...task,id:'continued',executionScope:task.id});assert.equal(trace.length,3,'history continuation must preserve prepared copy');
+ await operate({...input,action:'export'},{...task,id:'task2'});assert.equal(trace[3].made.length,9,'independent tasks cannot borrow old results');
 });
 test('invalid output and verification before delivery stop before expensive native work',async()=>{
  let runs=0;const operate=createArtboardOperations({run:async()=>{runs++;return {boards:[{name:'One'}]};},directory:()=>'.',requireOutput:async()=>{throw Error('输出位置不可用');}}),input={source:{path:'fixture.psb',fingerprint:'h'},plan:{},action:'export'},task={id:'isolated'};

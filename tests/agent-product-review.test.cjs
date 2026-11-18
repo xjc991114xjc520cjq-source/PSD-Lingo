@@ -12,12 +12,12 @@ test('product confirmation requires actual saved approval, retains pause and ans
  assert.equal(a.current.id,id);assert.equal(a.current.status,'completed');assert.equal(calls,1);
  assert.equal(a.current.history.find(h=>h.type==='user_answer').approvalDigest,'verified');
 });
-test('pause interrupts pending native wait, retains exact review, saves while paused without starting work',async()=>{
+test('pause retains pending native wait and exact review without restarting analysis',async()=>{
  let calls=0;const a=new AgentTask({think:async()=>{calls++;if(calls===1)await a.confirmProductMapping({mappingId:'m'});return done;}});
  a.start({request:'Modify'});await tick();const q=a.current.question;a.pause();await tick();
  assert.equal(a.current.question.id,q.id);assert.equal(a.current.status,'paused');
  a.productMappingApproved(q.id,{id:'m',approved:{approvalDigest:'verified'}});await tick();assert.equal(calls,1);assert.equal(a.current.status,'paused');
- a.resume();await a.runPromise;assert.equal(a.current.status,'completed');assert.equal(calls,2);
+ a.resume();await a.runPromise;assert.equal(a.current.status,'completed');assert.equal(calls,1);
 });
 test('stop while waiting rejects stale approval and finishes without continuing',async()=>{
  const a=new AgentTask({think:async()=>{await a.confirmProductMapping({mappingId:'m'});return done;}});

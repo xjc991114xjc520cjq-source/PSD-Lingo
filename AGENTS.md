@@ -65,3 +65,5 @@
 - 2026-11-17：用户要求完整UI交互检查并沿用改完即发布授权，准备0.3.93。首页示例区、共享卡片反馈、文件/文档面板、表单/弹窗/标签页、窄窗口检查面板滚动及键盘文件图层选择已修复。937项Node与助手/工作记录/下拉/SKU两套Electron测试、正式包启动通过。无Adobe或外部模型调用；详见practice-records/2026-11-17-interface-polish/实施与验收.md。公开状态以work/releases/0.3.93/public-verified.json为准。
 
 - 2026-11-17：另一台电脑AI导入UKFG line96定位为文字读取，新增逐对象隔离/错误阶段、稳定原生文字快照及清理失败保护。942项Node和客户副本99文字/完整预览、原生UKFG故障注入后其他98文字一致通过，原稿哈希未变。未自然复现对端错误，不声称Adobe根因或客户成稿通过。依持续发布授权准备0.3.94；详见practice-records/2026-11-17-ai-text-import-isolation/实施与验收.md及work/releases/0.3.94/public-verified.json。
+
+- 2026-11-18：SKU助手需求日期缺少文档入口已补prepare_text_replacements，主进程校验本次用户来源，单行/多行沿原文换行与混合样式生成批准文案，不清空旧文档和绑定。951项回归、本机协议Electron及真实本机Codex两种版式原生计划配置通过；本机模型测试预算到达后停止，未调用Adobe/未导出客户稿。依持续授权准备0.3.97，详见practice-records/2026-11-18-request-copy-replacements/实施与验收.md，公开以work/releases/0.3.97/public-verified.json为准。

@@ -8,7 +8,8 @@ import {planAiFile} from '../design-layout-planner.cjs';
 import {auditDesignFile,deliveryBoardsFor} from '../design-document-audit.cjs';
 import {validateArtworkHides} from '../artwork-visibility.cjs';
 import {createTextLayer,textActionsFor} from '../native-text-objects.cjs';
-import {makeMixedEdit} from '../mixed-text.cjs';
+import {makeMixedEdit,mixedIssue} from '../mixed-text.cjs';
+import {validateRules,replaceLayer} from '../services/request-text-replacements.cjs';
 export function createAgentWorkspace({state,call,importOriginal,render,history,fitText,buildRequest,getVisual,makePlan,selectFile,selectedLayer,resetWorkspace}){
  const pageReferences=new Map();
  const inspectedArtwork=new Map();
@@ -24,6 +25,22 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   const agentCall=(name,value)=>call(name,['suggest','suggestLayout'].includes(name)?{...value,assistantModel:model}:value);
   if(tool==='prepare_independent_task'){if(!resetWorkspace)throw Error('工作区隔离接口未就绪');resetWorkspace();pageReferences.clear();inspectedArtwork.clear();auditsCache.clear();layoutsCache.clear();diagnoses.clear();return {prepared:true,files:0,records:0};}
   if(tool==='workspace')return summary(args);
+  if(tool==='prepare_text_replacements'){
+   const f=current(args.fileIndex);if(state.sourceDocument?.productMappingId)throw Error('当前为已批准产品表任务，不能用需求片段替换产品字段来源');
+   if(['PSD','PSB'].includes(f.format)&&!f.nativeTextScanId)throw Error('先inspect_native_text读取本原稿全部单行、多行及嵌套文字，再直接准备需求替换；无需上传文案文档');
+   const rules=validateRules(args.rules,args.userMessages||[]);
+   if(typeof args.provenanceId!=='string'||!args.provenanceId)throw Error('缺少本任务用户需求来源');
+   const ids=args.layerIds;if(ids!==undefined&&(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||ids.some(id=>!f.layers.some(l=>l.id===id))))throw Error('指定文字ID不存在或重复，请使用当前原稿读取结果');
+   const candidates=f.layers.filter(l=>(!ids||ids.includes(l.id))&&l.visible!==false&&!l.skipExport),drafts=candidates.map(l=>({layer:l,edit:replaceLayer(l,rules)})).filter(d=>d.edit);
+   if(!drafts.length)return {changed:false,records:[],changes:[],matchedLayers:0,message:'指定范围未找到原片段，请核对实际原文与范围；不需要另行提供文档'};
+   const unsupported=drafts.filter(d=>d.layer.issues?.some(i=>!['文字层或分组已锁定','混合文字样式暂不支持',mixedIssue].includes(i)));if(unsupported.length)throw Error('命中文字存在原生限制：'+unsupported.map(d=>d.layer.name+'：'+d.layer.issues.join('；')).join('；'));
+   const digest=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t))),v=>v.toString(16).padStart(2,'0')).join('');
+   const prepared=[];for(const {layer:l,edit:e}of drafts){const hash=await digest(e.target),id='request:'+args.provenanceId+':'+await digest(e.original+'\0'+e.target),record={id,original:e.original,target:e.target,digest:hash,source:'本次用户需求 · 原稿片段替换',context:{requestReplacement:true,provenanceId:args.provenanceId,rules:e.ruleIndices.map(i=>rules[i])}};prepared.push({l,e,record});}
+   if(!isCurrent())throw interrupted('需求已补充或任务已停止，未导入旧替换文案');
+   const additions=prepared.map(p=>p.record).filter((r,i,a)=>a.findIndex(x=>x.id===r.id)===i&&!state.records.some(x=>x.id===r.id));
+   history.transaction(()=>{state.records.push(...additions);if(!state.docName)state.docName='本次需求替换文案';state.checked=false;},'request-copy-import');render();
+   return {changed:additions.length>0,matchedLayers:prepared.length,records:prepared.map(p=>p.record),fileIndex:args.fileIndex,scanId:f.nativeTextScanId,changes:prepared.map(({l,e,record})=>({layerId:l.id,layerKey:args.fileIndex+':'+f.layers.indexOf(l),original:e.original,recordIds:[record.id],spans:e.spans,anchor:l.alignment||'left',reason:'按本次用户明确要求替换片段，其余中文、换行及原字符样式保留'})),nextSteps:f.nativeTextScanId?'将返回changes传configure_native_text（fileIndex与scanId保持），整批统一修改后preview并export_files；无需导入文档或分别准备单行/多行文案':'按返回layerKey及recordIds使用bind_copy/edit_text，混合AI单行使用edit_mixed_text；不再要求文档'};
+  }
   if(tool==='inspect_native_text'){
    const f=current(args.fileIndex);if(!['PSD','PSB'].includes(f.format))throw Error('请选择PSD/PSB');if(f.layers.some(l=>l.recordId||l.manual||l.position||l.copyAdjustment||l.nativeCreation||l.nativeDisposition)||f.containerEdits?.length||f.artboardPlan||f.mixedTextEdits?.length||f.artworkHides?.length||textActionsFor(f).length)throw Error('请在开始改字前读取嵌套文字，以免覆盖已有修改');
    const meta=await call('agentArtboards',{action:'metadata',source:{path:f.path,fingerprint:f.fingerprint},boardIds:args.boardIds});if(!isCurrent())throw interrupted('任务已变化');history.transaction(()=>{f.layers=meta.layers;f.artboards=meta.artboards;f.nativeTextScanId=meta.nativeTextScanId;state.checked=false;},'native-text-scan');render();return {...meta,fileIndex:args.fileIndex};

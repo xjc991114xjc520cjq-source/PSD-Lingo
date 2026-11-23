@@ -187,10 +187,11 @@ ipcMain.handle('inspect-artwork',safeOperation('inspect-artwork',async request=>
  const metadata=await actualMetadata(request),object=metadata.artworkObjects?.find(o=>o.objectId===request.objectId);if(!object)throw Error('对象不存在或不受支持');
  psBusy=true;try{return await illustrator.inspectArtwork(path.join(app.getPath('userData'),'previews','artwork-'+Date.now()),request.path,object,{fingerprint:request.fingerprint});}finally{psBusy=false;}
 }));
-ipcMain.handle('installed-fonts',safeOperation('installed-fonts',async(format)=>{
+const fontCatalog=require('./services/adobe-font-catalog.cjs').createAdobeFontCatalog({load:async(format)=>{
   if(psBusy||batchBusy)throw new Error('Photoshop 正忙，请稍后读取字体');
   psBusy=true;try{return await (format==='AI'?illustrator.installedFonts:installedFonts)(path.join(app.getPath('userData'),'fonts',Date.now().toString()));}finally{psBusy=false;if(win&&!win.isDestroyed())win.focus();}
-}));
+}});
+ipcMain.handle('installed-fonts',safeOperation('installed-fonts',fontCatalog));
 ipcMain.handle('import-psd',safeOperation('import-psd',async (options = {}) => {
   let paths;
   if(options && Object.hasOwn(options,'paths')){

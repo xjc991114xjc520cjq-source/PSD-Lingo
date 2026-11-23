@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('desktop', {
   agentPause:()=>ipcRenderer.invoke('agent-pause'),
   agentResume:()=>ipcRenderer.invoke('agent-resume'),
   agentStop:()=>ipcRenderer.invoke('agent-stop'),
+  agentTypographySettings:v=>ipcRenderer.invoke('agent-typography-settings',v),
   agentSupplement:v=>ipcRenderer.invoke('agent-supplement',v),
   agentProductReview:v=>ipcRenderer.invoke('agent-product-review',v),
   agentProductApprove:v=>ipcRenderer.invoke('agent-product-approve',v),

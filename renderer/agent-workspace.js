@@ -28,8 +28,8 @@ export function createAgentWorkspace({state,call,importOriginal,render,history,f
   if(tool==='typography_fonts'){const f=current(args.fileIndex);const fonts=await call('installedFonts',f.format);typographyCatalogs.set(f.format,fonts);const filtered=fonts.filter(x=>!args.family||x.family===args.family).filter(x=>!args.search||(x.name+' '+x.family+' '+x.style).toLowerCase().includes(args.search.toLowerCase()));return {total:filtered.length,fonts:args.all===true?filtered:filtered.slice(args.offset||0,(args.offset||0)+100),note:'name为真实PostScript字体款式，family为字体家族，style为实际字重/字形；嵌套AI以Illustrator原生写入检查为准'};}
   if(tool==='configure_typography'){
    const f=current(args.fileIndex);if(f.demo)throw Error('请先导入真实原稿');
-   const catalog=typographyCatalogs.get(f.format)||await call('installedFonts',f.format);typographyCatalogs.set(f.format,catalog);if(!isCurrent())throw interrupted('任务已变化');
-   const result=planTypography(f,args,catalog),updates=new Map(result.edits.map(e=>[e.layerId,e.typography]));
+   const catalog=(typographyCatalogs.get(f.format)?.some(x=>x.name===args.font)?typographyCatalogs.get(f.format):null)||await call('installedFonts',f.format);typographyCatalogs.set(f.format,catalog);if(!isCurrent())throw interrupted('任务已变化');
+   const requested=args.requestedTypographySettings?.find(v=>pathKey(v.filePath)===pathKey(f.path));if(requested){const selected=catalog.find(x=>x.name===args.font),requestedFace=catalog.find(x=>x.name===requested.font),expectedFamily=requested.family===requested.font?requestedFace?.family:requested.family;if(!selected||selected.family!==expectedFamily||!requested.autoWeight&&args.font!==requested.font)throw Error('字体与本次面板设置不一致，请使用用户选定的字体系列和字重');args={...args,autoSize:requested.autoSize,autoTracking:requested.autoTracking,autoWeight:requested.autoWeight,tracking:requested.tracking};}const result=planTypography(f,args,catalog),updates=new Map(result.edits.map(e=>[e.layerId,e.typography]));
    let plan=f.artboardPlan,records=[];
    if(f.nativeTextScanId){
     if(plan&&!plan.nativeTextScanId)throw Error('已有模板计划，请先完成或撤回，再修改全文字体');

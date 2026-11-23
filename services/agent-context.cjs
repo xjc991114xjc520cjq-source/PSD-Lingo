@@ -8,7 +8,7 @@ function historyFor(history,start=0){
   seen.set(key,index);return {...h,event:index};
  }).slice(start);
 }
-function taskData(task,start=0){return {originalRequest:task.request,reviewProfile:task.reviewProfile||'delivery',taskKind:task.taskKind||'production',attachments:task.files,outputDirectory:task.outputDirectory,history:historyFor(task.history||[],start),availableReferenceImages:(task.referenceVisuals||[]).map(({fileId,name})=>({fileId,name}))};}
+function taskData(task,start=0){return {originalRequest:task.request,typographySettings:task.typographySettings||[],reviewProfile:task.reviewProfile||'delivery',taskKind:task.taskKind||'production',attachments:task.files,outputDirectory:task.outputDirectory,history:historyFor(task.history||[],start),availableReferenceImages:(task.referenceVisuals||[]).map(({fileId,name})=>({fileId,name}))};}
 const imageId=image=>crypto.createHash('sha256').update(image).digest('hex');
 function recordMetrics(task,m){
  if(!task)return;const p=task.performance||={calls:0,failedCalls:0,inputTokens:0,cachedInputTokens:0,outputTokens:0,usageReportedCalls:0,promptBytes:0,imageCount:0,durationMs:0,resumedTurns:0,reusedOperations:0,phases:{}};

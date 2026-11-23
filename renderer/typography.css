@@ -19,3 +19,9 @@
 .typography-dialog :is(button,input,select):focus-visible{outline:2px solid #efb78e;outline-offset:3px}
 @media(max-width:850px){.typography-workspace{grid-template-columns:1fr;gap:24px}.typography-dialog{padding:20px}.typography-proof{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.typography-dialog{width:calc(100vw - 20px);max-width:calc(100vw - 20px);padding:16px}.typography-proof{grid-template-columns:1fr}}
+
+.typography-font-status{margin:0;line-height:1.5;color:var(--muted,#c3bdb7);overflow-wrap:anywhere}.typography-font-status[data-state=error]{color:#ffc5a8}
+
+.agent-typography-settings{padding:16px;border:1px solid var(--line,#4a4643);border-radius:16px;background:var(--panel,#242529);margin:12px 0}.agent-typography-settings[hidden]{display:none}.agent-typography-settings h3{margin:0 0 6px}.agent-typography-settings p{margin:4px 0;color:var(--muted,#c3bdb7);overflow-wrap:anywhere}.agent-typography-row{display:flex;gap:10px;align-items:center;padding-top:12px}.agent-typography-row>div{flex:1;min-width:0}.agent-typography-row strong{overflow-wrap:anywhere}.agent-typography-row button{flex:none}.agent-control .agent-typography-settings{text-align:left;width:min(100%,700px)}
+
+.agent-control .agent-typography-settings{box-sizing:border-box;max-height:220px;overflow:auto}.agent-typography-settings>p{font-size:13px}.agent-typography-row button:focus-visible{outline:2px solid #efb78e;outline-offset:3px}

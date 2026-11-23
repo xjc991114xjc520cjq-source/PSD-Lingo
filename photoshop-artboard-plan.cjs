@@ -18,7 +18,7 @@ function validateArtboardPlan(plan,file){
   if(!['duplicate','blank'].includes(b.mode)||!Array.isArray(b.changes)||b.changes.length>500)throw Error('画板模式或修改列表无效');
   let box;if(b.mode==='blank'){if(b.templateId!==null||!Array.isArray(b.size)||b.size.length!==2||!b.size.every(n=>Number.isInteger(n)&&n>0))throw Error('空白画板尺寸无效');box=[0,0,...b.size];if(b.changes.length)throw Error('空白画板没有可替换的原文字');}
   else if(b.templateId===null){if(file.artboards?.length)throw Error('已有画板的文档必须指定templateId');box=[0,0,file.width,file.height];}
-  else{const a=file.artboards?.find(a=>a.id===b.templateId);if(!a)throw Error('模板画板不存在，请查看workspace');if(a.nativePath?.length!==1)throw Error('嵌套画板暂不支持，请先在Photoshop中整理为顶层画板');box=a.box;}
+  else{const a=file.artboards?.find(a=>a.id===b.templateId);if(!a)throw Error('模板画板不存在，请查看workspace');if(a.nativePath?.length!==1&&!(plan.nativeTextScanId&&file.documentCanvas&&a.id===-1&&a.nativePath?.length===0))throw Error('嵌套画板暂不支持，请先在Photoshop中整理为顶层画板');box=a.box;}
   w=Math.max(w,box[2]);h=Math.max(h,box[3]);const ids=new Set();
   for(const c of b.changes){const l=file.layers.find(l=>l.id===c.layerId);if(!l||ids.has(c.layerId)||l.original!==c.original||!Array.isArray(l.nativePath))throw Error('画板文字来源失效或重复');ids.add(c.layerId);
    if(b.templateId!==null&&l.boardId!==b.templateId)throw Error('修改文字不属于模板画板');

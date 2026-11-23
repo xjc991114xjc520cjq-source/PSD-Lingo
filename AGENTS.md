@@ -81,3 +81,5 @@
 - 2026-11-23：准备0.3.103，BridgeTalk无法发现Illustrator时新增每任务独立COM回退，沿用原生读/改/回嵌/验收工具；新增Windows应用路径及标准安装路径启动回退，已运行进程不重复启动。990项回归和故意屏蔽BridgeTalk发现的后台PS/AI三画板12文字保存重开/3JPG通过，原稿不变。对端2023尚未实测。记录practice-records/2026-11-23-adobe-independent-connection/实施与验收.md；正式状态以work/releases/0.3.103/public-verified.json为准。
 
 - 2026-11-23：原生文字补扫保留已有计划/文案/布局，新增与失败画板增量读取；内嵌AI默认参数打开及旧文字显式转换，Windows回执锁仅重试交回。993项Node及后台独立PSB三画板12文字/3内嵌AI保存重开/3JPG通过，准备0.3.104。对端2023自然故障与RPC根因未证明复现或解决；公开以work/releases/0.3.104/public-verified.json为准。
+
+- 2026-11-23：全文字体修改已接入侧栏/助手、真实字体款式和逐对象授权参数、原生混合/嵌套计划、预览成果复用及撤销/记录恢复。代码与自动测试阶段完成（1005项Node、字体界面三档Electron及助手22项整合）；用户本轮要求先完成代码和自动测试，未调用Adobe、未发布。原生字体保存重开与JPG视觉验收待当前空闲许可；见practice-records/2026-11-23-typography/实施与验收.md。

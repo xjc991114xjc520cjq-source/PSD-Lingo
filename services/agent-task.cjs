@@ -3,6 +3,9 @@ const {randomUUID}=require('node:crypto');
 const fs=require('node:fs/promises'),path=require('node:path');
 const {taskData,recordMetrics}=require('./agent-context.cjs');
 const TOOLS={
+ typography_fonts:'读取本机Adobe真实字体家族和款式：fileIndex，可选search、family、offset；每页100，避免发送全库。先查用户要求的字体，以name选择实际PostScript款式；字重不是模拟加粗。',
+ configure_typography:'全文修改字体：fileIndex、font:typography_fonts真实PostScript款式，tracking可选（1/1000 em；不传保持原字距），autoSize/autoTracking/autoWeight可选；overrides:[{layerId,sizeScale:相对原字号比例,tracking,font:同一家族真实款式,reason:基于实际画面的视觉依据}]。只允许自动选项授权的参数。PS/PSB先inspect_native_text包含混合与嵌套；AI直接原生逐字符修改，保留颜色、位置、换行与混合字号比例。先preview保留原稿视觉参照，批量分析标题层级、字形宽度、行数、间距和视觉字重，一次提交各对象建议；再preview与原图对比，必要时集中修正一次，不用字符框空白判断、不强行拉伸。字重采用实际字体款式；只检查有变化的画面，不重读源稿。之后export_files，以最终导出的图片验收，不能把参数通过称为视觉一致。',
+
  audit_images:'对本任务附件图片做完整设计审验。参数fileIds为图片附件ID数组；不传则使用全部已附加图片。可选requirements为本次需求的补充，不能改变用户约束。只读成品图，一次按页返回问题位置、根因、修改指导，不需要源工程或输出目录，不修改图片。',
  prepare_text_replacements:'用户已在需求框/补充/回答提供明确替换值时，直接从原图层生成有来源的批准文案，无需TXT/XLSX。fileIndex、rules:[{find:实际原文中的片段,replace:用户明确的新片段,evidence:逐字引用本次用户需求原句,kind:literal/date}]，可选layerIds限定当前原稿对象，默认当前文件可见未跳过文字。先import_source；PSD/PSB先inspect_native_text一次读取全部单行/多行/嵌套文字，不重扫。只替换片段，原中文、空格、换行、样式映射均保留，单行与两行自动分别生成完整target和spans。date只允许同一日期格式，用户可用另一日期写法表达同一完整日期，但不能猜年份/有效期；不同原日期可传多条规则。返回records、scanId及逐层changes，将changes直接传configure_native_text统一处理，再preview/export_files；AI普通/混合文字用已有绑定/改字工具。它只准备文案，不冒称已经修改或导出；重复准备复用记录，不清除现有文档/绑定。没有命中先核对实际原文，不要求用户制作带换行和不带换行的文档。不要用产品表匹配/模板合成代替简单片段替换，也不调用auto_bind/design_layout重做未要求的排版。',
  inspect_product_gifts:'只读检查本任务已附加的赠品PNG目录：fileId。返回当前PNG完整名称、哈希、尺寸及透明边界。不得靠模糊名称猜颜色/型号。产品对应selection.fields中赠品列必须role:gift，价格列role:price；先明确本次活动工作表，不把空赠品列当别页赠品。',

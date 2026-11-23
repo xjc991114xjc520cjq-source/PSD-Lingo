@@ -1,0 +1,21 @@
+.typography-dialog{width:min(1280px,calc(100vw - 48px));max-width:calc(100vw - 48px);max-height:calc(100vh - 48px);overflow:auto;background:var(--panel,#242529);color:var(--text,#f1ede9);padding:28px}
+.typography-dialog>p{max-width:72ch;color:#c3bdb7;line-height:1.6;margin:10px 0 26px}
+.typography-workspace{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:32px;align-items:start}
+.typography-workspace>section:first-child{display:flex;flex-direction:column;gap:10px;min-width:0}
+.typography-workspace label:not(.typography-check){font-weight:600;margin-top:8px}
+.typography-workspace h3{font-size:16px;margin:24px 0 4px}
+.typography-workspace :is(select,input:not([type=checkbox])){width:100%;min-width:0;min-height:42px;box-sizing:border-box}
+.typography-check{display:flex;gap:10px;align-items:center;min-height:34px;cursor:pointer}
+.typography-check input{width:16px;height:16px;flex:none;accent-color:#efb78e}
+.typography-actions{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.typography-proof{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;min-width:0}
+.typography-proof figure{margin:0;min-width:0;overflow:auto;background:#191a1e;border:1px solid #4a4643;border-radius:10px}
+.typography-proof figcaption{padding:12px 16px;font-size:14px;color:#d7cec6;border-bottom:1px solid #4a4643}
+.typography-proof img{display:block;max-width:100%;height:auto;margin:auto}
+.typography-proof img[hidden]{display:none}
+.typography-proof .typography-empty{grid-column:1/-1;color:#c3bdb7;line-height:1.6;min-height:100px}
+.typography-proof select{grid-column:1/-1}
+#typographyStatus{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;max-width:70ch;color:#f1c5a3}
+.typography-dialog :is(button,input,select):focus-visible{outline:2px solid #efb78e;outline-offset:3px}
+@media(max-width:850px){.typography-workspace{grid-template-columns:1fr;gap:24px}.typography-dialog{padding:20px}.typography-proof{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.typography-dialog{width:calc(100vw - 20px);max-width:calc(100vw - 20px);padding:16px}.typography-proof{grid-template-columns:1fr}}

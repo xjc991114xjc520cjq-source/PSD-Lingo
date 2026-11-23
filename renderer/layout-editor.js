@@ -1,3 +1,4 @@
+import {typographyEditsFor} from '../services/typography.cjs';
 import {textActionsFor} from '../native-text-objects.cjs';
 import {displayText} from '../text-display-style.cjs';
 import {union,alignmentOffsets,snapBox} from '../alignment.cjs';
@@ -20,8 +21,8 @@ export function createLayoutEditor({$,file,layer,record,fitText,call,changed,sel
   const fontFamily=(l,m,fit)=>{const name=m?.font||l?.font||fit?.family||'';return m?.family||fontsByName.get(name)?.family||({ArialMT:'Arial','Arial-BoldMT':'Arial',MicrosoftYaHei:'Microsoft YaHei'}[name])||name.replace(/[-_](?=(bold|black|medium|regular|light|semibold))/ig,' ').replace(/[-_]/g,' ');};
   const bound=f=>(f?.layers||[]).filter(l=>l.recordId&&!l.skipExport&&!l.issues.length);
   const containerEdits=f=>activeContainerEdits(f);
-  const sourceKey=f=>JSON.stringify([f?.fingerprint,bound(f).map(l=>l.id),f?.extractedContainers||[],f?.artworkHides||[],textActionsFor(f||{}),f?.mixedTextEdits||[]]);
-  const key=f=>JSON.stringify([f?.fingerprint,bound(f).map(l=>l.id),containerEdits(f),f?.extractedContainers||[],f?.artworkHides||[],textActionsFor(f||{}),f?.mixedTextEdits||[]]);
+  const sourceKey=f=>JSON.stringify([f?.fingerprint,bound(f).map(l=>l.id),f?.extractedContainers||[],f?.artworkHides||[],textActionsFor(f||{}),f?.mixedTextEdits||[],typographyEditsFor(f||{})]);
+  const key=f=>JSON.stringify([f?.fingerprint,bound(f).map(l=>l.id),containerEdits(f),f?.extractedContainers||[],f?.artworkHides||[],textActionsFor(f||{}),f?.mixedTextEdits||[],typographyEditsFor(f||{})]);
   const visualSignature=f=>JSON.stringify([key(f),bound(f).map(l=>[l.id,l.recordId,l.customText,l.box,l.position,l.manual,l.capitalization,style(l),fitText(l,record(l.recordId))])]);
   function textBounds(l){const r=record(l.recordId);if(!r)throw Error('文字绑定的文案记录不存在，请检查当前文案与绑定');const box=targetBox(l.box,l.position),fit=fitText(l,r);
     const x=box[0]+(l.alignment==='center'?(box[2]-fit.width)/2:l.alignment==='right'?box[2]-fit.width:0);
@@ -87,26 +88,26 @@ export function createLayoutEditor({$,file,layer,record,fitText,call,changed,sel
   async function ensureBackground(f){
     const epoch=previewEpoch,k=key(f),sk=sourceKey(f);if(failures.has(k))throw Error(failures.get(k));
     if(!backgrounds.has(k)&&!backgroundJobs.has(k)){
-      const request=JSON.parse(JSON.stringify({path:f.path,fingerprint:f.fingerprint,ids:bound(f).map(l=>l.id),containerEdits:containerEdits(f),extractedContainers:f.extractedContainers||[],mixedTextEdits:f.mixedTextEdits||[],textActions:textActionsFor(f),artworkHides:f.artworkHides||[]}));const job=backgroundTail.then(async()=>{try{if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');const url=await call('previewBackground',request);if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');await loadedImage(url);if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');backgrounds.set(k,url);lastBackgrounds.set(sk,url);if(backgrounds.size>12)backgrounds.delete(backgrounds.keys().next().value);if(lastBackgrounds.size>6)lastBackgrounds.delete(lastBackgrounds.keys().next().value);}catch(e){if(epoch===previewEpoch)failures.set(k,String(e.message||e));throw e;}finally{if(backgroundJobs.get(k)===job)backgroundJobs.delete(k);}});backgroundJobs.set(k,job);backgroundTail=job.catch(()=>{});
+      const request=JSON.parse(JSON.stringify({path:f.path,fingerprint:f.fingerprint,ids:bound(f).map(l=>l.id),containerEdits:containerEdits(f),extractedContainers:f.extractedContainers||[],mixedTextEdits:f.mixedTextEdits||[],typographyEdits:typographyEditsFor(f),textActions:textActionsFor(f),artworkHides:f.artworkHides||[]}));const job=backgroundTail.then(async()=>{try{if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');const url=await call('previewBackground',request);if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');await loadedImage(url);if(epoch!==previewEpoch)throw Error('原稿已重新导入，本次预览已失效');backgrounds.set(k,url);lastBackgrounds.set(sk,url);if(backgrounds.size>12)backgrounds.delete(backgrounds.keys().next().value);if(lastBackgrounds.size>6)lastBackgrounds.delete(lastBackgrounds.keys().next().value);}catch(e){if(epoch===previewEpoch)failures.set(k,String(e.message||e));throw e;}finally{if(backgroundJobs.get(k)===job)backgroundJobs.delete(k);}});backgroundJobs.set(k,job);backgroundTail=job.catch(()=>{});
     }
     if(backgroundJobs.has(k))await backgroundJobs.get(k);
     const url=backgrounds.get(k);if(!url)throw Error('当前替换背景尚未生成');await loadedImage(url);
   }
-  async function requestBackground(){const f=file();if(!f||f.demo||(!bound(f).length&&(!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length))||backgroundBusy)return;
+  async function requestBackground(){const f=file();if(!f||f.demo||(!bound(f).length&&(!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length&&!typographyEditsFor(f).length))||backgroundBusy)return;
     backgroundBusy=true;$('replacementNote').textContent='正在原生软件副本中生成背景…';
     try{await ensureBackground(f);}catch{}finally{backgroundBusy=false;draw();if(file()&&key(file())!==key(f))update();}
   }
   async function readyDesignVisuals(options={}){
     const f=file(),working=options.file||f;if(!f||f.demo||working?.fingerprint!==f.fingerprint)return [];
-    const epoch=previewEpoch,signature=visualSignature(f),requireCurrent=options.requireCurrent??(!!bound(working).length||(!!working.artworkHides?.length||!!working.mixedTextEdits?.length||!!textActionsFor(working).length));
+    const epoch=previewEpoch,signature=visualSignature(f),requireCurrent=options.requireCurrent??(!!bound(working).length||(!!working.artworkHides?.length||!!working.mixedTextEdits?.length||!!textActionsFor(working).length||!!typographyEditsFor(working).length));
       if(requireCurrent){if(options.retryBackground===true&&!backgroundJobs.has(key(working))){failures.delete(key(working));backgrounds.delete(key(working));}try{await ensureBackground(working);}catch(e){throw Error('当前替换预览生成失败：'+e.message);}}
     else if($('art').dataset.image!==f.preview)await loadedImage(f.preview);
     if(epoch!==previewEpoch||file()!==f||visualSignature(f)!==signature)throw Error('项目在预览生成期间已变化，请基于当前状态重新预览');
     const visuals=designVisuals(options);if(requireCurrent&&!visuals.some(v=>v.stage==='current'))throw Error('未取得当前替换预览，不能使用原稿代替');return visuals;
   }
   function cacheBackground(f,url){if(!f||!url)return;const k=key(f);backgrounds.set(k,url);lastBackgrounds.set(sourceKey(f),url);failures.delete(k);imageFor(url);}
-  function update(){const f=file(),visible=!!f&&(f.layers.some(l=>l.recordId)||(!!f.artworkHides?.length||!!f.mixedTextEdits?.length||!!textActionsFor(f).length));$('comparison').classList.toggle('has-replacement',visible);$('replacementPane').hidden=!visible;draw();clearTimeout(timer);if(visible)timer=setTimeout(requestBackground,450);}
-  function draw(){const f=file();if(!f||(!f.layers.some(l=>l.recordId)&&(!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length)))return;
+  function update(){const f=file(),visible=!!f&&(f.layers.some(l=>l.recordId)||(!!f.artworkHides?.length||!!f.mixedTextEdits?.length||!!textActionsFor(f).length||!!typographyEditsFor(f).length));$('comparison').classList.toggle('has-replacement',visible);$('replacementPane').hidden=!visible;draw();clearTimeout(timer);if(visible)timer=setTimeout(requestBackground,450);}
+  function draw(){const f=file();if(!f||(!f.layers.some(l=>l.recordId)&&(!f.artworkHides?.length&&!f.mixedTextEdits?.length&&!textActionsFor(f).length&&!typographyEditsFor(f).length)))return;
     lastVisualSignature='';
     const viewport=$('replacementViewport'),zoom=restoreReplacementZoom($('replacementZoom'),$('replacementZoom').value),scale=replacementScale(f.width,viewport.clientWidth,zoom);
     // Hidden batch/workbench panels have no layout yet. Keep the last canvas

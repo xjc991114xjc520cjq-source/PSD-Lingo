@@ -1,3 +1,4 @@
+const {validateTypographyEdits}=require('./services/typography.cjs');
 const crypto = require('node:crypto');
 const {validateMixedEdits}=require('./mixed-text.cjs');
 const {validateCreation,validateTextActions,photoshopTextObjects}=require('./native-text-objects.cjs');
@@ -87,9 +88,9 @@ function validatePlan(plan) {
   for (const file of plan.files) {
     if(file.deliveryBoards)require('./photoshop-delivery.cjs').validateBoards(file.deliveryBoards);
     validateMixedEdits(file.mixedTextEdits,{records:plan.records,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.mixedTextEdits||[]).length;
-    validateTextActions(file.textActions,{jobs:file.jobs});count+=(file.textActions||[]).length;
+    validateTextActions(file.textActions,{jobs:file.jobs});count+=(file.textActions||[]).length;validateTypographyEdits(file.typographyEdits);count+=(file.typographyEdits||[]).length;
     validateArtworkHides(file.artworkHides,{textActions:file.textActions,format:/\.ai$/i.test(file.path||'')?'AI':'PSD'});count+=(file.artworkHides||[]).length;
-    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length&&!file.textActions?.length&&!file.mixedTextEdits?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
+    if (!file.path || !file.fingerprint || !Array.isArray(file.jobs) || (!file.jobs.length&&!file.artworkHides?.length&&!file.textActions?.length&&!file.mixedTextEdits?.length&&!file.typographyEdits?.length)) throw new Error('文件未绑定文案或没有真实 PSD／PSB 路径');
     if((file.mixedTextEdits||[]).some(e=>file.jobs.some(j=>j.layerId===e.layerId)||(file.textActions||[]).some(a=>a.layerId===e.layerId)||(file.artworkHides||[]).some(a=>a.objectId==='t:'+e.layerId)))throw Error('同一混合文字不能同时普通改字、隐藏或清除');
     const seen = new Set();
     for (const job of file.jobs) {
@@ -155,6 +156,7 @@ function bounds(layer) { var b = layer.bounds; return [b[0].as("px"), b[1].as("p
 function within(layer, box) { var b = bounds(layer); return b[0] >= box[0] - 1 && b[1] >= box[1] - 1 && b[2] <= box[0] + box[2] + 1 && b[3] <= box[1] + box[3] + 1; }
 ${photoshopFit}
 ${photoshopTextObjects}
+${require('./typography-native.cjs').psTypographyNative}
 ${require('./photoshop-delivery.cjs').nativeDelivery}
 ${containerScript}
 ${extractionScript}
@@ -199,7 +201,7 @@ try {
         var finalBold=null,finalHorizontalScale=null,finalVerticalScale=null;try{finalBold=ti.fauxBold;}catch(_){}try{finalHorizontalScale=ti.horizontalScale;finalVerticalScale=ti.verticalScale;}catch(_){}
         layouts.push({layerId:job.layerId,name:layer.name,sourceText:typeof job.documentText==="string"?job.documentText:job.target,editedText:job.override?job.target:null,recordId:job.recordId,override:job.override||null,renderedText:fitted.text,insertedBreaks:fitted.breaks,font:ti.font,sizePt:ti.size.as("pt"),tracking:fitted.tracking,leadingPt:typeof fitted.leading==="number"?fitted.leading:null,autoLeading:ti.useAutoLeading,fauxBold:finalBold,previewLayout:job.previewLayout||null,renderingMode:job.previewLayout?"preview":"legacy-fit",manual:job.manual||null,horizontalScale:finalHorizontalScale,verticalScale:finalVerticalScale,position:job.position||null,finalBounds:bounds(layer),unchanged:fitted.unchanged});
       }
-      nativeTextActions(current,item.textActions||[]);
+      nativeTextActions(current,item.textActions||[]);nativeTypographyEdits(current,item.typographyEdits||[]);
       var expectedDelivery=item.deliveryBoards?psDeliverySnapshot(current):null;
       // 大型文档始终保留 PSB 格式；扩展名和 Photoshop 保存选项必须一致。
       var isLargeDocument = item.format === "PSB" || (!item.format && (/\\.psb$/i.test(item.path) || /\\.psb$/i.test(item.name))), extension = isLargeDocument ? ".psb" : ".psd";

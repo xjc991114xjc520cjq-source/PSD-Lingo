@@ -13,7 +13,7 @@ function fixture(){
 }
 function workspace(f,learning={}){
  const state={files:[f.file],records:f.records,fileIndex:0,layerIndex:0};let renders=0;
- const context={textActionsFor:require('../native-text-objects.cjs').textActionsFor,structuredClone,state,manualStyleFor,activeContainerEdits,layoutLearning:learning,startLearningTask:action=>Promise.resolve().then(action).catch(()=>{}),fitText:f.fitText,record:id=>f.records.find(r=>r.id===id),policyFor:()=>({allowWrap:true,allowLeading:false,trackingLimit:0}),file:()=>state.files[state.fileIndex],layer:()=>state.files[state.fileIndex].layers[state.layerIndex],contextProperties:null,containerEditor:null,layoutEditor:null,render:()=>renders++,focusBoundLayer(){}};
+ const context={typographyEditsFor:require('../services/typography.cjs').typographyEditsFor,textActionsFor:require('../native-text-objects.cjs').textActionsFor,structuredClone,state,manualStyleFor,activeContainerEdits,layoutLearning:learning,startLearningTask:action=>Promise.resolve().then(action).catch(()=>{}),fitText:f.fitText,record:id=>f.records.find(r=>r.id===id),policyFor:()=>({allowWrap:true,allowLeading:false,trackingLimit:0}),file:()=>state.files[state.fileIndex],layer:()=>state.files[state.fileIndex].layers[state.layerIndex],contextProperties:null,containerEditor:null,layoutEditor:null,render:()=>renders++,focusBoundLayer(){}};
  const select=app.slice(app.indexOf('function selectedLayer('),app.indexOf('\nfunction selectFile('));
  const plans=app.slice(app.indexOf('function previewLayoutFor('),app.indexOf('\nfunction task('));
  vm.runInNewContext(select+'\n'+plans+'\nglobalThis.api={makePlan,selectedLayer};',context);return {...context.api,state,renders:()=>renders};
@@ -39,3 +39,8 @@ test('AI missing or changed font, weight or stretch never reaches preview',()=>{
  for(const patch of [{font:'OtherFont'},{weight:'bold'},{stretchX:90},{stretchY:90}])assert.throws(()=>validateDesignOutput({proposals:[{...valid,...patch}]},r));
 });
 
+test('whole-document font edits produce real export plans without a copy document and compose after approved copy edits',async()=>{
+ const f=fixture();f.file.layers[0].typography={font:'Arial-BoldMT',tracking:12,sizeScale:.9};delete f.file.layers[0].recordId;f.records=[];
+ const plan=await workspace(f).makePlan();validatePlan(plan);assert.equal(plan.files[0].jobs.length,0);assert.equal(plan.files[0].typographyEdits[0].original,'原稿');assert.equal(plan.files[0].typographyEdits[0].typography.sizeScale,.9);assert.ok(jsxForPlan(plan).includes('nativeTypographyEdits'));
+ const bound=fixture();bound.file.layers[0].typography={font:'Arial-BoldMT'};const combined=await workspace(bound).makePlan();validatePlan(combined);assert.equal(combined.files[0].typographyEdits[0].target,combined.files[0].jobs[0].previewLayout.text);
+});

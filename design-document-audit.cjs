@@ -14,6 +14,7 @@ function detailCrops(request,audit,board){
 }
 function auditTargets(file,records){
  const targets=file.layers.filter(l=>l.visible!==false&&!l.skipExport&&records.some(r=>r.id===l.recordId));
+ for(const l of file.layers.filter(l=>l.typography&&l.visible!==false&&!l.skipExport))if(!targets.some(t=>t.id===l.id))targets.push({...l,artworkOnly:true,boardBox:l.boardBox||[0,0,file.width,file.height],boardNames:l.boardNames?.length?l.boardNames:['画布']});
  for(const e of file.mixedTextEdits||[]){const l=file.layers.find(l=>l.id===e.layerId);if(!l||!records.some(r=>r.id===e.recordId))throw Error('混合改字来源失效，无法审阅');if(!targets.some(t=>t.id===l.id))targets.push({...l,recordId:e.recordId,artworkOnly:true});}
  const hidden=(file.artworkHides||[]).map(e=>({edit:e,object:file.artworkObjects?.find(o=>o.objectId===e.objectId&&o.sourceIdentity===e.sourceIdentity)}));
  if(hidden.some(h=>!h.object))throw Error('隐藏对象缺少已验证来源，无法审阅');
@@ -37,7 +38,7 @@ async function auditDesignFile({file,records,fitText,buildRequest,getVisual,call
   const request=layer?buildRequest({file:scopedFile,layer,records,fitText,auditOnly:true}):{version:1,selectedLayerKey:'',canvas:{width:file.width,height:file.height},layers:[],containers:[]};
   request.layers=request.layers.filter(l=>intersects(l.sourceBox)||intersects(l.box));request.containers=request.containers.filter(c=>intersects(c.box));
   request.artworkObjects=(file.artworkObjects||[]).filter(o=>o.boardNames?.includes(g.name)).map(o=>({...o,hidden:hidden.some(h=>h.object.objectId===o.objectId)}));
-  request.nativeMixedEdits=(file.mixedTextEdits||[]).filter(e=>g.ids.includes(e.layerId));request.textObjectActions=textActionsFor(file).filter(a=>scopedFile.layers.some(l=>l.id===a.layerId));request.createdTextObjects=scopedFile.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
+  request.typographyChange=file.typographySettings?{settings:file.typographySettings,adjustments:file.typographyAdjustments||[],acceptance:'按修改前后实际字形、视觉宽度、换行、层级和视觉字重评价，字号与字间距数值不同不构成问题；不使用字符框空白判断'}:undefined;request.nativeMixedEdits=(file.mixedTextEdits||[]).filter(e=>g.ids.includes(e.layerId));request.textObjectActions=textActionsFor(file).filter(a=>scopedFile.layers.some(l=>l.id===a.layerId));request.createdTextObjects=scopedFile.layers.filter(l=>l.nativeCreation&&l.visible!==false).map(l=>({layerId:l.id,creation:l.nativeCreation,recordIds:l.copyAdjustment?.recordIds}));
   request.visibilityEdits=hidden.filter(h=>h.object.boardNames.includes(g.name)).map(h=>({...h.edit,box:h.object.box,kind:h.object.kind}));
   const ids=new Set(file.layers.filter(l=>g.ids.includes(l.id)).flatMap(l=>[l.recordId,...(l.copyAdjustment?.recordIds||[])]));
   for(const e of request.nativeMixedEdits)ids.add(e.recordId);

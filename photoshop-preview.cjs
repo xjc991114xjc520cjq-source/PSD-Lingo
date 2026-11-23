@@ -29,6 +29,7 @@ var source=null,copy=null,opened=false,stage="读取源 PSD",failure=null,dialog
 function find(c,id){for(var i=0;i<c.layers.length;i++){var l=c.layers[i];if(l.id===id)return l;if(l.typename==="LayerSet"){var v=find(l,id);if(v)return v;}}return null;}
 function findLayer(doc,id){return find(doc,id);}
 ${photoshopTextObjects}
+${require('./typography-native.cjs').psTypographyNative}
 ${containerScript}
 ${extractionScript}
 try{
@@ -38,7 +39,7 @@ if(source&&!source.saved)throw new Error("源 PSD 有未保存改动，请先保
 if(!source){source=app.open(file);opened=true;}
 stage="创建预览副本";copy=source.duplicate("PSD Lingo preview",false);app.activeDocument=copy;
 stage="拆分底部容器";var nativeEdits=materializeExtracted(copy,${JSON.stringify(options.extractedContainers||[])},${JSON.stringify(options.containerEdits||[])});stage="调整底部容器";applyContainers(copy,nativeEdits);
-nativeTextActions(copy,${JSON.stringify(options.textActions||[])});
+nativeTextActions(copy,${JSON.stringify(options.textActions||[])});nativeTypographyEdits(copy,${JSON.stringify(options.typographyEdits||[])});
 stage="隐藏绑定原文";
 for(var i=0;i<ids.length;i++){if(ids[i]<0)continue;var l=find(copy,ids[i]);if(!l||l.kind!==LayerKind.TEXT)throw new Error("预览文字层 ID 不匹配");l.visible=false;}
 ${options.scalePreview?'stage="缩小显示预览";var w=copy.width.as("px"),h=copy.height.as("px"),scale=Math.min(1,16384/w,16384/h,Math.sqrt(6000000/(w*h)));if(scale<1)copy.resizeImage(UnitValue(Math.max(1,Math.floor(w*scale)),"px"),UnitValue(Math.max(1,Math.floor(h*scale)),"px"),null,ResampleMethod.BICUBIC);':''}

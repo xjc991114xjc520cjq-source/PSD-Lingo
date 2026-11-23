@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('desktop', {
   getLayoutExamples: value => ipcRenderer.invoke('layout-memory-examples',value),
   openLayoutMemory: () => ipcRenderer.invoke('open-layout-memory'),
   installedFonts: format => ipcRenderer.invoke('installed-fonts',format),
+  typographyWorkflow: value=>ipcRenderer.invoke('typography-workflow',value),
   suggest: value => ipcRenderer.invoke('codex-suggest', value),
   suggestLayout: value => ipcRenderer.invoke('codex-layout', value),
   loadCodexSettings:()=>ipcRenderer.invoke('load-codex-settings'),

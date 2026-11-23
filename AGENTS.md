@@ -79,3 +79,5 @@
 - 2026-11-23：准备0.3.102，修复嵌套AI部分失败扫描缓存、失败画板定向重读、BridgeTalk运行版本发现/启动就绪/真实故障分类及PS/AI通用/版本化COM发现。985项回归与后台独立3画板12文字含3AI对象PSB保存重开/JPG通过；对端2023未自然复现。记录practice-records/2026-11-23-adobe-connection/实施与验收.md；正式发布以work/releases/0.3.102/public-verified.json为准。
 
 - 2026-11-23：准备0.3.103，BridgeTalk无法发现Illustrator时新增每任务独立COM回退，沿用原生读/改/回嵌/验收工具；新增Windows应用路径及标准安装路径启动回退，已运行进程不重复启动。990项回归和故意屏蔽BridgeTalk发现的后台PS/AI三画板12文字保存重开/3JPG通过，原稿不变。对端2023尚未实测。记录practice-records/2026-11-23-adobe-independent-connection/实施与验收.md；正式状态以work/releases/0.3.103/public-verified.json为准。
+
+- 2026-11-23：原生文字补扫保留已有计划/文案/布局，新增与失败画板增量读取；内嵌AI默认参数打开及旧文字显式转换，Windows回执锁仅重试交回。993项Node及后台独立PSB三画板12文字/3内嵌AI保存重开/3JPG通过，准备0.3.104。对端2023自然故障与RPC根因未证明复现或解决；公开以work/releases/0.3.104/public-verified.json为准。

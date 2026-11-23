@@ -13,6 +13,14 @@ test('layout reuse commits once and invalidates for changes to task, model/rules
  assert.equal(plans,7);assert.equal((await run('design_layout',{...args,replan:true})).stoppedNoProgress,true);assert.equal(plans,7);await run('design_layout',{...args,referenceFileIds:['new-reference']});assert.equal(plans,8);context.warnings=['Invalid rule file'];await run('design_layout',args);await run('design_layout',args);assert.equal(plans,10);
 });
 function fixture(call=async()=>{}){const state={files:[{name:'source.ai',path:'source.ai',layers:[{id:1,name:'Title',original:'标题',issues:[]},{id:2,name:'kept',recordId:'old',issues:[]}]}],records:[{id:'old',target:'Old'},{id:'new',target:'New'}]},transactions=[];return {state,transactions,run:createAgentWorkspace({state,call,history:{transaction:(fn,reason)=>{transactions.push(reason);fn();}},render:()=>{},selectFile:()=>{},selectedLayer:()=>{},importOriginal:async()=>{},getVisual:()=>[],makePlan:async()=>({files:[]})})};}
+test('native scan expansion retains configured copy and layout, and rejects changed targets without mutation',async()=>{
+ let changed=false,calls=0;const layer={id:'native:a',original:'Original',nativePath:[0],boardId:1,issues:[]},boards=[{id:1,name:'A',box:[0,0,400,300],nativePath:[0]}];
+ const f=fixture(async(name,args)=>{calls++;assert.equal(args.nativeTextScanId,calls===1?'first':'second');return {nativeTextScanId:'second',artboards:boards,layers:[{...layer,original:changed?'Unexpected':'Original'},{id:'native:b',original:'Other',boardId:1,nativePath:[1],issues:[]}]};}),file=f.state.files[0];
+ Object.assign(file,{format:'PSB',width:400,height:300,nativeTextScanId:'first',layers:[layer],artboards:boards});f.state.records=[{id:'r',target:'Approved'}];
+ await f.run('configure_native_text',{fileIndex:0,scanId:'first',documentName:'Kept',changes:[{layerId:layer.id,original:'Original',recordIds:['r'],spans:[{text:'Approved',sourceStart:0}],reason:'approved',layout:{coordinateSpace:'object-document',offset:[2,3]}}]});
+ const before=JSON.stringify(file.artboardPlan.boards);await f.run('inspect_native_text',{fileIndex:0,boardIds:[1]});assert.equal(JSON.stringify(file.artboardPlan.boards),before);assert.equal(file.artboardPlan.documentName,'Kept');assert.equal(file.artboardPlan.nativeTextScanId,'second');assert.equal(f.state.records.length,1);
+ const stateBefore=JSON.stringify(file),commits=f.transactions.length;changed=true;await assert.rejects(f.run('inspect_native_text',{fileIndex:0}),/来源或样式变化/);assert.equal(JSON.stringify(file),stateBefore);assert.equal(f.transactions.length,commits);
+});
 
 test('mixed style edits use an undo transaction, reject missing copy and preserve independent parameter labels',async()=>{
  const f=fixture(),file=f.state.files[0];file.format='AI';Object.assign(file.layers[0],{original:'1亿次',issues:['混合文字样式尚不支持'],alignment:'center'});

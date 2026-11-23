@@ -15,7 +15,10 @@ async function withIllustratorMailbox(directory,run,{execute=require('../illustr
    await execute(path.join(directory,'ai-com-'+item.id),source);
    result=JSON.parse((await fs.readFile(output,'utf8')).replace(/^\uFEFF/,''));
   }catch(e){result={error:'Illustrator 独立COM通道失败：'+e.message,code:e.uncertain?'AI_COM_EXECUTION_UNCERTAIN':'AI_COM_CONNECTION_FAILED',uncertain:!!e.uncertain};}
-  const temp=response+'.tmp';await fs.writeFile(temp,JSON.stringify({id:item.id,result}));await fs.rename(temp,response);
+  const temp=response+'.tmp';await fs.writeFile(temp,JSON.stringify({id:item.id,result}));
+  // Windows readers (including Photoshop) can briefly hold the old receipt open.
+  // Retry only publishing the completed receipt, never the Adobe operation.
+  for(let attempt=0;;attempt++){try{await fs.rename(temp,response);break;}catch(e){if(!['EPERM','EACCES','EBUSY'].includes(e.code)||attempt>=40)throw e;await new Promise(resolve=>setTimeout(resolve,50));}}
  }if(!closed)await new Promise(resolve=>setTimeout(resolve,interval));}})();
  // Always observe the pump rejection, including while the native job is waiting.
  let pumpFailure;pump.catch(e=>{pumpFailure=e;});

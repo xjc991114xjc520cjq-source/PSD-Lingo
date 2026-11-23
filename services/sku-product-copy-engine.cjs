@@ -2,16 +2,19 @@
 const crypto=require('node:crypto'),path=require('node:path');
 const {hashFile}=require('../photoshop-file-io.cjs');
 const {validateArtboardPlan}=require('../photoshop-artboard-plan.cjs');
-function createProductCopyEngine({engine,helperPath=engine.helperPath}){
+function createProductCopyEngine({engine,helperPath=engine.helperPath,onIssue=()=>{}}){
  const scans=new Map();
  return {capture(ids){return {schema:1,scans:[...scans].filter(([id])=>ids.includes(id))};},restore(snapshot){if(snapshot?.schema!==1)return;for(const [id,scan] of snapshot.scans||[]){if(!scan?.source?.fingerprint||!scan?.metadata||!Array.isArray(scan.data?.matches))continue;scans.set(id,structuredClone(scan));}while(scans.size>8)scans.delete(scans.keys().next().value);},async inspect({source,mapping,metadata,regions}){
   if(!mapping.approved)throw Error('请先确认产品对应');if(regions!==undefined&&(!regions||typeof regions!=='object'||Array.isArray(regions)||Object.entries(regions).some(([id,r])=>!mapping.approved.boards.some(b=>String(b.boardId)===id&&b.action==='use')||!Array.isArray(r)||r.length!==4||!r.every(Number.isFinite)||r[0]<0||r[1]<0||r[2]<=0||r[3]<=0||r[0]+r[2]>1||r[1]+r[3]>1)))throw Error('底部文案块范围无效');
   const key=JSON.stringify([source.path,source.fingerprint,mapping.approved.approvalDigest,regions]);
-  for(const scan of scans.values())if(scan.key===key)return scan.metadata;
+  let previous;for(const scan of scans.values())if(scan.key===key){previous=scan;if(!(scan.data.issues||[]).length)return scan.metadata;}
   const boardIds=mapping.approved.boards.filter(b=>b.action==='use').map(b=>String(b.boardId)),rule={productScan:true,boardIds,regions,includeHidden:false,detectVariants:false};
-  const data=await engine.execute(source.path,{rule,operation:'analyze'});if(await hashFile(source.path)!==source.fingerprint)throw Error('原稿在底部文案解析期间发生变化');
+  const retryBoards=previous?[...new Set(previous.data.issues.map(i=>String(i.boardId)))]:[],scoped=retryBoards.length&&retryBoards.every(id=>boardIds.includes(id));
+  const fresh=await engine.execute(source.path,{rule:scoped?{...rule,boardIds:retryBoards}:rule,operation:'analyze'});
+  const data=scoped?{...previous.data,...fresh,boards:previous.data.boards,matches:[...previous.data.matches.filter(e=>!retryBoards.includes(String(e.board.id))),...fresh.matches],issues:[...previous.data.issues.filter(e=>!retryBoards.includes(String(e.boardId))),...(fresh.issues||[])],skipped:[...(previous.data.skipped||[]).filter(e=>!retryBoards.includes(String(e.boardId))),...(fresh.skipped||[])]}:fresh;if(await hashFile(source.path)!==source.fingerprint)throw Error('原稿在底部文案解析期间发生变化');
+  for(const issue of fresh.issues||[])try{await onIssue({code:issue.code||'NATIVE_OBJECT_READ_FAILED',nativePhase:issue.nativePhase||'read',message:issue.reason,source:{format:metadata.format||'PSD',fingerprint:source.fingerprint}});}catch(_){}
   const id=crypto.randomUUID(),layers=data.matches.map(e=>{const ranges=e.styles?.textStyleRange||[],size=ranges[0]?.textStyle?.size;return {id:'sku:'+e.key,name:e.name,original:e.original,box:e.box,localBox:e.localBox,nativeCanvas:e.nativeCanvas,boardBox:e.board.box,boardNames:[e.board.name],boardId:Number(e.board.id),nativePath:e.steps[0].path,visible:e.visible,font:e.fonts[0],size:size?.value||size||12,alignment:'left',issues:e.problems,supported:!e.problems.length,mixedStyleRuns:ranges.map(r=>({from:r.from,to:r.to,signature:JSON.stringify(r.textStyle)}))};});
-  const result={...metadata,layers,productCopyScanId:id,productCopyScanIssues:data.issues,productCopyScanSkipped:data.skipped};scans.set(id,{key,source,rule,data,metadata:result});if(scans.size>8)scans.delete(scans.keys().next().value);return result;
+  const result={...metadata,layers,productCopyScanId:id,productCopyScanIssues:data.issues,productCopyScanSkipped:data.skipped};for(const [old,r]of scans)if(r.key===key)scans.delete(old);scans.set(id,{key,source,rule,data,metadata:result});if(scans.size>8)scans.delete(scans.keys().next().value);return result;
  },async run({source,plan,directory,onProgress=()=>{}}){
   const scan=scans.get(plan.productCopyScanId);if(!scan||scan.source.path!==source.path||scan.source.fingerprint!==source.fingerprint)throw Error('底部对象定位已失效，请重新inspect_product_copy并配置计划');
   validateArtboardPlan(plan,scan.metadata);const format=path.extname(source.path).slice(1).toUpperCase();if(plan.outputFormat!=='auto'&&plan.outputFormat!==format)throw Error('嵌套智能对象改字保留原稿PSD/PSB格式；请选auto或原格式');

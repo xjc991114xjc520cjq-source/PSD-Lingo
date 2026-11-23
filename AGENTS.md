@@ -75,3 +75,5 @@
 - 0.3.99最终门禁：967项Node、22项助手Electron、54图独立高级审验及正式包启动全部通过。实际公开发布须查看该版本public-verified.json；不以本条记录代替公开签名证明。
 - 2026-11-18：接续与暂停通道修复准备0.3.100。安全边界暂停保留同一本机Codex会话、待答问题和在途结果；nativeSession支持thread/resume及保留完整记录的明确降级。工作记录暂停/待答断点、结构/预览引用、原生文字和SKU定位、制作副本及审验缓存恢复，继承任务谱系且保持新任务隔离。976项Node、助手22项Electron、暂停/回答/继续及暂停断点、历史记录恢复、54图9批1会话中途暂停和正式包启动通过；实际本机gpt-6.1-sol双回合跨进程工具接续通过。未调用Adobe或客户原稿，旧记录无缓存仍需必要重读，不承诺立即冻结在途原生操作。详见practice-records/2026-11-18-continuation/实施与验收.md；公开状态以work/releases/0.3.100/public-verified.json及latest签名为准，归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.100。
 - 2026-11-18：0.3.100上传收尾期间发现普通小PSD恢复快照缺少8位RGB标记，保留已上传资产、标为预发布并撤离稳定latest；补齐字段及真实renderer parseImported回归后，全量977项通过。最终准备0.3.101，其他暂停/接续UI、本机跨进程及54图9批中途暂停证据沿用；正式包、归档及公开验签分别查看work/releases/0.3.101，未验签前不以准备状态声称最终正式发布。
+
+- 2026-11-23：准备0.3.102，修复嵌套AI部分失败扫描缓存、失败画板定向重读、BridgeTalk运行版本发现/启动就绪/真实故障分类及PS/AI通用/版本化COM发现。985项回归与后台独立3画板12文字含3AI对象PSB保存重开/JPG通过；对端2023未自然复现。记录practice-records/2026-11-23-adobe-connection/实施与验收.md；正式发布以work/releases/0.3.102/public-verified.json为准。

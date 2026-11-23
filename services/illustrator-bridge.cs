@@ -7,8 +7,7 @@ class IllustratorBridge {
   Console.OutputEncoding=System.Text.Encoding.UTF8;object app=null;bool dispatched=false;string phase="连接";
   try {
    if(args.Length!=1||!File.Exists(args[0])||Path.GetExtension(args[0]).ToLowerInvariant()!=".jsx")throw new Exception("Invalid Illustrator script path");
-   Type type=Type.GetTypeFromProgID("Illustrator.Application",true);
-   app=Activator.CreateInstance(type);
+   Type type;app=AdobeConnection.Connect("Illustrator",out type);
    phase="脚本接口预检";
    object probe=type.InvokeMember("DoJavaScript",BindingFlags.InvokeMethod|BindingFlags.OptionalParamBinding,null,app,new object[]{"'sparkit-native-ready'"});
    if(Convert.ToString(probe)!="sparkit-native-ready")throw new Exception("原生脚本接口未返回预期的就绪结果");

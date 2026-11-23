@@ -17,8 +17,8 @@ class DeviceService {
  static string PhotoshopScriptPath(string file){string full=Path.GetFullPath(file);if(!File.Exists(full)||!String.Equals(Path.GetExtension(full),".jsx",StringComparison.OrdinalIgnoreCase))throw new Exception("Photoshop script file is missing or invalid");return full;}
  static void PhotoshopScript(string file){
   string full=PhotoshopScriptPath(file);
-  Type type=Type.GetTypeFromProgID("Photoshop.Application");if(type==null)throw new Exception("Photoshop COM registration unavailable");object ps=null;
-  try{ps=Activator.CreateInstance(type);using(var notice=new AdobeSaveNotice(full)){type.InvokeMember("DoJavaScriptFile",BindingFlags.InvokeMethod,null,ps,new object[]{full});}}
+  Type type;object ps=null;
+  try{ps=AdobeConnection.Connect("Photoshop",out type);using(var notice=new AdobeSaveNotice(full)){type.InvokeMember("DoJavaScriptFile",BindingFlags.InvokeMethod,null,ps,new object[]{full});}}
   catch(TargetInvocationException e){throw new Exception("Photoshop script failed: "+(e.InnerException??e).Message,e.InnerException??e);}
   finally{if(ps!=null&&Marshal.IsComObject(ps))Marshal.FinalReleaseComObject(ps);}
  }

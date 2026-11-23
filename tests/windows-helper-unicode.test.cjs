@@ -10,7 +10,7 @@ test('compiled Windows helper validates UTF8 Chinese and supplementary-character
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sparkit-unicode-'));
  try {
   const exe=path.join(dir,'helper.exe');
-  execFileSync(path.join(process.env.WINDIR||'C:/Windows','Microsoft.NET/Framework64/v4.0.30319/csc.exe'),['/nologo','/target:exe','/platform:x64','/reference:System.Web.Extensions.dll','/reference:System.Security.dll','/out:'+exe,path.join(__dirname,'../services/windows-device.cs'),path.join(__dirname,'../services/windows-adobe-notices.cs')],{windowsHide:true});
+  execFileSync(path.join(process.env.WINDIR||'C:/Windows','Microsoft.NET/Framework64/v4.0.30319/csc.exe'),['/nologo','/target:exe','/platform:x64','/reference:System.Web.Extensions.dll','/reference:System.Security.dll','/out:'+exe,path.join(__dirname,'../services/windows-device.cs'),path.join(__dirname,'../services/windows-adobe-notices.cs'),path.join(__dirname,'../services/adobe-connection.cs')],{windowsHide:true});
   const folder=path.join(dir,'代表验证 中文 空格 😀');fs.mkdirSync(folder);
   const file=path.join(folder,'预览.jsx');fs.writeFileSync(file,'// validation only; never execute');
   assert.deepEqual(await helper(exe,{op:'validate-photoshop-script',path:file}),{valid:true,path:file});

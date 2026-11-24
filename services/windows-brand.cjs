@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process');
+function hasEmbeddedIcon(exe,icon){try{const bytes=fs.readFileSync(exe),ico=fs.readFileSync(icon),count=ico.readUInt16LE(4);if(count<1||count>20)return false;for(let i=0;i<count;i++){const entry=6+16*i,length=ico.readUInt32LE(entry+8),offset=ico.readUInt32LE(entry+12);if(!length||offset+length>ico.length||!bytes.includes(ico.subarray(offset,offset+length)))return false;}return true;}catch{return false;}}
 function install({app,icon,isUpdating=()=>false}){
  if(process.platform!=='win32'||!app.isPackaged)return;
  const exe=process.execPath;if(path.basename(exe).toLowerCase()!=='psd lingo.exe')return;
@@ -6,10 +7,10 @@ function install({app,icon,isUpdating=()=>false}){
  const launch=args=>{const child=spawn(helper,args,{windowsHide:true,detached:true,stdio:'ignore'});child.on('error',()=>{});child.unref();};
  launch(['shortcuts',exe,icon]);
  const marker=path.join(app.getPath('userData'),'windows-brand-'+crypto.createHash('sha256').update(exe+app.getVersion()).update(fs.readFileSync(icon)).digest('hex').slice(0,16)+'.ok');
- if(fs.existsSync(marker))return;
+ if(fs.existsSync(marker)||hasEmbeddedIcon(exe,icon))return;
  app.once('before-quit',()=>{
   if(isUpdating())return;
   try{const dir=path.join(app.getPath('userData'),'branding');fs.mkdirSync(dir,{recursive:true});const copied=path.join(dir,'sparkit-brand-'+app.getVersion()+'.exe');fs.copyFileSync(helper,copied);const child=spawn(copied,['after-exit',exe,icon,String(process.pid),marker],{windowsHide:true,detached:true,stdio:'ignore'});child.on('error',()=>{});child.unref();}catch{}
  });
 }
-module.exports={install};
+module.exports={install,hasEmbeddedIcon};

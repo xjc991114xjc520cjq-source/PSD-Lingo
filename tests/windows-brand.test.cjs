@@ -20,3 +20,5 @@ test('Windows branding does not patch executable while update restart owns it',(
  mod.exports.install({app:{isPackaged:true,getAppPath:()=> 'C:/runtime/resources/app',getPath:()=> 'C:/profile',getVersion:()=> 'test',once:(_event,fn)=>{beforeQuit=fn;}},icon:'C:/icon.ico',isUpdating:()=>updating});beforeQuit();assert.equal(calls.filter(a=>a[0]==='after-exit').length,updating?0:1);
  }
 });
+
+test('already branded runtime never schedules an executable rewrite after close',()=>{const {hasEmbeddedIcon}=require('../services/windows-brand.cjs'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'brand-already-')),ico=path.resolve(__dirname,'../renderer/assets/sparkit.ico'),bytes=fs.readFileSync(ico),exe=path.join(dir,'program.exe');try{const images=[];for(let i=0;i<bytes.readUInt16LE(4);i++){const entry=6+i*16;images.push(bytes.subarray(bytes.readUInt32LE(entry+12),bytes.readUInt32LE(entry+12)+bytes.readUInt32LE(entry+8)));}fs.writeFileSync(exe,Buffer.concat([Buffer.from('fixture'),...images]));assert.equal(hasEmbeddedIcon(exe,ico),true);fs.writeFileSync(exe,'unbranded');assert.equal(hasEmbeddedIcon(exe,ico),false);}finally{fs.rmSync(dir,{recursive:true,force:true});}});

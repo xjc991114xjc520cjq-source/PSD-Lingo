@@ -6,6 +6,7 @@ const {containerScript}=require('./container-edit.cjs');
 const {extractionScript}=require('./container-extraction.cjs');
 function decodeBridgeOutput(chunks){return Buffer.concat(chunks).toString('utf16le').replace(/^\uFEFF/,'').trim();}
 async function preparePhotoshop(helperPath){
+  if(process.platform==='darwin')return; // Apple Events resolves the host at submission.
   if(!helperPath)return;
   await helper(helperPath,{op:'prepare-photoshop'});
 }
@@ -13,6 +14,15 @@ async function executeScript(directory, source) {
   await fs.mkdir(directory,{recursive:true});
   const jsx=path.join(directory,'preview.jsx');
   await fs.writeFile(jsx,'\uFEFF'+source,'utf8');
+  if(process.platform==='darwin'){
+    const diagnostic=path.join(directory,'bridge-status.json');
+    const record=value=>fs.writeFile(diagnostic,JSON.stringify({transport:'apple-events',at:new Date().toISOString(),...value}));
+    await record({state:'starting'});
+    try{await require('./services/macos-adobe.cjs').runMacAdobeScript('photoshop',jsx);}
+    catch(error){await record({state:'failed',error:error.message,uncertain:!!error.uncertain}).catch(()=>{});throw error;}
+    try{await record({state:'completed'});}catch(error){throw require('./services/native-receipt.cjs').missingReceipt(error);}
+    return;
+  }
   const helperCandidates=[path.join(__dirname,'photoshop-bridge.exe'),path.join(__dirname,'services/bin/psd-lingo-service.exe'),path.join(__dirname,'../psd-lingo-service.exe')];
   let bridge;for(const candidate of helperCandidates){try{await fs.access(candidate);bridge=candidate;break;}catch{}}
   const diagnostic=path.join(directory,'bridge-status.json');

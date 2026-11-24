@@ -16,7 +16,7 @@ function verifyEnvelope(envelope,keys) {
   if(signature.length!==64||!crypto.verify('sha256',Buffer.from(canonical(envelope.payload)),{key:keys[envelope.keyId],dsaEncoding:'ieee-p1363'},signature))throw new Error('服务响应签名校验失败');
   return envelope.payload;
 }
-function deviceId(spki) {return 'win-'+crypto.createHash('sha256').update(Buffer.from(spki,'base64')).digest('hex').slice(0,24);}
+function deviceId(spki,platform='win32') {if(!['win32','darwin'].includes(platform))throw Error('设备平台不受支持');return (platform==='darwin'?'mac-':'win-')+crypto.createHash('sha256').update(Buffer.from(spki,'base64')).digest('hex').slice(0,24);}
 function checkLease(envelope,keys,{appId,device,version}) {
   const p=verifyEnvelope(envelope,keys),now=Date.parse(p.serverTimeUtc),expiry=Date.parse(p.expiresAtUtc);
   if(p.appId!==appId||p.deviceId!==device||p.buildId!==version||!Array.isArray(p.features)||!p.leaseId||!Number.isFinite(now)||!Number.isFinite(expiry)||expiry<=now||expiry-now>900000)throw new Error('授权租约内容无效');

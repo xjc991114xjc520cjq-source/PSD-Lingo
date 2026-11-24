@@ -8,6 +8,8 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "build:helper": "node services/build-helper.cjs",
+    "build:helper:mac": "node services/build-macos-helper.cjs",
+    "test:mac:native": "node --test tests/macos-device-native.test.cjs",
     "updates:admin": "electron server/admin",
     "updates:prepare": "node server/tools/prepare-release.cjs"
   },

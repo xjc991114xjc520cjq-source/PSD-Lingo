@@ -56,6 +56,7 @@ app.redraw();var b=inkBounds(t);t.translate(r[0]+p.box[0]-b[0],r[1]-p.box[1]-b[1
 function executeScript(directory,source){return enqueueScript(async()=>{
  await fs.mkdir(directory,{recursive:true});const jsx=path.join(directory,'illustrator.jsx');
  await fs.writeFile(jsx,'\uFEFF'+source,'utf8');
+ if(require('node:process').platform==='darwin')return require('./services/macos-adobe.cjs').runMacAdobeScript('illustrator',jsx);
  const bridge=await fs.access(path.join(__dirname,'illustrator-bridge.exe')).then(()=>path.join(__dirname,'illustrator-bridge.exe'),()=>path.join(__dirname,'services/bin/illustrator-bridge.exe'));
  await new Promise((resolve,reject)=>{const child=spawn(bridge,[jsx],{windowsHide:true}),output=[];child.stdout.on('data',b=>output.push(b));child.stderr.on('data',b=>output.push(b));child.on('error',reject);child.on('close',code=>code===0?resolve():reject(bridgeError(Buffer.concat(output).toString('utf8'),code)));});
 });}

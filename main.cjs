@@ -268,15 +268,18 @@ async function executePhotoshopPlan(plan,outputDir){
     const dir = path.join(app.getPath('userData'), 'jobs', Date.now().toString()); await fs.mkdir(dir, {recursive: true});
     const jsx = path.join(dir, 'run.jsx'), vbs = path.join(dir, 'bridge.vbs');
     const resultPath=path.join(dir,'result.json');
-    await helper(helperPath,{op:'prepare-photoshop'});
+    if(process.platform!=='darwin')await helper(helperPath,{op:'prepare-photoshop'});
     const script=jsxForPlan(plan,outputDir?{outputDirectory:outputDir,silent:true}:{}).replace('report.close();','report.close(); report.copy('+JSON.stringify(resultPath.replace(/\\/g,'/'))+');');
     await fs.writeFile(jsx, '\uFEFF' + script, 'utf8');
+    if(process.platform==='darwin')await require('./services/macos-adobe.cjs').runMacAdobeScript('photoshop',jsx);
+    else {
     await fs.writeFile(vbs, 'On Error Resume Next\r\nSet ps = CreateObject("Photoshop.Application")\r\nIf Err.Number <> 0 Then\r\n WScript.Echo "Photoshop COM unavailable. Install Photoshop or export JSX and run via File > Scripts > Browse."\r\n WScript.Quit 1\r\nEnd If\r\nErr.Clear\r\nps.DoJavaScriptFile WScript.Arguments(0)\r\nIf Err.Number <> 0 Then\r\n WScript.Echo Err.Description\r\n WScript.Quit 1\r\nEnd If\r\nWScript.Echo "Photoshop finished. Review the report in your chosen output folder."\r\n', 'utf8');
     await new Promise((resolve, reject) => {
       const child = spawn('cscript.exe', ['//nologo','//U', vbs, jsx], {windowsHide: true}); const output = [];
       child.stdout.on('data', b => output.push(b)); child.stderr.on('data', b => output.push(b));
       child.on('error', reject); child.on('close', code => {const message=decodeBridgeOutput(output);if(code===0)resolve(message);else reject(message.includes('Photoshop COM unavailable')?Error(message):require('./services/native-receipt.cjs').missingReceipt(Error(message||'Photoshop脚本进程未正常返回')));});
     });
+    }
     let psResults;try{psResults=JSON.parse((await fs.readFile(resultPath,'utf8')).replace(/^\uFEFF/,''));if(!Array.isArray(psResults)||psResults.length!==plan.files.length)throw Error('原生结果数量不符');}catch(error){throw require('./services/native-receipt.cjs').missingReceipt(error);}
 
     for(const [i,r]of psResults.entries()){const file=plan.files[i];if(!file)continue;if(!r.error&&file.deliveryBoards)try{await require('./photoshop-delivery.cjs').verifyDelivery(r,{expectedBoards:file.deliveryBoards});}catch(e){r.error=e.message;r.status='最终JPG核验未通过，已保存副本保留';}if(await hashFile(file.path)!==file.fingerprint){r.error='制作期间原稿已变化，当前副本不能作为已通过成果';}}
@@ -424,7 +427,7 @@ ipcMain.handle('clear-codex-settings',safeOperation('clear-codex-settings',()=>c
 ipcMain.handle('list-api-models',safeOperation('list-api-models',input=>listApiModels(input,{settings:codexSettings,fetch:(...args)=>net.fetch(...args)})));
 ipcMain.handle('discover-codex',safeOperation('discover-codex',async()=>{let savedPath='';try{savedPath=(await codexSettings.get()).executable;}catch{}return discoverCodex({savedPath});}));
 ipcMain.handle('choose-codex',safeOperation('choose-codex',async () => {
-  const r = await dialog.showOpenDialog(win, {title: '选择官方 Codex CLI 可执行文件', properties: ['openFile'], filters: [{name: 'Codex CLI', extensions: ['exe']}]});
+  const r = await dialog.showOpenDialog(win, {title: '选择官方 Codex CLI 可执行文件', properties: ['openFile'], ...(process.platform==='win32'?{filters: [{name: 'Codex CLI', extensions: ['exe']}]}:{})});
   return r.canceled ? null : r.filePaths[0];
 }));
 ipcMain.handle('cancel-codex',safeOperation('cancel-codex',async () => { codexAbort?.abort(); return true; }));

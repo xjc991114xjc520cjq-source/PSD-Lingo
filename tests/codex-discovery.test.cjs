@@ -2,6 +2,21 @@ const test=require('node:test'),assert=require('node:assert/strict'),path=requir
 const {discoverCodex}=require('../services/codex-discovery.cjs');
 function fixture(files=[],directories={}){const calls=[];return {calls,async stat(name){calls.push(name);if(!files.includes(name))throw new Error('missing');return {isFile:()=>true};},async readdir(name){return (directories[name]||[]).map(name=>({name,isDirectory:()=>true}));}};}
 const options=io=>({platform:'win32',arch:'x64',env:{},io});
+function macFixture(files,denied=[]){const io=fixture(files);io.access=async file=>{if(denied.includes(file))throw Error('not executable');};return io;}
+test('Mac Finder PATH finds Apple Silicon Homebrew installation without running a shell',async()=>{
+ const io=macFixture(['/opt/homebrew/bin/codex']);
+ const result=await discoverCodex({platform:'darwin',arch:'arm64',env:{HOME:'/Users/test',PATH:'/usr/bin:/bin'},io});
+ assert.equal(result.path,'/opt/homebrew/bin/codex');assert.ok(io.calls.every(file=>!file.endsWith('.exe')));
+});
+test('Mac discovery finds optional native npm ARM64 package before Homebrew shim',async()=>{
+ const file='/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex/codex';
+ const result=await discoverCodex({platform:'darwin',arch:'arm64',env:{},io:macFixture([file,'/opt/homebrew/bin/codex'])});assert.equal(result.path,file);
+});
+test('Mac paths preserve case, prefer HOME and reject files without execute permission',async()=>{
+ const io=macFixture(['/Tools/Codex','/Tools/codex','/Users/mac/.codex/bin/codex'],['/Tools/Codex']);
+ const result=await discoverCodex({platform:'darwin',arch:'arm64',savedPath:'/Tools/Codex',env:{HOME:'/Users/mac',USERPROFILE:'/wrong',PATH:'/Tools'},io});
+ assert.equal(result.path,'/Tools/codex');assert.ok(result.candidates.includes('/Users/mac/.codex/bin/codex'));
+});
 test('saved valid executable is first and skips scans',async()=>{const io=fixture(['C:\\Tools\\codex.exe']);const result=await discoverCodex({...options(io),savedPath:'C:\\Tools\\codex.exe'});assert.equal(result.path,'C:\\Tools\\codex.exe');assert.equal(io.calls.length,1);});
 test('missing saved path falls back to PATH, handles quoted paths and case-insensitive env',async()=>{const io=fixture(['C:\\Program Files\\Codex\\codex.exe']);const result=await discoverCodex({...options(io),savedPath:'C:\\old\\codex.exe',env:{Path:'"C:\\Program Files\\Codex";relative'}});assert.equal(result.path,'C:\\Program Files\\Codex\\codex.exe');assert.ok(io.calls.every(p=>path.isAbsolute(p)));});
 test('npm shim directory resolves optional native package instead of selecting cmd wrapper',async()=>{const file='C:\\User\\Roaming\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe';const io=fixture([file]);const result=await discoverCodex({...options(io),env:{APPDATA:'C:\\User\\Roaming'}});assert.equal(result.path,file);assert.ok(!io.calls.some(p=>p.endsWith('.cmd')));});

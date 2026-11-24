@@ -12,6 +12,8 @@ private/
 *secret*.txt
 admin-password-hash.json
 *.dpapi
+*.keychain
+services/bin/sparkit-device
 *.log
 *.exe
 *.dll

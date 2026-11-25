@@ -1,0 +1,56 @@
+name: Sparkit Mac test package
+on:
+  push:
+    branches: [codex/mac-test-build]
+    paths: [mac-build-trigger.json]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch private draft build input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $inputSpec = Get-Content mac-build-trigger.json -Raw | ConvertFrom-Json
+          if ($inputSpec.tag -notmatch '^mac-test-source-[0-9-]+$') { throw 'Invalid build source tag' }
+          gh release download $inputSpec.tag --repo $env:GITHUB_REPOSITORY --pattern 'Sparkit-Mac-build-input.zip' --dir input
+          if ($LASTEXITCODE) { throw 'Source download failed' }
+          if ((Get-FileHash input/Sparkit-Mac-build-input.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $inputSpec.sha256) { throw 'Source hash mismatch' }
+          Expand-Archive input/Sparkit-Mac-build-input.zip source
+      - name: Install Mac dependencies
+        working-directory: source
+        run: |
+          if ((node -p process.arch) -ne 'arm64') { throw 'Apple Silicon runner required' }
+          npm install --no-audit --no-fund --package-lock=false
+          if ($LASTEXITCODE) { throw 'Dependency installation failed' }
+      - name: Compile and package
+        working-directory: source
+        run: |
+          node services/build-macos-helper.cjs
+          if ($LASTEXITCODE) { throw 'Swift compilation failed' }
+          node build.cjs
+          if ($LASTEXITCODE) { throw 'Renderer build failed' }
+          node package-macos.cjs
+          if ($LASTEXITCODE) { throw 'Mac package failed' }
+          node tools/mac-package-smoke.cjs
+          if ($LASTEXITCODE) { throw 'Packaged app smoke test failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sparkit-Mac-arm64-test
+          path: |
+            source/work/mac-dist/*.zip
+            source/work/mac-dist/*.json
+            source/work/mac-dist/*.txt
+          if-no-files-found: warn

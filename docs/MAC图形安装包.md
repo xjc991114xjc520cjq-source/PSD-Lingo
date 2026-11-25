@@ -17,4 +17,8 @@
 ## 验证
 
 最终云端运行、安装报告和公开收据完成后补充。不能把命令行安装成功冒充用户 Mac Gatekeeper 图形放行通过。旧版“已损坏”提示尚未远程确诊，PKG 旨在固定安装路径并保持原生权限与链接，不声称已证明根因。
-`n最终云端运行 45542048193 成功：34 项 Mac 专项、实际 PKG 安装、安装后深度签名、正式 renderer 与登录设置、真实 CLI 登录发起/取消及 Keychain/Secure Enclave 均通过；零模型调用。安装包 262100230 字节，SHA256 3e34d1b3dbc691a94497977cafd8360b36d5953fcd38680d410a013712b30cbe。本机下载哈希已核对。Gatekeeper 自动评估 rejected（no usable signature），首次图形放行仍待用户 Mac；尚未实现公证后的零拦截分发。
+
+最终云端运行 45542048193 成功：34 项 Mac 专项、实际 PKG 安装、安装后深度签名、正式 renderer 与登录设置、真实 CLI 登录发起/取消及 Keychain/Secure Enclave 均通过；零模型调用。安装包 262100230 字节，SHA256 3e34d1b3dbc691a94497977cafd8360b36d5953fcd38680d410a013712b30cbe。本机下载哈希已核对。Gatekeeper 自动评估 rejected（no usable signature），首次图形放行仍待用户 Mac；尚未实现公证后的零拦截分发。
+
+
+已公开第三版，匿名安装包下载 HTTP 200，公开报告/资产 digest/本机 SHA256 一致，Windows latest 仍为 v0.3.107。收据 work/mac-installer-handoff/public-verified.json；本机归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-test-0.3.107-arm64-3。

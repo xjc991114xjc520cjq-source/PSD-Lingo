@@ -72,3 +72,7 @@
 ## 第二版公开交付收据
 
 第二版已于 2026-11-25 公开：[内置 Codex 的 Mac 测试包](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107-2)。匿名下载 HTTP 200，公开报告/资产 digest/本机 SHA256 一致，262214213 字节，616 个 ZIP 条目、14 个 framework 符号链接与 Codex/配套程序执行权限已核对。Windows latest 仍为 v0.3.107。收据 work/mac-embedded-handoff/public-verified.json；本机归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-test-0.3.107-arm64-2。
+
+## 第三版图形安装包
+
+用户要求免终端的简便测试；已公开 mac-arm64-test-0.3.107-3，新增 .pkg 自动安装到 /Applications/Sparkit.app。云端 45542048193 的实际安装、安装后签名与应用/Codex/Keychain 验证通过，34 项 Mac 专项通过。详见 MAC图形安装包.md。Gatekeeper 评估拒绝无签名安装器，首次可能需隐私与安全性单独放行；无 Developer ID/公证，不宣称零拦截或用户 Mac 已通过。收据 work/mac-installer-handoff/public-verified.json，Windows latest 不变。

@@ -26,3 +26,4 @@ Mac 包已带官方 arm64 Codex CLI 0.172.0 及其配套原生程序、资源和
 后续反馈优先检查第二版的实际账号登录、模型列表、一次小任务和任务继续；不把未登录的协议测试描述成真实用户模型对话通过。
 
 第二版 SHA256：`d36cf7a2010a51d2c571c0b976bad2b1a3305e8f04603a5df8407d9887cc9d2f`。发布状态以 `work/mac-embedded-handoff/public-verified.json` 为准。
+第二版已于 2026-11-25 公开：[内置 Codex 的 Mac 测试包](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107-2)。匿名下载 HTTP 200，公开报告/资产 digest/本机 SHA256 一致，262214213 字节，616 个 ZIP 条目、14 个 framework 符号链接与 Codex/配套程序执行权限已核对。Windows latest 仍为 v0.3.107。收据 work/mac-embedded-handoff/public-verified.json；本机归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-test-0.3.107-arm64-2。

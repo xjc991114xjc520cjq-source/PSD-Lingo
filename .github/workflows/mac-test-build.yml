@@ -45,6 +45,13 @@ jobs:
           if ($LASTEXITCODE) { throw 'Renderer build failed' }
           node package-macos.cjs
           if ($LASTEXITCODE) { throw 'Mac package failed' }
+          node tools/mac-installer.cjs
+          if ($LASTEXITCODE) { throw 'Installer packaging failed' }
+          sudo /usr/sbin/installer -pkg work/mac-dist/Sparkit-0.3.107-Mac-arm64-Setup.pkg -target /
+          if ($LASTEXITCODE) { throw 'Real installer execution failed' }
+          /usr/bin/codesign --verify --deep --strict /Applications/Sparkit.app
+          if ($LASTEXITCODE) { throw 'Installed application signature failed' }
+          $env:SPARKIT_MAC_SMOKE_APP = '/Applications/Sparkit.app'
           node tools/mac-package-smoke.cjs
           if ($LASTEXITCODE) { throw 'Packaged app smoke test failed' }
       - name: Archive verified Mac package as private draft
@@ -52,7 +59,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'mac-arm64-test-0.3.107-2'
+          $tag = 'mac-arm64-test-0.3.107-3'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target codex/mac-test-build --draft --title 'Sparkit Apple Silicon test 0.3.107' --notes 'Ad-hoc signed developer test build. Not notarized. Adobe and real-device acceptance pending.'
@@ -60,7 +67,7 @@ jobs:
           }
           $isDraft = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
           if ($LASTEXITCODE -or $isDraft -ne 'true') { throw 'Published packages must not be overwritten; choose a new test tag' }
-          gh release upload $tag source/work/mac-dist/*.zip source/work/mac-dist/*.json source/work/mac-dist/*.png --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag source/work/mac-dist/*.pkg source/work/mac-dist/*.zip source/work/mac-dist/*.json source/work/mac-dist/*.png --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE) { throw 'Draft package archive failed' }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -76,6 +83,7 @@ jobs:
         with:
           name: Sparkit-Mac-arm64-test
           path: |
+            source/work/mac-dist/*.pkg
             source/work/mac-dist/*.zip
             source/work/mac-dist/*.json
             source/work/mac-dist/*.txt

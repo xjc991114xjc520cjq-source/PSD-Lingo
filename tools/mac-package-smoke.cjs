@@ -3,11 +3,12 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function main(){
  if(process.platform!=='darwin'||process.arch!=='arm64')throw Error('Apple Silicon required');
  const dist=path.resolve(__dirname,'../work/mac-dist'),profile=await fs.mkdtemp(path.join(os.tmpdir(),'sparkit-mac-smoke-'));
- const child=spawn(path.join(dist,'Sparkit.app/Contents/MacOS/Sparkit'),['--user-data-dir='+profile,'--remote-debugging-port=0'],{stdio:['ignore','pipe','pipe']});
+ const installedApp=process.env.SPARKIT_MAC_SMOKE_APP||path.join(dist,'Sparkit.app');
+ const child=spawn(path.join(installedApp,'Contents/MacOS/Sparkit'),['--user-data-dir='+profile,'--remote-debugging-port=0'],{stdio:['ignore','pipe','pipe']});
  let log='',exit;child.stdout.on('data',v=>log+=v);child.stderr.on('data',v=>log+=v);child.on('exit',code=>exit=code);
- const report={platform:process.platform,arch:process.arch,rendererPassed:false,nativeHardware:'not-tested',adobe:'requires-user-Mac'};
+ const report={installedApp,platform:process.platform,arch:process.arch,rendererPassed:false,nativeHardware:'not-tested',adobe:'requires-user-Mac'};
  try{
-  const {invokeDeviceService}=require('../services/device-service.cjs'),helperRoot=path.join(dist,'Sparkit.app/Contents/Resources/app');
+  const {invokeDeviceService}=require('../services/device-service.cjs'),helperRoot=path.join(installedApp,'Contents/Resources/app');
   const call=request=>invokeDeviceService(null,request,{root:helperRoot,timeoutMs:15000});
   report.capabilities=await call({op:'capabilities'});
   const plain=Buffer.from('Mac packaged Keychain roundtrip 中文').toString('base64');

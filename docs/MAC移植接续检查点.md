@@ -11,6 +11,7 @@
 - Worker 兼容版已部署：`491efe0c-b2c3-4f8c-9680-13035c1fb509`。线上软件身份协议检查通过，测试设备撤销；不冒充用户 Mac 硬件测试。
 - 详细实现和边界见 `docs/MAC第三阶段云端构建与交付.md`，用户步骤见 `docs/MAC实机测试指南.md`。
 - 独立 Mac 测试 tag：`mac-arm64-test-0.3.107`；公开状态以最终 GitHub API 验证和 `work/mac-handoff/public-verified.json` 为准。源码输入草稿保持私有，Windows stable latest 不变。
+- 已于 2026-11-25 公开为独立预发布：[Mac 测试版](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107)。匿名成品下载 HTTP 200、公开 build-report 与 GitHub 资产 digest、本机 SHA256 一致；Windows latest 仍为 v0.3.107。生产测试包首轮交付已完成，后续优先处理用户 Mac 的实测反馈。
 - 仍待用户 Mac 的 Gatekeeper/Keychain 生命周期、Codex 和实际 Adobe 读写验收；云端没有 Adobe。Mac 自动更新和 Apple 公证仍未接入。
 - 接续先检查以上证据及 git status，不重做已经完成的移植。不要再按下方历史快照误称“尚未编译/没有安装包”。
 

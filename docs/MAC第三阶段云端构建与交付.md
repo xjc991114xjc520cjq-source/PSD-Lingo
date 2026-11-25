@@ -23,6 +23,7 @@
 - 生产协议测试：`work/mac-server-live-report.json`。临时软件 P-256 身份的 Mac bootstrap、签名租约、续租与错误身份拒绝通过，随后撤销测试设备。该证据不冒充硬件身份验收。
 - 最终包、build-report、smoke-report、签名校验日志与截图保存于 work 的交付目录，并在交付后补充最终云端运行编号/公开地址。
 - 最终复跑 `45530434765` 全部通过，独立 Mac 测试 tag 为 `mac-arm64-test-0.3.107`。下载包 107073305 字节、SHA256 `450dec34ff3d7cd56fc029a4f8e20e0c53e47ffefb57af70458db82c8b92ed64`。本机检查确认 563 个 ZIP 条目、14 个 framework 符号链接和原生 helper 执行权限。
+- [独立 Mac 预发布已公开](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107)。匿名下载 HTTP 200，公开报告/资产 digest/本机包哈希一致；Windows latest 前后均为 v0.3.107。未认证 GitHub API 受共享出口速率限制，元数据使用已认证 API 核对，成品及 build-report 另以无凭据公开请求验证。收据 `work/mac-handoff/public-verified.json`，本机归档 `D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-test-0.3.107-arm64`。
 
 ## 边界与接续
 

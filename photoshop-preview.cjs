@@ -44,7 +44,7 @@ ${containerScript}
 ${extractionScript}
 try{
 var file=new File(${JSON.stringify(input)}),ids=${JSON.stringify(ids)};
-for(var i=0;i<app.documents.length;i++){try{if(app.documents[i].fullName.fsName.toLowerCase()===file.fsName.toLowerCase())source=app.documents[i];}catch(e){}}
+for(var i=0;i<app.documents.length;i++){try{if(app.documents[i].fullName.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']()===file.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']())source=app.documents[i];}catch(e){}}
 if(source&&!source.saved)throw new Error("源 PSD 有未保存改动，请先保存并重新导入");
 if(!source){source=app.open(file);opened=true;}
 stage="创建预览副本";copy=source.duplicate("PSD Lingo preview",false);app.activeDocument=copy;

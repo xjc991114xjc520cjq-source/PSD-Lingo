@@ -1,5 +1,5 @@
 const path=require('node:path');
-const key=p=>path.resolve(p).replace(/\\/g,'/').toLowerCase();
+const key=p=>require('./file-identity.cjs').fileKey(p);
 async function resolveTemplateInputs(args,file,task,{hashInputs=true}={}){
  const multiple=args.templates!==undefined,configs=multiple?args.templates:[args];
  if(!Array.isArray(configs)||!configs.length||configs.length>12||new Set(configs.map(c=>c?.templateFileId)).size!==configs.length)throw Error('请提供1至12个不重复的模板附件配置');

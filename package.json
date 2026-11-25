@@ -11,7 +11,8 @@
     "build:helper:mac": "node services/build-macos-helper.cjs",
     "test:mac:native": "node --test tests/macos-device-native.test.cjs",
     "updates:admin": "electron server/admin",
-    "updates:prepare": "node server/tools/prepare-release.cjs"
+    "updates:prepare": "node server/tools/prepare-release.cjs",
+    "package:mac": "node package-macos.cjs"
   },
   "dependencies": {
     "ag-psd": "^28.0.0",
@@ -21,7 +22,8 @@
   },
   "devDependencies": {
     "electron": "^35.0.0",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "@electron/osx-sign": "2.7.2"
   },
   "productName": "灵搭 Sparkit"
 }

@@ -1,6 +1,6 @@
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 const {setTimeout:delay}=require('node:timers/promises');
-const samePath=(a,b)=>typeof a==='string'&&typeof b==='string'&&path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
+const samePath=(a,b)=>typeof a==='string'&&typeof b==='string'&&require('./file-identity.cjs').fileKey(a)===require('./file-identity.cjs').fileKey(b);
 // Observation only. All desktop mutations go through Codex's registered URL
 // handler, so its own project manager owns cache, backend mapping and events.
 async function readRegistration(home,directory,preferredId){

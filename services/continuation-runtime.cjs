@@ -1,6 +1,6 @@
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 const digest=v=>crypto.createHash('sha256').update(v).digest('hex');
-const key=p=>path.resolve(p).toLowerCase();
+const key=p=>require('./file-identity.cjs').fileKey(p);
 // Only structure and a separately hashed preview, never a customer source copy.
 async function capture({snapshot,metadata,nativeText,productCopy,directory}){
  const files=snapshot?.continuationInputs?.files||[...(snapshot?.project?.files||[]),...(snapshot?.batchPreview?.state?.files||[])],imports=[];

@@ -7,7 +7,7 @@ async function backgroundTemplates(job,hash){
  const templates=[];for(const c of configs)templates.push({templateFileId:c.templateFileId,template:{path:c.templatePath,fingerprint:await hash(c.templatePath)}});return templates;
 }
 function validateBackgroundTemplates(p,templates){
- const expected=require('../sku-template-routing.cjs').templateSources(p),key=p=>path.resolve(p).toLowerCase();
+ const expected=require('../sku-template-routing.cjs').templateSources(p),key=p=>require('./file-identity.cjs').fileKey(p);
  if(expected.length!==templates.length||expected.some(e=>!templates.some(t=>(!p.templates||t.templateFileId===e.templateFileId)&&key(t.template.path)===key(e.template.path)&&t.template.fingerprint===e.template.fingerprint)))throw Error('运行计划模板与本次完整模板清单不一致');
 }
 module.exports={backgroundTemplates,validateBackgroundTemplates};

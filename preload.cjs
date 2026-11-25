@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  platform:process.platform,
   diagnosticStatus:()=>ipcRenderer.invoke('diagnostic-status'),diagnosticFlush:()=>ipcRenderer.invoke('diagnostic-flush'),diagnosticCopy:()=>ipcRenderer.invoke('diagnostic-copy'),reportDiagnostic:v=>ipcRenderer.invoke('diagnostic-renderer',v),onDiagnosticStatus:fn=>{const listener=(_,v)=>fn(v);ipcRenderer.on('diagnostic-status',listener);return()=>ipcRenderer.removeListener('diagnostic-status',listener);},
   restoreWorkBatch:v=>ipcRenderer.invoke('restore-work-batch',v),
   workRecordBegin:v=>ipcRenderer.invoke('work-record-begin',v),

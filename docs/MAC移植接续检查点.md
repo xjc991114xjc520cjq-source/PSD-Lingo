@@ -2,6 +2,18 @@
 
 更新时间：2026-11-25。目标：持续制作，直到用户能在 M 系列 Mac 开始实机测试。
 
+## 第三阶段交付更新（优先于下方历史快照）
+
+- 已生成真正 arm64 Mac 测试 `.app` / ZIP：`work/mac-handoff/Sparkit-0.3.107-Mac-arm64-test.zip`，107073305 字节。
+- SHA256：`450dec34ff3d7cd56fc029a4f8e20e0c53e47ffefb57af70458db82c8b92ed64`。
+- 最终云端运行 `45530434765` 成功；Swift、12 项 Mac 平台专项、深度签名校验、包内 Secure Enclave 稳定公钥与签名、Keychain 跨进程加解密、renderer 真实启动及截图通过。本机已复核 ZIP 哈希、helper 权限和 14 个 framework 符号链接。
+- Windows 最终回归 1040 总数 / 1038 pass / 0 fail / 2 平台 skip。日志 `work/mac-stage3-handoff-regression.log`。
+- Worker 兼容版已部署：`491efe0c-b2c3-4f8c-9680-13035c1fb509`。线上软件身份协议检查通过，测试设备撤销；不冒充用户 Mac 硬件测试。
+- 详细实现和边界见 `docs/MAC第三阶段云端构建与交付.md`，用户步骤见 `docs/MAC实机测试指南.md`。
+- 独立 Mac 测试 tag：`mac-arm64-test-0.3.107`；公开状态以最终 GitHub API 验证和 `work/mac-handoff/public-verified.json` 为准。源码输入草稿保持私有，Windows stable latest 不变。
+- 仍待用户 Mac 的 Gatekeeper/Keychain 生命周期、Codex 和实际 Adobe 读写验收；云端没有 Adobe。Mac 自动更新和 Apple 公证仍未接入。
+- 接续先检查以上证据及 git status，不重做已经完成的移植。不要再按下方历史快照误称“尚未编译/没有安装包”。
+
 ## 当前权威状态
 
 - 工作树：C:/Users/JC/.codex/worktrees/sparkit-mac-port/PSD-Lingo

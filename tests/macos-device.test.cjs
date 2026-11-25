@@ -11,7 +11,7 @@ test('Mac transport resolves native helper and keeps all secrets on stdin',async
  assert.equal(deviceHelperPath('windows.exe',{platform:'win32'}),'windows.exe');
 });
 test('unsupported Mac operations fail before dispatch; no EXE fallback',async()=>{
- let calls=0;await assert.rejects(invokeDeviceService('windows.exe',{op:'install-font'},{platform:'darwin',spawnFn:()=>calls++}),/尚未支持/);assert.equal(calls,0);
+ let calls=0;await assert.rejects(invokeDeviceService('windows.exe',{op:'prepare-photoshop'},{platform:'darwin',spawnFn:()=>calls++}),/尚未支持/);assert.equal(calls,0);
  await assert.rejects(invokeDeviceService('x',{op:'identity'},{platform:'linux'}),/尚未支持/);
 });
 test('malformed/oversized native responses and timeouts fail closed',async()=>{
@@ -68,3 +68,5 @@ test('Mac Codex settings use separate encrypted file, restore credentials and re
   await fs.writeFile(settings.file,'invalid');await assert.rejects(settings.get(),/无法读取/);await assert.rejects(settings.save({apiKey:'other'}),/无法读取/);
  }finally{await fs.rm(dataDir,{recursive:true,force:true});}
 });
+
+test('Mac font installation routes the request to native helper',async()=>{const f=processFixture(c=>{c.stdout.emit('data',Buffer.from('{"installed":true}'));c.emit('close',0);});assert.equal((await invokeDeviceService('x',{op:'install-font',path:'/tmp/font.otf'},{platform:'darwin',spawnFn:f.spawn})).installed,true);assert.equal(JSON.parse(f.calls[0].input).path,'/tmp/font.otf');});

@@ -1,6 +1,6 @@
 const path=require('node:path');
 const {spawn}=require('node:child_process');
-const macOperations=new Set(['identity','sign','protect','unprotect']);
+const macOperations=new Set(['identity','sign','protect','unprotect','install-font','capabilities']);
 function deviceHelperPath(file,{platform=process.platform,root=__dirname}={}){
  if(platform==='win32')return file;
  if(platform==='darwin')return path.join(root,'bin','sparkit-device');

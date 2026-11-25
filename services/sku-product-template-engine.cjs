@@ -7,7 +7,7 @@ const {mappingRecords}=require('../sku-product-copy.cjs');
 function createProductTemplateEngine({directory,helperPath,readMapping,execute=require('../photoshop-preview.cjs').executeScript,prepare=require('../photoshop-preview.cjs').preparePhotoshop,compose=require('../photoshop-artboards.cjs').composeArtboards,hash=hashFile}){
  const pending=new Map(),sourceCache=new Map();
  const base=()=>typeof directory==='function'?directory():directory;
- const equal=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
+ const equal=(a,b)=>require('./file-identity.cjs').fileKey(a)===require('./file-identity.cjs').fileKey(b);
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
  const location=id=>{if(!/^[a-f0-9]{64}$/.test(id||''))throw Error('模板扫描ID无效');return path.join(base(),id);};
  function assertInputs(source,mapping,template){
@@ -45,7 +45,7 @@ function createProductTemplateEngine({directory,helperPath,readMapping,execute=r
   const entries=require('../sku-template-routing.cjs').templateSources(p),scans=[],mappings=new Map(),hashes=new Map();let mapping;
   // Share reads only within this validation. No fingerprint survives into the
   // next preview/export/run; compose still performs its own mutation fence.
-  const checkedHash=file=>{const key=path.resolve(file).toLowerCase();if(!hashes.has(key))hashes.set(key,hash(file));return hashes.get(key);};
+  const checkedHash=file=>{const key=require('./file-identity.cjs').fileKey(file);if(!hashes.has(key))hashes.set(key,hash(file));return hashes.get(key);};
   for(const entry of entries){
    const envelope=JSON.parse(await fs.readFile(path.join(location(entry.scanId),'scan.json'),'utf8')),scan=envelope.scan;
    if(envelope.digest!==digest(scan)||scan.id!==entry.scanId||!equal(scan.source.path,source.path)||scan.source.fingerprint!==source.fingerprint||JSON.stringify(entry.template)!==JSON.stringify(scan.template))throw Error('模板扫描损坏或不属于本原稿');

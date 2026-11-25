@@ -39,3 +39,14 @@ test('Mac update lifecycle cannot fetch or install a Windows package',async()=>{
  await updates.init();await updates.check();assert.equal(fetched,0);assert.equal(updates.status().configured,false);
  await assert.rejects(updates.install({}),/签名更新通道尚未接入/);assert.equal(updates.phase,'idle');updates.close();
 });
+
+test('Photoshop waiting for Illustrator does not deadlock; same host remains serialized',async()=>{
+ const pending=[],started=[];
+ const exec=(file,args,options,cb)=>({stdin:{on(){},end(){started.push(args[1]);pending.push(cb);}}});
+ const opts={platform:'darwin',io,exec};
+ const ps=runMacAdobeScript('photoshop','/tmp/ps.jsx',opts);await new Promise(r=>setImmediate(r));
+ const ps2=runMacAdobeScript('photoshop','/tmp/ps2.jsx',opts),ai=runMacAdobeScript('illustrator','/tmp/ai.jsx',opts);
+ await new Promise(r=>setImmediate(r));assert.deepEqual(started,['/tmp/ps.jsx','/tmp/ai.jsx']);
+ pending[1](null,'','');await ai;pending[0](null,'','');await ps;
+ await new Promise(r=>setImmediate(r));assert.equal(started[2],'/tmp/ps2.jsx');pending[2](null,'','');await ps2;
+});

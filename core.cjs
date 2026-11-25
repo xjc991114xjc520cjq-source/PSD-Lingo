@@ -166,7 +166,7 @@ try {
     try {
       var file = new File(item.path);
       if (!file.exists) throw new Error("原 PSD／PSB 不存在");
-      for (var d = 0; d < app.documents.length; d++) { try { if (app.documents[d].fullName.fsName.toLowerCase() === file.fsName.toLowerCase()) original = app.documents[d]; } catch (_) {} }
+      for (var d = 0; d < app.documents.length; d++) { try { if (app.documents[d].fullName.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']() === file.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']()) original = app.documents[d]; } catch (_) {} }
       if (original && !original.saved) throw new Error("原 PSD／PSB 在 Photoshop 中有未保存改动，请先保存并重新导入");
       if (!original) { original = app.open(file); opened = true; }
       app.activeDocument = original;

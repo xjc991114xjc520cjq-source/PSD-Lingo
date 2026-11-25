@@ -1,6 +1,6 @@
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 const supported=p=>/\.(ai|psd|psb|xlsx|docx|csv|tsv|txt|json|png|jpe?g|webp)$/i.test(p);
-function mergeAttachments(current,added,{max=24}={}){const key=f=>path.resolve(f.path).replace(/\\/g,'/').toLowerCase(),merged=new Map(current.map(f=>[key(f),f]));for(const f of added)merged.set(key(f),f);const files=[...merged.values()];if(files.length>max)throw Error('每个任务最多附加 24 个文件或文件夹');return files;}
+function mergeAttachments(current,added,{max=24}={}){const key=f=>require('./file-identity.cjs').fileKey(f.path),merged=new Map(current.map(f=>[key(f),f]));for(const f of added)merged.set(key(f),f);const files=[...merged.values()];if(files.length>max)throw Error('每个任务最多附加 24 个文件或文件夹');return files;}
 // Register paths only. Folder contents and file bytes are read on explicit tool requests.
 function createAttachments(){
  const entries=new Map(),realPaths=new Map();

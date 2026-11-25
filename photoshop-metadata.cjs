@@ -125,7 +125,7 @@ function walk(container){
 }
 try{
 app.displayDialogs=DialogModes.NO;var file=new File(${JSON.stringify(input)});if(!file.exists)throw new Error('原 PSD／PSB 不存在');
-for(var i=0;i<app.documents.length;i++){try{if(app.documents[i].fullName.fsName.toLowerCase()===file.fsName.toLowerCase())source=app.documents[i];}catch(_){}}
+for(var i=0;i<app.documents.length;i++){try{if(app.documents[i].fullName.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']()===file.fsName[/^windows/i.test($.os)?'toLowerCase':'toString']())source=app.documents[i];}catch(_){}}
 if(source&&!source.saved)throw new Error('原 PSD／PSB 在 Photoshop 中有未保存改动，请先保存并重新导入');
 if(!source){source=app.open(file);opened=true;}app.activeDocument=source;
 // Use explicit branches: nested ternaries in ExtendScript can misread 8-bit documents.

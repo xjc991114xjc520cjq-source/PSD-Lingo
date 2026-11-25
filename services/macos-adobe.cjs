@@ -2,7 +2,9 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const {execFile}=require('node:child_process');
 const {createScriptQueue}=require('./illustrator-connection.cjs');
-const enqueue=createScriptQueue();
+// Photoshop may wait on Illustrator through the per-job mailbox. Serializing
+// both applications on one queue would deadlock that nested request.
+const queues={photoshop:createScriptQueue(),illustrator:createScriptQueue()};
 const hosts={photoshop:'com.adobe.Photoshop',illustrator:'com.adobe.illustrator'};
 // Keep JSX and user paths out of AppleScript source. argv is passed without a shell.
 function appleScript(host){
@@ -15,7 +17,7 @@ async function runMacAdobeScript(host,jsx,{platform=process.platform,io=fs,exec=
  const source=appleScript(host);
  if(typeof jsx!=='string'||!path.posix.isAbsolute(jsx)||/[\0\r\n]/.test(jsx))throw Error('JSX 文件路径无效');
  if(!(await io.stat(jsx)).isFile())throw Error('JSX 文件不存在');
- return enqueue(()=>new Promise((resolve,reject)=>{
+ return queues[host](()=>new Promise((resolve,reject)=>{
   let child;
   try{
    child=exec('/usr/bin/osascript',['-',jsx],{encoding:'utf8',timeout:3610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{

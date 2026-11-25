@@ -58,6 +58,8 @@ jobs:
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target codex/mac-test-build --draft --title 'Sparkit Apple Silicon test 0.3.107' --notes 'Ad-hoc signed developer test build. Not notarized. Adobe and real-device acceptance pending.'
             if ($LASTEXITCODE) { throw 'Draft creation failed' }
           }
+          $isDraft = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -or $isDraft -ne 'true') { throw 'Published packages must not be overwritten; choose a new test tag' }
           gh release upload $tag source/work/mac-dist/*.zip source/work/mac-dist/*.json source/work/mac-dist/*.png --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE) { throw 'Draft package archive failed' }
       - uses: actions/upload-artifact@v4

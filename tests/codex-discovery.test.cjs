@@ -3,6 +3,10 @@ const {discoverCodex}=require('../services/codex-discovery.cjs');
 function fixture(files=[],directories={}){const calls=[];return {calls,async stat(name){calls.push(name);if(!files.includes(name))throw new Error('missing');return {isFile:()=>true};},async readdir(name){return (directories[name]||[]).map(name=>({name,isDirectory:()=>true}));}};}
 const options=io=>({platform:'win32',arch:'x64',env:{},io});
 function macFixture(files,denied=[]){const io=fixture(files);io.access=async file=>{if(denied.includes(file))throw Error('not executable');};return io;}
+test('Mac bundled native Codex is discovered on a clean Finder installation',async()=>{
+ const file='/Applications/Sparkit.app/Contents/Resources/app/bin/codex/bin/codex',root='/Applications/Sparkit.app/Contents/Resources/app';
+ const result=await discoverCodex({root,platform:'darwin',arch:'arm64',env:{},io:macFixture([file])});assert.equal(result.path,file);assert.equal(result.bundled,true);
+});
 test('Mac Finder PATH finds Apple Silicon Homebrew installation without running a shell',async()=>{
  const io=macFixture(['/opt/homebrew/bin/codex']);
  const result=await discoverCodex({platform:'darwin',arch:'arm64',env:{HOME:'/Users/test',PATH:'/usr/bin:/bin'},io});

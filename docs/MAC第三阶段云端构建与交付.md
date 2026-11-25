@@ -30,3 +30,7 @@
 交付让用户开始 Mac 实机测试，不等于全软件 Mac 业务验收。用户按 `MAC实机测试指南.md` 从小样顺序测试；未占用本机 Adobe，未处理客户原稿。Apple 公证、固定分发签名身份、升级后 Keychain 生命周期、Mac 自动更新及 Adobe 真机路径仍是后续任务。
 
 不要把测试包放进 Windows stable latest。不要把草稿源码资产改成公开发布；仅独立 Mac 测试发布可包含经过校验的成品包与公开报告。
+
+## 内置 Codex 第二版
+
+新增独立第二版 mac-arm64-test-0.3.107-2。官方 CLI、登录入口及无需 Codex 桌面版的助手任务路径已接入，最终云端 45535826167 成功；详细证据见 MAC内置Codex与助手.md 和 work/mac-embedded-handoff。首版资产保留，Windows stable latest 不变。

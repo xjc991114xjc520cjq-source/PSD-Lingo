@@ -1,9 +1,10 @@
 const fs=require('node:fs/promises'),path=require('node:path');const {helper}=require('./authorization.cjs');
 const {DEFAULT_API_BASE_URL,normalizeApiBaseUrl,normalizeApiProtocol}=require('./api-endpoint.cjs');
 class CodexSettings{
- constructor({dataDir,helperPath,helperFn=helper,io=fs,platform=process.platform}){this.file=path.join(dataDir,platform==='darwin'?'codex-settings.keychain':'codex-settings.dpapi');this.helperPath=helperPath;this.helperFn=helperFn;this.io=io;this.pending=Promise.resolve();}
+ constructor({dataDir,helperPath,helperFn=helper,io=fs,platform=process.platform}){this.platform=platform;this.file=path.join(dataDir,platform==='darwin'?'codex-settings.keychain':'codex-settings.dpapi');this.helperPath=helperPath;this.helperFn=helperFn;this.io=io;this.pending=Promise.resolve();}
+ async defaults(){const value=this.empty();if(this.platform==='darwin'){const executable=require('./bundled-codex.cjs').bundledCodexPath({platform:this.platform});try{await this.io.access(executable,1);return {...value,mode:'local',executable};}catch{}}return value;}
  empty(){return {mode:'api',executable:'',apiModel:'',localModel:'',apiKey:'',apiBaseUrl:DEFAULT_API_BASE_URL,apiProtocol:'auto'};}
- async read(){let encrypted;try{encrypted=await this.io.readFile(this.file,'utf8');}catch(e){if(e.code==='ENOENT')return this.empty();throw new Error('无法读取本机保存的连接设置。请清除后重新填写。');}try{const decoded=await this.helperFn(this.helperPath,{op:'unprotect',value:encrypted});const value=JSON.parse(Buffer.from(decoded.value,'base64').toString('utf8'));return this.validate(value);}catch{throw new Error('无法读取本机保存的连接设置。请清除后重新填写。');}}
+ async read(){let encrypted;try{encrypted=await this.io.readFile(this.file,'utf8');}catch(e){if(e.code==='ENOENT')return this.defaults();throw new Error('无法读取本机保存的连接设置。请清除后重新填写。');}try{const decoded=await this.helperFn(this.helperPath,{op:'unprotect',value:encrypted});const value=JSON.parse(Buffer.from(decoded.value,'base64').toString('utf8'));return this.validate(value);}catch{throw new Error('无法读取本机保存的连接设置。请清除后重新填写。');}}
  validate(v){
   if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('连接设置无效');
   const mode=v.mode===undefined?'api':v.mode;if(mode!=='api'&&mode!=='local')throw new Error('连接方式无效');

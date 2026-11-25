@@ -2,6 +2,14 @@
 
 更新时间：2026-11-25。目标：持续制作，直到用户能在 M 系列 Mac 开始实机测试。
 
+## 内置 Codex 第二版更新（优先读取）
+
+- 首版已有助手与 SDK，本次补齐官方 arm64 CLI 0.172.0、完整资源与许可、自动发现/默认本机连接和浏览器登录/检查/取消按钮。
+- 内置助手使用 Sparkit 自有任务目录与工作记录继续，不依赖安装 Codex 桌面版；外部 Codex 原有桌面归属校验保留。
+- Windows 1046 总数 / 1044 pass / 0 fail / 2 skip；Mac 34 专项及最终云端 `45535826167` 成功，真实 CLI 登录 start/cancel、动态工具注册、设置可见性、Keychain/Secure Enclave 与签名通过，零模型调用。
+- 第二版 tag `mac-arm64-test-0.3.107-2`；SHA256 `d36cf7a2010a51d2c571c0b976bad2b1a3305e8f04603a5df8407d9887cc9d2f`。公开状态以 `work/mac-embedded-handoff/public-verified.json` 为准；不覆盖首版和 Windows stable latest。
+- 实现/边界见 `docs/MAC内置Codex与助手.md`，用户步骤见 `docs/MAC实机测试指南.md`。真实账号模型调用及 Adobe 读写仍待用户 Mac 验收。
+
 ## 第三阶段交付更新（优先于下方历史快照）
 
 - 已生成真正 arm64 Mac 测试 `.app` / ZIP：`work/mac-handoff/Sparkit-0.3.107-Mac-arm64-test.zip`，107073305 字节。

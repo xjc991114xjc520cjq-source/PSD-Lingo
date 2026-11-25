@@ -1,7 +1,7 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 // Filesystem-only discovery: never launch an executable or run a shell command.
-async function discoverCodex({savedPath='',env=process.env,platform=process.platform,arch=process.arch,io=fs}={}){
+async function discoverCodex({savedPath='',env=process.env,platform=process.platform,arch=process.arch,io=fs,root=__dirname}={}){
  const p=platform==='win32'?path.win32:path.posix,windows=platform==='win32',candidates=[],seen=new Set();
  const clean=value=>typeof value==='string'?value.trim().replace(/^"(.*)"$/,'$1'):'';
  async function add(value){value=clean(value);if(!value||!p.isAbsolute(value)||/[\r\n\0]/.test(value))return;value=p.normalize(value);const key=windows?value.toLowerCase():value;if(seen.has(key))return;seen.add(key);if(windows&&!/\.exe$/i.test(value))return;try{const stat=await io.stat(value);if(stat.isFile()){if(!windows)await io.access(value,1);candidates.push(value);}}catch{}}
@@ -13,6 +13,7 @@ async function discoverCodex({savedPath='',env=process.env,platform=process.plat
  const packagedSaved=windows&&/[\\/]WindowsApps[\\/]/i.test(clean(savedPath));
  if(!packagedSaved)await add(savedPath);
  if(candidates.length)return {path:candidates[0],candidates};
+ if(platform==='darwin'){await add(require('./bundled-codex.cjs').bundledCodexPath({platform,root}));if(candidates.length)return {path:candidates[0],candidates,bundled:true};}
  const envGet=name=>env[name]??Object.entries(env).find(([key])=>key.toLowerCase()===name.toLowerCase())?.[1]??'';
  const home=windows?(envGet('USERPROFILE')||envGet('HOME')):envGet('HOME'),local=envGet('LOCALAPPDATA'),roaming=envGet('APPDATA');
  // The desktop app extracts its runnable CLI outside the protected MSIX tree.

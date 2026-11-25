@@ -50,7 +50,7 @@ export function installAgentUi({call,execute,openSettings,isBusy=()=>false}){
  let selectedOutput='',current=null,files=[],questionId='',opening=false,starting=false,lastModelRequest=0;
  const fail=e=>{error.textContent=e.message||String(e);if(dialog.classList.contains('is-completed'))completionError.textContent=error.textContent;};
  const action=fn=>async()=>{error.textContent='';completionError.textContent='';try{await fn();}catch(e){fail(e);}};
- function showProject(p){savedProject=p;projectSummary.textContent='Codex 项目：'+p.name+' · 点击修改名称和位置';projectName.value=p.name;projectFolder.value=p.parentDirectory;projectStatus.textContent='新任务归入：'+p.directory+'；首次开始时创建 Codex 项目，之后持续复用。当前任务的后续对话保留原项目。';}
+ function showProject(p){savedProject=p;projectSummary.textContent='Codex 项目：'+p.name+' · 点击修改名称和位置';projectName.value=p.name;projectFolder.value=p.parentDirectory;projectStatus.textContent='任务目录：'+p.directory+'；继续同一任务会保留原对话与工作记录。';}
  async function loadProject(){showProject(await call('agentProject'));}
  projectPick.onclick=action(async()=>{const p=await call('agentProjectFolder');if(p)projectFolder.value=p;});
  projectSave.onclick=action(async()=>{projectSave.disabled=true;try{showProject(await call('agentProjectSave',{name:projectName.value.trim(),parentDirectory:projectFolder.value.trim()}));}finally{projectSave.disabled=false;}});

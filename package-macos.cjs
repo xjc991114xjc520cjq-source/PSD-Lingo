@@ -19,6 +19,10 @@ async function main(){
  await fs.mkdir(path.join(payload,'bin'),{recursive:true});
  require('esbuild').buildSync({entryPoints:[path.join(root,'main.cjs')],bundle:true,platform:'node',target:'node22',format:'cjs',outfile:path.join(payload,'main.cjs'),external:['electron','@openai/codex-sdk']});
  await fs.copyFile(path.join(root,'services/bin/sparkit-device'),path.join(payload,'bin/sparkit-device'));await fs.chmod(path.join(payload,'bin/sparkit-device'),0o755);
+ const codexRoot=path.join(root,'node_modules/@openai/codex-darwin-arm64'),codexSource=path.join(codexRoot,'vendor/aarch64-apple-darwin/bin/codex');
+ await fs.cp(path.join(codexRoot,'vendor/aarch64-apple-darwin'),path.join(payload,'bin/codex'),{recursive:true});await fs.chmod(path.join(payload,'bin/codex/bin/codex'),0o755);
+ const codexMinimum=execFileSync('/usr/bin/otool',['-l',codexSource],{encoding:'utf8'}).match(/minos[ ]+([0-9.]+)/)?.[1]||'13.0';
+ const minimumMacOS=parseFloat(codexMinimum)>13?codexMinimum:'13.0';execFileSync(pb,['-c','Set :LSMinimumSystemVersion '+minimumMacOS,plist]);
  await fs.copyFile(path.join(root,'preload.cjs'),path.join(payload,'preload.cjs'));
  for(const folder of ['design-skills','design-plugins'])await fs.cp(path.join(root,'services',folder),path.join(payload,folder),{recursive:true});
  await fs.mkdir(path.join(payload,'renderer'),{recursive:true});
@@ -28,12 +32,14 @@ async function main(){
  for(const file of ['dist','package.json'])await fs.cp(path.join(root,'node_modules/@openai/codex-sdk',file),path.join(sdk,file),{recursive:true});
  await fs.cp(path.join(root,'第三方许可'),path.join(payload,'第三方许可'),{recursive:true});
  await fs.copyFile(path.join(root,'vendor/ssf/LICENSE'),path.join(payload,'第三方许可/ssf-LICENSE'));
+ // Retain the official CLI distribution's attribution alongside its unmodified binary.
+ for(const file of ['LICENSE','NOTICE','README.md']){try{await fs.copyFile(path.join(codexRoot,file),path.join(payload,'第三方许可','OpenAI-Codex-'+file));}catch(e){if(e.code!=='ENOENT')throw e;}}
  await fs.writeFile(path.join(payload,'package.json'),JSON.stringify({name:'psd-lingo',productName:'灵搭 Sparkit',version:require('./package.json').version,main:'main.cjs'}));
- await require('@electron/osx-sign').sign({app,identity:'-',identityValidation:false,platform:'darwin',preAutoEntitlements:false,preEmbedProvisioningProfile:false,optionsForFile:()=>({entitlements:path.join(root,'tools/mac-entitlements.plist'),hardenedRuntime:true,timestamp:'none'})});
+ await require('@electron/osx-sign').sign({app,binaries:[path.join(payload,'bin/codex/bin/codex')],identity:'-',identityValidation:false,platform:'darwin',preAutoEntitlements:false,preEmbedProvisioningProfile:false,optionsForFile:()=>({entitlements:path.join(root,'tools/mac-entitlements.plist'),hardenedRuntime:true,timestamp:'none'})});
  execFileSync('/usr/bin/codesign',['--verify','--deep','--strict','--verbose=2',app],{stdio:'inherit'});
  const zip=path.join(dist,`Sparkit-${require('./package.json').version}-Mac-arm64-test.zip`);
  await fs.rm(zip,{force:true});execFileSync('/usr/bin/ditto',['-c','-k','--sequesterRsrc','--keepParent',app,zip]);
- const report={version:require('./package.json').version,platform:process.platform,arch:process.arch,minimumMacOS:'13.0',signing:'ad-hoc',notarized:false,zip:path.basename(zip),sha256:crypto.createHash('sha256').update(await fs.readFile(zip)).digest('hex'),builtAt:new Date().toISOString()};
+ const report={version:require('./package.json').version,platform:process.platform,arch:process.arch,minimumMacOS,codexMinimumMacOS:codexMinimum,signing:'ad-hoc',notarized:false,bundledCodex:require(path.join(codexRoot,'package.json')).version,zip:path.basename(zip),sha256:crypto.createHash('sha256').update(await fs.readFile(zip)).digest('hex'),builtAt:new Date().toISOString()};
  await fs.writeFile(path.join(dist,'build-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

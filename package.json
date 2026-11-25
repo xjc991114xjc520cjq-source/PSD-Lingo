@@ -25,5 +25,8 @@
     "esbuild": "^0.25.0",
     "@electron/osx-sign": "2.7.2"
   },
-  "productName": "灵搭 Sparkit"
+  "productName": "灵搭 Sparkit",
+  "optionalDependencies": {
+    "@openai/codex-darwin-arm64": "npm:@openai/codex@0.172.0-darwin-arm64"
+  }
 }

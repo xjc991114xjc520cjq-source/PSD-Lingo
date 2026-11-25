@@ -15,6 +15,12 @@ class AgentProject{
  async save(input){const next=validateProject({...input,key:randomUUID(),projectId:undefined}),old=await this.get();return this.write(next.name===old.name&&next.parentDirectory===old.parentDirectory?validateProject(old):next);}
  async prepare(session,snapshot,options={}){
   const v=validateProject(snapshot),directory=rootOf(v);options.signal?.throwIfAborted();await fs.mkdir(directory,{recursive:true});await fs.access(directory,require('node:fs').constants.W_OK);
+  if(options.embedded){
+   // Embedded CLI owns its own task directory. Do not invent a Codex Desktop
+   // registration or mutate an existing desktop project's saved identity.
+   options.onStatus?.('使用内置 Codex；本任务的会话与工作记录保存在 Sparkit，目录：'+directory);
+   const {projectId,...local}=v;return {...local,directory,binding:'embedded'};
+  }
   let project;
   try{
    const registration=await this.desktop.ensure({directory,projectId:v.projectId,...options});

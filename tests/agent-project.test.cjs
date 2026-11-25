@@ -1,5 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const {AgentProject,validateProject}=require('../services/agent-project.cjs');
+test('embedded Codex binds the chosen task directory without fabricating desktop membership',async t=>{
+ const {dir,store,desktop}=await fixture(t),saved=await store.save({name:'Embedded',parentDirectory:dir});
+ desktop.ensure=()=>assert.fail('Embedded runtime must not require desktop registration');
+ await store.write({...saved,projectId:'existing-desktop'});
+ const p=await store.prepare({request:()=>assert.fail()},await store.get(),{embedded:true});
+ assert.equal(p.directory,saved.directory);assert.equal(p.binding,'embedded');assert.equal(p.projectId,undefined);assert.equal((await store.get()).projectId,'existing-desktop');
+});
 async function fixture(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'agent-project-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let id='desktop';const desktop={ensure:async()=>({projectId:id})};return {dir,store:new AgentProject(dir,{desktop}),desktop,setId:v=>id=v};}
 test('registered desktop identity persists; unchanged settings reuse it and old task cannot overwrite new settings',async t=>{
  const {dir,store,desktop}=await fixture(t),initial=await store.save({name:'中文项目',parentDirectory:dir});let reads=0;

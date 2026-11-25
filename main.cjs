@@ -426,6 +426,11 @@ ipcMain.handle('save-codex-settings',safeOperation('save-codex-settings',value=>
 ipcMain.handle('clear-codex-settings',safeOperation('clear-codex-settings',()=>codexSettings.clear()));
 ipcMain.handle('list-api-models',safeOperation('list-api-models',input=>listApiModels(input,{settings:codexSettings,fetch:(...args)=>net.fetch(...args)})));
 ipcMain.handle('discover-codex',safeOperation('discover-codex',async()=>{let savedPath='';try{savedPath=(await codexSettings.get()).executable;}catch{}return discoverCodex({savedPath});}));
+const codexLogin=new(require('./services/codex-login.cjs').CodexLogin)({credentials:()=>require('./services/assistant-connection.cjs').assistantCredentials(codexSettings),open:url=>require('electron').shell.openExternal(url),env:()=>withLocalCodexProxy(process.env,url=>session.defaultSession.resolveProxy(url))});
+ipcMain.handle('codex-login-start',safeOperation('codex-login-start',()=>codexLogin.start()));
+ipcMain.handle('codex-login-status',safeOperation('codex-login-status',()=>codexLogin.status()));
+ipcMain.handle('codex-login-cancel',safeOperation('codex-login-cancel',()=>codexLogin.cancel()));
+app.on('before-quit',()=>codexLogin.close());
 ipcMain.handle('choose-codex',safeOperation('choose-codex',async () => {
   const r = await dialog.showOpenDialog(win, {title: '选择官方 Codex CLI 可执行文件', properties: ['openFile'], ...(process.platform==='win32'?{filters: [{name: 'Codex CLI', extensions: ['exe']}]}:{})});
   return r.canceled ? null : r.filePaths[0];

@@ -1,13 +1,13 @@
-# 灵搭 Sparkit · Apple Silicon 首轮实机测试
+# 灵搭 Sparkit · Apple Silicon 第二版实机测试
 
-适用：M 系列 Mac，macOS 13 或更新版本。包名 `Sparkit-0.3.107-Mac-arm64-test.zip`。这是 Mac 开发测试包，采用 ad-hoc 签名，尚未通过 Apple Developer ID 签名与公证。
+适用：M 系列 Mac，macOS 13 或更新版本。第二版下载：[内置 Codex 的 Mac 测试包](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107-2)。包名 `Sparkit-0.3.107-Mac-arm64-test.zip`；请按发布 tag 区分首版。这是 Mac 开发测试包，采用 ad-hoc 签名，尚未通过 Apple Developer ID 签名与公证。
 
 ## 安装与首次启动
 
 1. 将 ZIP 传到 Mac，在 Finder 中解压，把 `Sparkit.app` 拖到“应用程序”。不要在 Windows 上解压再传输 `.app`，否则可能丢失可执行权限和符号链接。
 2. 打开 Sparkit。若提示无法验证开发者，先关闭提示，再到“系统设置 → 隐私与安全性”点击“仍要打开”，确认打开。此流程见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。如提示“已损坏”或仍无法启动，保留完整提示与系统版本反馈，先核对交付哈希。
 3. 首次启动保持联网，等待申请本机免费许可。Keychain 如请求访问 Sparkit 自己的条目，确认允许；不要删除设备密钥或从其他电脑复制授权文件。
-4. 本机助手需安装并登录官方 Codex 桌面版及可执行的 Codex CLI。在“设置与连接”检查发现结果，必要时选择实际 `codex` 可执行文件。API 模式可按已有入口配置；不要在反馈中发送 API Key。
+4. 第二版 Mac 包已内置官方 Codex CLI 0.172.0 和 AI 工作助手，不必另装 Node、CLI 或 Codex 桌面版。打开“设置与连接 → 本机 Codex”，点击“登录 Codex”，在浏览器完成本人账号登录，再点击“检查登录”。已在本机登录的账号可直接检查。然后从首页 AI 助手卡片开始；账号登录和模型调用需要网络。若手动选择外部 Codex，则沿用其桌面项目连接流程。API 模式仍可按已有入口配置；不要在反馈中发送 API Key。
 5. Photoshop / Illustrator 需在 Mac 上正常安装并完成首次启动。第一次读取对应文件时允许 Sparkit 控制 Adobe；拒绝后可到“系统设置 → 隐私与安全性 → 自动化”调整。仅需要处理 PS 文件时先测试 Photoshop 即可。
 
 ## 按顺序测试
@@ -33,7 +33,7 @@
 
 - 已在云端 arm64 Mac 编译 Swift、打包真正 `.app`、深度验证签名并启动正式包的渲染页面。
 - 包内 helper 的 Keychain 加解密、Secure Enclave 公钥跨进程稳定性及原生签名验签已在云端 Mac 通过。
-- Windows 自动回归 1040 项：1038 通过，2 跳过（真实 Mac 原生门禁及 Mac 大小写附件测试）；Mac 云端另运行路径/项目绑定/附件与 Adobe 调度模拟测试。
+- Windows 自动回归 1046 项：1044 通过，2 跳过（真实 Mac 原生门禁及 Mac 大小写附件测试）；Mac 云端 34 项专项通过，并验证包内真实 Codex 初始化、任务/工具注册、登录发起与取消和设置页可见性；未调用模型。
 - 生产服务已兼容 Mac 身份，线上软件密钥协议检查通过免费许可、租约签名、续期与错误身份拒绝；测试设备已撤销。
 - 用户 Mac 的 Gatekeeper 首次放行、Keychain 拒绝/锁定/升级生命周期、实际 Codex 连接和 Adobe 读写尚待本轮实机测试。云端没有安装 Adobe，不能将传输模拟测试称为 Adobe 实机通过。
 - Mac 自动更新暂未接入。测试包采用手动替换，Windows 稳定更新通道保持现有发布。

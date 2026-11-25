@@ -47,6 +47,19 @@ jobs:
           if ($LASTEXITCODE) { throw 'Mac package failed' }
           node tools/mac-package-smoke.cjs
           if ($LASTEXITCODE) { throw 'Packaged app smoke test failed' }
+      - name: Archive verified Mac package as private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'mac-arm64-test-0.3.107'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target codex/mac-test-build --draft --title 'Sparkit Apple Silicon test 0.3.107' --notes 'Ad-hoc signed developer test build. Not notarized. Adobe and real-device acceptance pending.'
+            if ($LASTEXITCODE) { throw 'Draft creation failed' }
+          }
+          gh release upload $tag source/work/mac-dist/*.zip source/work/mac-dist/*.json source/work/mac-dist/*.png --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE) { throw 'Draft package archive failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

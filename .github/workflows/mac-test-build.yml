@@ -39,6 +39,8 @@ jobs:
         run: |
           node services/build-macos-helper.cjs
           if ($LASTEXITCODE) { throw 'Swift compilation failed' }
+          node --test tests/file-identity.test.cjs tests/macos-adobe.test.cjs
+          if ($LASTEXITCODE) { throw 'Mac platform regression failed' }
           node build.cjs
           if ($LASTEXITCODE) { throw 'Renderer build failed' }
           node package-macos.cjs

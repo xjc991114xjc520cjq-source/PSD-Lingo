@@ -48,6 +48,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          name: Sparkit-Mac-reports
+          path: |
+            source/work/mac-dist/*.json
+            source/work/mac-dist/*.txt
+            source/work/mac-dist/*.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
           name: Sparkit-Mac-arm64-test
           path: |
             source/work/mac-dist/*.zip

@@ -42,5 +42,6 @@ async function main(){
  await fs.rm(zip,{force:true});execFileSync('/usr/bin/ditto',['-c','-k','--sequesterRsrc','--keepParent',app,zip]);
  const report={version:require('./package.json').version,platform:process.platform,arch:process.arch,minimumMacOS,codexMinimumMacOS:codexMinimum,signing:'ad-hoc',notarized:false,bundledCodex:require(path.join(codexRoot,'package.json')).version,zip:path.basename(zip),sha256:crypto.createHash('sha256').update(await fs.readFile(zip)).digest('hex'),builtAt:new Date().toISOString()};
  await fs.writeFile(path.join(dist,'build-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ await require('./tools/mac-startup-repair.cjs').generate(app,dist);
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

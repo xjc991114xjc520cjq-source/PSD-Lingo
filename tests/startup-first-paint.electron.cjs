@@ -1,6 +1,6 @@
 // First-paint regression: hold the real renderer bundle, then release or fail it.
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const root=process.env.SPARKIT_STARTUP_ROOT||path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/startup-first-paint';app.setPath('userData',out+'/profile');
+const root=process.env.SPARKIT_STARTUP_ROOT||path.resolve(__dirname,'..'),out=path.join(root,'work/startup-first-paint');app.setPath('userData',out+'/profile');
 const safe=value=>({ok:true,value});for(const [name,value] of Object.entries({'load-codex-settings':{},'service-ready':true,'layout-memory-status':{},'status':{active:true,authorization:{active:true},updates:{}},'agent-state':null}))ipcMain.handle(name,()=>safe(value));
 app.on('window-all-closed',()=>{});
 app.whenReady().then(async()=>{let exit=0;const evidence=[];try{await fs.mkdir(out,{recursive:true});for(const fail of [false,true]){

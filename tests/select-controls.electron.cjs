@@ -1,7 +1,7 @@
 process.on('uncaughtException',e=>{console.error(e);process.exit(1);});
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs/promises'),assert=require('node:assert/strict'),path=require('node:path'),esbuild=require('esbuild');
-const root=path.resolve(__dirname,'..').replaceAll('\\','/'),out='D:/PSD-Lingo/work/select-ui';let win,failed=false;
+const root=path.resolve(__dirname,'..').replaceAll('\\','/'),out=path.join(root,'work/select-ui');let win,failed=false;app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{try{
  await fs.mkdir(out,{recursive:true});let html=await fs.readFile(root+'/renderer/index.html','utf8');html=html.replace('<head>','<head><base href="'+require('node:url').pathToFileURL(root+'/renderer/').href+'">').replace(/<script[^>]*>[\s\S]*?<\/script>/g,'');await fs.writeFile(out+'/fixture.html',html);
  win=new BrowserWindow({show:false,width:1510,height:980,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});await win.loadFile(out+'/fixture.html');

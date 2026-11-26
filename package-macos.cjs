@@ -13,7 +13,8 @@ async function main(){
   try{execFileSync(pb,['-c',`Set :${key} ${value}`,plist],{stdio:'pipe'});}catch{execFileSync(pb,['-c',`Add :${key} string ${value}`,plist]);}
  }
  const iconset=path.join(dist,'Sparkit.iconset');await fs.mkdir(iconset,{recursive:true});
- for(const size of [16,32,128,256,512])for(const scale of [1,2])execFileSync('/usr/bin/sips',['-z',String(size*scale),String(size*scale),path.join(root,'renderer/assets/sparkit-icon.png'),'--out',path.join(iconset,`icon_${size}x${size}${scale===2?'@2x':''}.png`)],{stdio:'pipe'});
+ const macIcon=path.join(dist,'mac-icon-source.png');execFileSync(require('electron'),[path.join(root,'tools/mac-icon.cjs'),path.join(root,'renderer/assets/sparkit-icon.png'),macIcon],{stdio:'inherit'});
+ for(const size of [16,32,128,256,512])for(const scale of [1,2])execFileSync('/usr/bin/sips',['-z',String(size*scale),String(size*scale),macIcon,'--out',path.join(iconset,`icon_${size}x${size}${scale===2?'@2x':''}.png`)],{stdio:'pipe'});
  execFileSync('/usr/bin/iconutil',['-c','icns',iconset,'-o',path.join(resources,'sparkit.icns')]);
  execFileSync(pb,['-c','Set :CFBundleIconFile sparkit.icns',plist]);
  await fs.mkdir(path.join(payload,'bin'),{recursive:true});

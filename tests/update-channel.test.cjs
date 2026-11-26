@@ -1,6 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 const JSZip=require('jszip');
-const {Updates}=require('../services/updates.cjs');
+const {Updates:BaseUpdates}=require('../services/updates.cjs');
+class Updates extends BaseUpdates{constructor(options){super({platform:'win32',...options});}}
 const {canonical,validateManifest}=require('../services/protocol.cjs');
 const {prepareRelease}=require('../services/release-publisher.cjs');
 function fixture(){const keys=crypto.generateKeyPairSync('ec',{namedCurve:'prime256v1',privateKeyEncoding:{type:'pkcs8',format:'pem'},publicKeyEncoding:{type:'spki',format:'pem'}}),repo='example/psd-lingo';const config={appId:'PSDLingo',githubRepository:repo,updateManifestUrl:'https://github.com/'+repo+'/releases/latest/download/update.json',updateKeys:{'update-1':keys.publicKey}};const payload={appId:'PSDLingo',version:'0.3.3',releaseTag:'v0.3.3',downloadUrl:'https://github.com/'+repo+'/releases/download/v0.3.3/app.zip',pageUrl:'https://github.com/'+repo+'/releases/tag/v0.3.3',sha256:'a'.repeat(64),length:10,runtimeMajor:35,updaterProtocol:1,isMandatory:false,isMajorUpdate:false,minimumSupportedVersion:'0.3.2',publishedAtUtc:new Date().toISOString(),policyRevision:1,notes:'测试'};const sign=p=>({algorithm:'ES256',keyId:'update-1',payload:p,signature:crypto.sign('sha256',Buffer.from(canonical(p)),{key:keys.privateKey,dsaEncoding:'ieee-p1363'}).toString('base64')});return {keys,config,payload,sign};}

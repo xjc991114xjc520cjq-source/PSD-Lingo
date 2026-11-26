@@ -1,7 +1,7 @@
-const key=p=>String(p).replace(/\\/g,'/').toLowerCase();
+const key=p=>{const normalized=String(p).replace(/\\/g,'/');return /^([a-z]:\/|\/\/)/i.test(normalized)?normalized.toLowerCase():normalized;};
 function normalizeSettings(value=[],files){
  if(!Array.isArray(value))throw Error('字体设置列表无效');
- const result=value.map(v=>{if(!v||typeof v.filePath!=='string'||!/^([a-z]:[\\/]|\\\\)/i.test(v.filePath)||! /\.(ai|psd|psb)$/i.test(v.filePath)||typeof v.font!=='string'||!v.font.trim()||/[\r\n\0]/.test(v.font)||typeof v.family!=='string'||!v.family.trim())throw Error('请选择原稿与实际字体系列');
+ const result=value.map(v=>{if(!v||typeof v.filePath!=='string'||!/^([a-z]:[\\/]|\\\\|\/)/i.test(v.filePath)||/[\r\n\0]/.test(v.filePath)||! /\.(ai|psd|psb)$/i.test(v.filePath)||typeof v.font!=='string'||!v.font.trim()||/[\r\n\0]/.test(v.font)||typeof v.family!=='string'||!v.family.trim())throw Error('请选择原稿与实际字体系列');
  for(const k of ['autoSize','autoTracking','autoWeight'])if(v[k]!==undefined&&typeof v[k]!=='boolean')throw Error('自动适配选项无效');
  if(v.tracking!==undefined&&(!Number.isInteger(v.tracking)||v.tracking< -1000||v.tracking>10000))throw Error('字间距无效');
  if(files&&!files.some(f=>key(f.path)===key(v.filePath)))throw Error('字体设置对应的原稿不在本次附件中');

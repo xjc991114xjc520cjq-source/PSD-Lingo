@@ -1,7 +1,7 @@
 // Real renderer/preload/IPC and persistent store. Deterministic assistant; no Adobe or remote model.
 const {app,BrowserWindow,ipcMain}=require('electron');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const out=process.env.SPARKIT_RECORD_TEST_OUTPUT||'D:/PSD-Lingo/work/work-records-ui',root=path.resolve(__dirname,'..');
+const out=process.env.SPARKIT_RECORD_TEST_OUTPUT||path.join(__dirname,'../work/work-records-ui'),root=path.resolve(__dirname,'..');
 app.setPath('userData',out+'/electron-profile');
 app.on('window-all-closed',()=>{});
 let win,records,agent;

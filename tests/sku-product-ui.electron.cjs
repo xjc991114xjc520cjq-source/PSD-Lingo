@@ -1,5 +1,5 @@
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),esbuild=require('esbuild'),JSZip=require('jszip');
-const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/sku-product-ui/run-'+Date.now();let win;
+const root=path.resolve(__dirname,'..'),out=path.join(root,'work/sku-product-ui/run-'+Date.now());let win;app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let failed=false;try{
  await fs.mkdir(out,{recursive:true});const source=out+'/source.psb',workbook=out+'/products.xlsx';
  const {writePsdBuffer}=require('ag-psd');await fs.writeFile(source,writePsdBuffer({width:900,height:300,children:['N9白色冰轴','N9套装'].map((name,i)=>({name,id:10+i,children:[],artboard:{rect:{left:i*450,top:0,right:i*450+400,bottom:300}}}))},{psb:true}));

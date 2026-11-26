@@ -119,7 +119,7 @@ export function installSparkit({state,toast,importPaths}){
   else if(action==='assistant'){withMotionTrigger(assistantCard,()=>$('openAgentSidebar').click());}
  });
  for(const d of document.querySelectorAll('dialog'))d.addEventListener('close',()=>paintNav(current));
- document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!document.querySelector('dialog[open]')){if(e.key.toLowerCase()==='h'){e.preventDefault();route('home');}if(e.key.toLowerCase()==='o'){e.preventDefault();route('editor');$('openProject').click();}}});
+ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!document.querySelector('dialog[open]')){if(e.key.toLowerCase()==='h'&&!(window.desktop?.platform==='darwin'&&e.metaKey)){e.preventDefault();route('home');}if(e.key.toLowerCase()==='o'){e.preventDefault();route('editor');$('openProject').click();}}});
  shell.hidden=true;home.hidden=false;document.body.dataset.sparkRoute='home';refreshProjects();paintNav('home');
  // Expose only navigation for UI verification, never document mutation or IPC.
  window.sparkitNavigate=route;

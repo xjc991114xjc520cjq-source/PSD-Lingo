@@ -117,6 +117,7 @@ app.whenReady().then(async () => {
   watchWindowStartup(win,{onTimeout:()=>console.warn('主窗口首帧事件未触发，已启用启动显示保障')});
   windowsBrand.install({app,icon:path.join(__dirname,'renderer/assets/sparkit.ico'),isUpdating:()=>updates.phase==='restarting'});
   win.setMenu(null);
+  require('./services/macos-menu.cjs').installMacMenu({Menu:require('electron').Menu});
   win.webContents.on('render-process-gone',(_,details)=>{void captureDiagnostic({kind:'renderer-crash',operation:'renderer',message:details.reason,code:String(details.exitCode)});});
   await updates.init();
   win.on('focus',()=>updates.check(false).catch(()=>{}));

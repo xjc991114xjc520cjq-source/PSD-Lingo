@@ -1,4 +1,4 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{execFile}=require('node:child_process'),{promisify}=require('node:util');
+const nativeTest=require('node:test'),test=(name,fn)=>nativeTest(name,{skip:process.platform!=='win32'},fn),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{execFile}=require('node:child_process'),{promisify}=require('node:util');
 const exec=promisify(execFile);
 test('updater tolerates an exclusive acknowledgment writer instead of rolling back a healthy startup',async()=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'updater-ack-lock-'));

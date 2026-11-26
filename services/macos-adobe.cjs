@@ -12,11 +12,20 @@ function appleScript(host){
  const command=host==='photoshop'?'do javascript file jsxFile':'do javascript jsxFile';
  return `on run argv\nset jsxFile to POSIX file (item 1 of argv)\nwith timeout of 3600 seconds\ntell application id "${id}"\n${command}\nend tell\nend timeout\nend run\n`;
 }
-async function runMacAdobeScript(host,jsx,{platform=process.platform,io=fs,exec=execFile}={}){
+async function findMacAdobe(host,{exec=execFile}={}){
+ const id=hosts[host];if(!id)throw Error('不支持的 Adobe 程序');
+ return new Promise((resolve,reject)=>exec('/usr/bin/open',['-Ra','-b',id],{timeout:15000},error=>{
+  if(!error)return resolve(id);
+  const failed=Error('未找到 '+(host==='photoshop'?'Adobe Photoshop':'Adobe Illustrator')+'。请安装并激活后重试；原稿尚未修改。');
+  failed.uncertain=false;failed.nativePhase='preflight';reject(failed);
+ }));
+}
+async function runMacAdobeScript(host,jsx,{platform=process.platform,io=fs,exec=execFile,discover=findMacAdobe}={}){
  if(platform!=='darwin')throw Error('macOS Adobe 通道只能在 Mac 上运行');
  const source=appleScript(host);
  if(typeof jsx!=='string'||!path.posix.isAbsolute(jsx)||/[\0\r\n]/.test(jsx))throw Error('JSX 文件路径无效');
  if(!(await io.stat(jsx)).isFile())throw Error('JSX 文件不存在');
+ await discover(host);
  return queues[host](()=>new Promise((resolve,reject)=>{
   let child;
   try{
@@ -34,4 +43,4 @@ async function runMacAdobeScript(host,jsx,{platform=process.platform,io=fs,exec=
   }catch(error){reject(error);}
  }));
 }
-module.exports={appleScript,runMacAdobeScript};
+module.exports={appleScript,runMacAdobeScript,findMacAdobe};

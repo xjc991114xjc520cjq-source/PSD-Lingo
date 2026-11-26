@@ -8,7 +8,10 @@ import CoreText
 // local test builds without inventing a restricted data-protection access group.
 enum DeviceFailure: Error { case failed(String) }
 let keyTag = Data("PSDLingo.Device.mac.v1".utf8)
-let secretService = "PSDLingo.Secrets.mac.v1"
+// An explicit test namespace prevents remote QA from touching a user's identity.
+let testNamespace = ProcessInfo.processInfo.environment["SPARKIT_KEYCHAIN_TEST_NAMESPACE"] ?? ""
+let validTestNamespace = !testNamespace.isEmpty && testNamespace.count <= 80 && testNamespace.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil
+let secretService = "PSDLingo.Secrets.mac.v1" + (validTestNamespace ? ".test." + testNamespace : "")
 let aad = Data("PSDLingo.Secrets.mac.v1".utf8)
 func check(_ status: OSStatus) throws {
     guard status == errSecSuccess else { throw DeviceFailure.failed("keychain status \(status)") }
@@ -142,6 +145,11 @@ do {
     FileHandle.standardOutput.write(response)
     FileHandle.standardOutput.write(Data([10]))
 } catch {
-    FileHandle.standardError.write(Data("Mac device operation failed; check Keychain and helper signing.\n".utf8))
+    let detail: String
+    switch error {
+    case DeviceFailure.failed(let reason): detail = reason
+    default: let native = error as NSError; detail = "\(native.domain) \(native.code)"
+    }
+    FileHandle.standardError.write(Data("Mac device operation failed: \(detail)\n".utf8))
     exit(1)
 }

@@ -21,7 +21,7 @@ function invokeDeviceService(file,request,{timeoutMs=15000,platform=process.plat
    child.stdout.on('data',chunk=>{size+=chunk.length;if(size>1024*1024){finish(Error('设备响应超出限制'));child.kill();}else out.push(Buffer.from(chunk));});
    // Preserve Windows Adobe failure classification; Mac helper errors are generic.
    child.stderr.on('data',chunk=>{errorSize+=chunk.length;if(errorSize<=65536)errors.push(Buffer.from(chunk));});
-   child.on('close',code=>{if(settled)return;if(code!==0)return finish(Error(platform==='win32'&&errors.length?Buffer.concat(errors).toString('utf8'):'设备服务失败，请检查本机密钥访问权限'));try{const value=JSON.parse(Buffer.concat(out).toString('utf8'));if(!value||typeof value!=='object'||Array.isArray(value))throw Error();finish(null,value);}catch{finish(Error('设备服务响应无效'));}});
+   child.on('close',code=>{if(settled)return;if(code!==0){const detail=Buffer.concat(errors).toString('utf8');return finish(Error(platform==='win32'&&errors.length?detail:platform==='darwin'&&/-25308/.test(detail)?'macOS 当前会话不允许钥匙串交互。请在已登录的 Mac 桌面打开灵搭，允许本次钥匙串访问后重试。':'设备服务失败，请检查本机密钥访问权限'));}try{const value=JSON.parse(Buffer.concat(out).toString('utf8'));if(!value||typeof value!=='object'||Array.isArray(value))throw Error();finish(null,value);}catch{finish(Error('设备服务响应无效'));}});
    child.stdin.on('error',error=>finish(error));child.stdin.end(input,'utf8');
   }catch(error){finish(error);child?.kill();}
  });

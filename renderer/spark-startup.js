@@ -1,4 +1,4 @@
-// One finite composition. Every moving layer uses compositor transforms/opacity.
+// One finite composition. Automatic playback uses the browser animation timeline.
 let activeStartup;
 function createStartupTimeline({manual=false,reduced}={}){
  activeStartup?.skip();
@@ -35,7 +35,7 @@ function createStartupTimeline({manual=false,reduced}={}){
   animate('.startup-emblem',[{opacity:1,transform:'translate(-50%,-50%) scale(1)'},{opacity:1,transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(${to?to.width/104:.20})`}],2100,750,'cubic-bezier(.45,0,.2,1)');
   animate('.startup-ground',[{opacity:1},{opacity:0}],2600,300,'cubic-bezier(.4,0,.2,1)');
  }
- const api={duration,finished,skip:finish,seek(ms){animations.forEach(a=>{a.pause();a.currentTime=Math.min(duration,Math.max(0,ms));});},get active(){return !closed;}};
+ const api={duration,finished,skip:finish,animate,play(){const start=document.timeline.currentTime;animations.forEach(a=>{a.play();a.startTime=start;});timer=setTimeout(finish,duration+34);},seek(ms){animations.forEach(a=>{a.pause();a.currentTime=Math.min(duration,Math.max(0,ms));});},get active(){return !closed;}};
  activeStartup=api;
  if(!manual)timer=setTimeout(finish,duration+34);
  return api;
@@ -53,28 +53,29 @@ emblem.insertAdjacentHTML('beforeend',`<svg class="emblem-art" viewBox="90 0 283
 <g mask="url(#logo-mask)"><rect class="logo-fill" x="90" y="0" width="283" height="310" fill="url(#metal)"/><rect class="logo-sweep" x="30" y="-80" width="90" height="500" fill="url(#spec)" transform="rotate(25 231 155)"/></g></svg>`);
 const host=document.querySelector('#sparkStartup');
 host.insertAdjacentHTML('beforeend',`<svg class="handoff" viewBox="0 0 1280 800" preserveAspectRatio="none"><path pathLength="1" stroke="#ffbd82" d="M 522 335 C 520 236 690 205 728 282 C 755 345 661 316 640 344"/><path pathLength="1" stroke="#a8d9cd" d="M 755 363 C 745 453 589 467 552 395 C 526 342 610 360 640 344"/></svg>`);
-const originalSeek=anim.seek.bind(anim),s=(a,b,t)=>{let v=Math.max(0,Math.min(1,(t-a)/(b-a)));return v*v*(3-2*v)};
-const seek=t=>{originalSeek(t);let fill=s(1170,1660,t),trace=s(930,1280,t)*(1-s(1640,1900,t));
-const name=document.querySelector('.startup-name');
-name.style.opacity=String(1-s(2080,2310,t));name.style.transform='translate(-50%,0)';
+// Build the decorative tracks once. Never seek paused animations on every frame.
+const s=(a,b,t)=>{let v=Math.max(0,Math.min(1,(t-a)/(b-a)));return v*v*(3-2*v)};
+const track=(selector,value)=>{
+ const frames=Array.from({length:91},(_,i)=>({...value(i*anim.duration/90),offset:i/90}));
+ anim.animate(selector,frames,0,anim.duration,'linear');
+};
+track('.startup-name',t=>({opacity:1-s(2080,2310,t),transform:'translate(-50%,0)'}));
 for(const [selector,start,duration,travel] of [['h1',1450,220,9],['p',1550,180,6]]){
- const el=name.querySelector(selector),progress=s(start,start+duration,t),ease=1-Math.pow(1-progress,3);
- el.style.opacity=String(progress);el.style.transform='translateY('+((1-ease)*travel)+'px)';el.style.clipPath='inset(0 0 '+((1-ease)*100)+'% 0)';
+ track('.startup-name '+selector,t=>{const progress=s(start,start+duration,t),ease=1-Math.pow(1-progress,3);return {opacity:progress,transform:'translateY('+((1-ease)*travel)+'px)',clipPath:'inset(0 0 '+((1-ease)*100)+'% 0)'};});
 }
-document.querySelector('.logo-fill').style.clipPath='inset('+(100-fill*100)+'% 0 0 0)';
-document.querySelector('.logo-outline').style.opacity=trace*.9;
-let sweep=s(1630,2110,t);let beam=document.querySelector('.logo-sweep');beam.setAttribute('x',String(15+sweep*360));beam.style.opacity=s(1630,1720,t)*(1-s(2010,2140,t))*.75;
-for(const [i,p]of [...document.querySelectorAll('.handoff path')].entries()){let q=s(770+i*90,1400+i*90,t);p.style.strokeDasharray='.22 .78';p.style.strokeDashoffset=String(1.22-q*1.22);p.style.opacity=s(770,900,t)*(1-s(1320,1480,t))*.8;}
-};seek(0);return seek;
+track('.logo-fill',t=>({clipPath:'inset('+(100-s(1170,1660,t)*100)+'% 0 0 0)'}));
+track('.logo-outline',t=>({opacity:s(930,1280,t)*(1-s(1640,1900,t))*.9}));
+track('.logo-sweep',t=>({transform:'translateX('+(15+s(1630,2110,t)*360-30)+'px) rotate(25deg)',transformOrigin:'231px 155px',opacity:s(1630,1720,t)*(1-s(2010,2140,t))*.75}));
+for(const i of [0,1]){
+ const selector='.handoff path:nth-child('+(i+1)+')';host.querySelector(selector).style.strokeDasharray='.22 .78';
+ track(selector,t=>({strokeDashoffset:1.22-s(770+i*90,1400+i*90,t)*1.22,opacity:s(770,900,t)*(1-s(1320,1480,t))*.8}));
 }
+}
+
 export function playSparkitStartup({manual=false,reduced}={}){
  const quiet=reduced??(matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement.classList.contains('spark-reduce-motion'));
  const timeline=createStartupTimeline({manual:true,reduced:quiet});
- const paint=quiet?ms=>timeline.seek(ms):enhanceStartup(timeline);
- let raf,closed=false,start;
- const skip=()=>{if(closed)return;closed=true;cancelAnimationFrame(raf);timeline.skip();};
- timeline.finished.then(()=>{closed=true;cancelAnimationFrame(raf);});
- const tick=now=>{if(closed||!timeline.active)return;start??=now;const elapsed=now-start;paint(Math.min(timeline.duration,elapsed));if(elapsed<timeline.duration)raf=requestAnimationFrame(tick);else skip();};
- paint(0);window.sparkitBoot?.handoff();if(!manual)raf=requestAnimationFrame(tick);
- return {duration:timeline.duration,ready:Promise.resolve(),finished:timeline.finished,skip,seek(ms){cancelAnimationFrame(raf);paint(Math.min(timeline.duration,Math.max(0,ms)));},get active(){return timeline.active;},get renderer(){return 'waapi';}};
+ if(!quiet)enhanceStartup(timeline);
+ window.sparkitBoot?.handoff();if(!manual)timeline.play();
+ return {duration:timeline.duration,ready:Promise.resolve(),finished:timeline.finished,skip:timeline.skip,seek:timeline.seek,get active(){return timeline.active;},get renderer(){return 'waapi';}};
 }

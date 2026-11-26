@@ -97,3 +97,9 @@ Mac 深度签名、13 个 renderer 文件逐字节核对、4 项更新回归、�
 Mac 桌面交付：/Users/jingchun/Desktop/灵搭Sparkit-Mac-DMG-0.3.109。生产安装未覆盖，用户需保存项目、退出旧版后拖动替换。DMG SHA-256 fd9bc66490e4c95c676eef7da1a6f8fec97dc5e5a9392264a78f46204e83619c，288654486 字节。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.109-arm64。
 
 1053 项 Node 回归（1051 pass / 0 fail / 2 skip）；修复后 6 项 Mac 更新专项通过。Mac 实机实际 DMG 更新 0.3.108 至 0.3.109、新窗口完整加载、备份与数据保留通过；故意缺少启动回执时实际恢复 0.3.108 通过。记录 MAC-DMG自动更新-0.3.109.md，证据 dmg-update109-qa.json、dmg-update109-rollback.json。无 Apple 公证，不关闭全局 Gatekeeper；此为用户授权的发布者签名测试分发方式。公开状态见归档 public-verified.json。
+
+## 0.3.110 DMG 更新测试版（2026-11-26）
+
+用户明确要求发布新版测试更新和自动安装。版本升至 0.3.110，没有新增功能修改；确认用户 Mac /Applications/Sparkit.app 当前为 0.3.109。6 项更新专项通过，Mac 0.3.109 隔离副本至 0.3.110 的真实 DMG 自动替换、窗口重新加载、备份及数据保留通过，不替用户执行生产安装。
+
+DMG 288654112 字节，SHA-256 1ae7a82c7d729697526c7b73da7c04984c6df0af5aa9c3e5a8171ed05d95d5a3。版本 tag mac-v0.3.110-arm64；通道 mac-dmg-updates。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.110-arm64，原生证据 dmg-update110-qa.json，公开状态以 public-verified.json 为准。记录 MAC更新测试-0.3.110.md。Windows latest 保持 v0.3.107。

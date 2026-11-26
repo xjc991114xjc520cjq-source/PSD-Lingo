@@ -2,14 +2,16 @@
 const origins=new WeakMap(),running=new WeakMap();
 let trigger=null;
 let explicitTrigger=null;
-export function withMotionTrigger(element,open){const previous=explicitTrigger;explicitTrigger=element;try{return open();}finally{explicitTrigger=previous;}}
+export function withMotionTrigger(element,open){const previous=explicitTrigger;explicitTrigger=explicitTrigger||element;try{return open();}finally{explicitTrigger=previous;}}
 export function setMotionTrigger(element){if(element?.isConnected)trigger=element;}
+export function afterDialogMotion(surface){return running.get(surface)?.finished.catch(()=>{})||Promise.resolve();}
 export const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement.classList.contains('spark-reduce-motion');
 export function sourceTransform(surface,source){
  const r=surface.getBoundingClientRect(),s=source?.isConnected?source.getBoundingClientRect():null;
  if(!s||!s.width||!r.width)return {transform:'translateY(45px) scale(.92)',origin:'50% 100%',source:null};
  const dx=s.left+s.width/2-r.left-r.width/2,dy=s.top+s.height/2-r.top-r.height/2;
- const surfaceSource=source.dataset?.motionSurface==='true';
+ const surfaceSource=source.dataset?.motionSurface==='true',shell=surface.id==='agentDialog';
+ if(shell)return {transform:`translate(${dx}px,${dy}px) scale(${s.width/r.width},${s.height/r.height})`,origin:'50% 50%',source:{x:s.x,y:s.y,width:s.width,height:s.height}};
  return {transform:`translate(${dx}px,${dy}px) scale(${Math.max(.06,Math.min(surfaceSource?2:.46,s.width/r.width))},${Math.max(.06,Math.min(surfaceSource?2:.3,s.height/r.height))})`,origin:'50% 50%',source:{x:s.x,y:s.y,width:s.width,height:s.height}};
 }
 export function installDialogMotion(){
@@ -21,21 +23,22 @@ export function installDialogMotion(){
   const interrupted=present?{opacity:present.opacity,transform:present.transform}:null;
   previous?.cancel();running.delete(this);delete this.dataset.sparkClosing;
   if(wasOpen){
-   if(interrupted){const a=this.animate([interrupted,{opacity:1,transform:'none'}],{duration:reducedMotion()?90:180,easing:'cubic-bezier(.16,1,.3,1)'});running.set(this,a);a.finished.then(()=>{if(running.get(this)===a){running.delete(this);this.style.willChange='';}}).catch(()=>{});}
+   if(interrupted){const a=this.animate([interrupted,{opacity:1,transform:'none'}],{duration:reducedMotion()?90:180,easing:'cubic-bezier(.16,1,.3,1)'});running.set(this,a);a.finished.then(()=>{if(running.get(this)===a){running.delete(this);delete this.dataset.motionShell;this.style.willChange='';}}).catch(()=>{});}
    return;
   }
-  const source=explicitTrigger||trigger||document.activeElement;show.call(this);this.style.willChange='transform,opacity';
+  const source=explicitTrigger||trigger||document.activeElement;show.call(this);
+  const shell=this.id==='agentDialog';if(shell)this.dataset.motionShell='true';this.style.willChange='transform,opacity';
   const origin=sourceTransform(this,source);origins.set(this,{...origin,element:source});
   this.style.transformOrigin=origin.origin;
   this.dataset.motionSource=source?.id||source?.dataset?.route||'control';
   const reduced=reducedMotion();
-  const frames=reduced?[{opacity:.2},{opacity:1}]:[
+  const frames=shell&&!reduced?[{opacity:.12,transform:origin.transform},{opacity:1,transform:'none'}]:reduced?[{opacity:.2},{opacity:1}]:[
    {opacity:.05,transform:origin.transform,offset:0},
    {opacity:1,transform:'translate(0,0) scale(1.012)',offset:.76},
    {opacity:1,transform:'translate(0,0) scale(1)',offset:1}
   ];
-  const a=this.animate(frames,{duration:reduced?90:280,easing:'cubic-bezier(.2,.8,.2,1)'});running.set(this,a);
-  a.finished.then(()=>{if(running.get(this)===a){running.delete(this);this.style.willChange='';}}).catch(()=>{});
+  const a=this.animate(frames,{duration:reduced?90:shell?200:280,easing:'cubic-bezier(.2,.8,.2,1)'});running.set(this,a);
+  a.finished.then(()=>{if(running.get(this)===a){running.delete(this);delete this.dataset.motionShell;this.style.willChange='';}}).catch(()=>{});
  };
  proto.close=function(value){
   if(!this.open)return Promise.resolve();
@@ -43,7 +46,7 @@ export function installDialogMotion(){
   const computed=getComputedStyle(this),present={opacity:computed.opacity,transform:computed.transform};
   running.get(this)?.cancel();const origin=origins.get(this);
   const target=origin?.element?.isConnected?sourceTransform(this,origin.element):origin;
-  this.dataset.sparkClosing='true';
+  this.dataset.sparkClosing='true';if(this.id==='agentDialog')this.dataset.motionShell='true';
   const reduced=reducedMotion();
   const a=this.animate(reduced?[{opacity:1},{opacity:0}]:[
    present,
@@ -52,7 +55,7 @@ export function installDialogMotion(){
   running.set(this,a);
   return a.finished.catch(()=>{}).then(()=>{
    if(running.get(this)!==a)return;
-   running.delete(this);delete this.dataset.sparkClosing;close.call(this,value);a.cancel();this.style.willChange='';
+   running.delete(this);delete this.dataset.sparkClosing;delete this.dataset.motionShell;close.call(this,value);a.cancel();this.style.willChange='';
    if(origin?.element?.isConnected)origin.element.focus({preventScroll:true});
   });
  };

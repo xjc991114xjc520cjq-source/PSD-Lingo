@@ -1,3 +1,4 @@
+import {withMotionTrigger,afterDialogMotion} from './spark-dialog-motion.js';
 import {normalizeSettings,summary as typographySummary,key as typographyKey} from '../services/typography-task-settings.cjs';
 import {REQUEST as continuationRequest} from '../services/continuation-request.cjs';
 import {restoreStateFrame} from '../services/agent-state-publication.cjs';
@@ -71,8 +72,8 @@ export function installAgentUi({call,execute,openSettings,isBusy=()=>false}){
   if(!running&&(!previous||previous.id!==s.id||active(previous)))control.scrollIntoView({block:'start'});
  }
  async function loadModels(){const request=++lastModelRequest;refresh.disabled=true;modelNote.textContent='正在获取本机 Codex 可用模型…';try{const result=await call('agentModels');if(request!==lastModelRequest)return;models.replaceChildren();for(const name of result.models){const option=el('option');option.value=name;models.append(option);}if(!model.value||connectionKey&&connectionKey!==result.connectionKey)model.value=result.selected||'';connectionKey=result.connectionKey||'';modelNote.textContent=(result.mode==='local'?'本机 Codex':'API')+' · '+result.models.length+' 个模型'+(result.nextCursor?'（前 100 个，可手动输入其余模型）':'');}catch(e){modelNote.textContent=e.message+'；可手动输入本机 Codex 模型，开始时将检查连接';}finally{if(request===lastModelRequest)refresh.disabled=!!current;}}
- trigger.onclick=action(async()=>{if(opening)return;if(isBusy()){if(!dialog.open)dialog.showModal();throw Error('请先完成当前导入、AI 或原生文件任务');}opening=true;try{if(!dialog.open)dialog.showModal();await loadProject();update(await call('agentState'));if(!current)await loadModels();}finally{opening=false;}});
- side.onclick=()=>trigger.click();close.onclick=()=>dialog.close();dialog.addEventListener('cancel',e=>{if(active(current))e.preventDefault();});
+ trigger.onclick=action(async()=>{if(opening)return;if(isBusy()){if(!dialog.open)dialog.showModal();throw Error('请先完成当前导入、AI 或原生文件任务');}opening=true;try{if(!dialog.open)dialog.showModal();await afterDialogMotion(dialog);if(!dialog.open)return;await loadProject();update(await call('agentState'));if(!current)await loadModels();}finally{opening=false;}});
+ side.onclick=()=>withMotionTrigger(side,()=>trigger.click());close.onclick=()=>dialog.close();dialog.addEventListener('cancel',e=>{if(active(current))e.preventDefault();});
  settings.onclick=()=>{dialog.close();void openSettings();};refresh.onclick=()=>loadModels();
  const appendFiles=async(paths,kind)=>{const added=await call('agentFiles',paths?{paths,...(kind?{kind}:{})}:kind?{kind}:undefined);files=[...new Map([...files,...added].map(f=>[f.id,f])).values()];renderFiles();};
  bindFileDrop(dialog,{allowDirectories:true,extensions:['ai','psd','psb','xlsx','docx','csv','tsv','txt','json','png','jpg','jpeg','webp'],multiple:true,onPaths:appendFiles,onError:text=>fail(Error(text))});

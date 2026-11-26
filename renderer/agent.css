@@ -70,3 +70,8 @@
 .agent-task-actions #agentNewTask:hover{background:#3b302a;border-color:#efc7a7}
 .agent-task-hint{margin:10px 0 0;color:var(--agent-muted);font-size:12px;line-height:1.65}
 @media(max-width:560px){.agent-task-actions{flex-direction:column;gap:8px}}
+
+/* Animate only the empty surface; reveal live controls at their final size. */
+.agent-dialog::backdrop{backdrop-filter:none;background:#101114b8}
+.agent-dialog[data-motion-shell]> *{visibility:hidden}
+.agent-dialog[data-motion-shell]{box-shadow:none!important;background:#393638!important}

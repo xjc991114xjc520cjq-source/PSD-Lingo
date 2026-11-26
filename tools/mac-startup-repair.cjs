@@ -18,7 +18,10 @@ fail(){ print -r -- "$1" >&2; exit 1; }
 HERE="\${0:A:h}"
 CHECK_ONLY=0
 if [[ "\${1:-}" == '--no-launch' ]]; then CHECK_ONLY=1; shift; fi
-APP="\${1:-$HERE/Sparkit.app}"
+APP="\${1:-}"
+if [[ -z "$APP" && -d '/Applications/Sparkit.app' ]]; then APP='/Applications/Sparkit.app'; fi
+if [[ -z "$APP" && -d "$HOME/Applications/Sparkit.app" ]]; then APP="$HOME/Applications/Sparkit.app"; fi
+if [[ -z "$APP" && -d "$HERE/Sparkit.app" ]]; then APP="$HERE/Sparkit.app"; fi
 [[ -d "$APP" && ! -L "$APP" ]] || fail '请指定当前测试版 Sparkit.app；不处理符号链接或不存在的应用。'
 APP="\${APP:A}"
 ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist") || fail '应用信息读取失败。'

@@ -1,5 +1,7 @@
 # 灵搭 Sparkit · Apple Silicon 第二版实机测试
 
+> **2026-11-26 用户实测更新：安装仍未通过。** 用户 macOS 15.6 的 PKG 被 Apple 安全检查拦截，且未找到“仍要打开”。云端实际安装/启动通过不等于用户下载后通过 Gatekeeper。其他分支请先读 [Mac 移植踩坑与分支交接](MAC移植踩坑与分支交接.md)，不要沿用下方旧说明承诺可直接安装。
+
 适用：M 系列 Mac，macOS 13 或更新版本。第二版下载：[内置 Codex 的 Mac 测试包](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107-2)。包名 `Sparkit-0.3.107-Mac-arm64-test.zip`；请按发布 tag 区分首版。这是 Mac 开发测试包，采用 ad-hoc 签名，尚未通过 Apple Developer ID 签名与公证。
 
 > 第三版优先使用图形安装包：[Mac 安装器测试版](https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-arm64-test-0.3.107-3)。下载 `Sparkit-0.3.107-Mac-arm64-Setup.pkg`，双击安装，然后在“应用程序”打开 Sparkit，无需终端或解压应用。若首次拦截，在“系统设置 → 隐私与安全性”仅对该安装器点击“仍要打开”。尚未 Apple 签名/公证，不能保证所有 Mac 无拦截。详细边界见 `MAC图形安装包.md`。下方 ZIP 步骤仅供旧版参考。

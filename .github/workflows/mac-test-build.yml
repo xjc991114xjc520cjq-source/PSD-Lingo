@@ -59,7 +59,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'mac-arm64-test-0.3.107-4'
+          $tag = 'mac-arm64-test-0.3.107-5'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target codex/mac-test-build --draft --title 'Sparkit Apple Silicon test 0.3.107' --notes 'Ad-hoc signed developer test build. Not notarized. Adobe and real-device acceptance pending.'
@@ -88,3 +88,4 @@ jobs:
             source/work/mac-dist/*.json
             source/work/mac-dist/*.txt
           if-no-files-found: warn
+

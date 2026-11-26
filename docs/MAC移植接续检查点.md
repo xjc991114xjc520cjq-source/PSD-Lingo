@@ -81,3 +81,11 @@
 ## 第三版图形安装包
 
 用户要求免终端的简便测试；已公开 mac-arm64-test-0.3.107-3，新增 .pkg 自动安装到 /Applications/Sparkit.app。云端 45542048193 的实际安装、安装后签名与应用/Codex/Keychain 验证通过，34 项 Mac 专项通过。详见 MAC图形安装包.md。Gatekeeper 评估拒绝无签名安装器，首次可能需隐私与安全性单独放行；无 Developer ID/公证，不宣称零拦截或用户 Mac 已通过。收据 work/mac-installer-handoff/public-verified.json，Windows latest 不变。
+
+## 0.3.108 公开更新通道测试（2026-11-26 接续）
+
+0.3.108 已公开为独立预发布 mac-v0.3.108-arm64，签名清单发布到 mac-updates。本轮仅升 package 版本并完成前一聊天中断的发布，不重做移植。版本页：https://github.com/xjc991114xjc520cjq-source/PSD-Lingo/releases/tag/mac-v0.3.108-arm64 。Windows latest 经 API 核对仍为 v0.3.107。
+
+归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.108-arm64；公开收据 public-verified.json。详细证据及签名边界见 MAC更新通道测试-0.3.108.md。清单为可选测试更新；安装器缺少 Apple Developer ID Installer 签名/公证，自动安装仍会被客户端拒绝，未放宽正式验证器。
+
+Mac 深度签名、13 个 renderer 文件逐字节核对、4 项更新回归、真实完整包回环 HTTP 下载/重试/签名拒绝通过；Mac 直连 GitHub 的本轮公开检查超时，不能声称实机公开端到端通过。公开清单验签和 GitHub 5 项资产 digest 均已核对；公开下载另在 Windows 上运行同一更新服务验证，见 public-update108-client.json。

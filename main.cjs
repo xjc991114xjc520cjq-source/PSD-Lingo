@@ -122,6 +122,11 @@ app.whenReady().then(async () => {
   await updates.init();
   win.on('focus',()=>updates.check(false).catch(()=>{}));
   await win.loadFile(path.join(__dirname, 'renderer/index.html'));
+  if(process.platform==='darwin'&&process.env.SPARKIT_UPDATE_ACK){
+   const ack=process.env.SPARKIT_UPDATE_ACK;delete process.env.SPARKIT_UPDATE_ACK;
+   const relative=path.relative(path.join(app.getPath('userData'),'updates'),ack);
+   if(/^dmg-install-[^/\\]+[/\\]launch-ack\.json$/.test(relative))await fs.writeFile(ack,JSON.stringify({version:app.getVersion(),pid:process.pid}),{flag:'wx',mode:0o600});
+  }
   win.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   win.webContents.on('will-navigate', e => e.preventDefault());
   authorization.init().catch(e=>console.error('授权初始化失败：'+e.message));

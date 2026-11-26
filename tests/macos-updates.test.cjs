@@ -9,6 +9,18 @@ function fixture(){
  const sign=p=>({algorithm:'ES256',keyId:'test',payload:p,signature:crypto.sign('sha256',Buffer.from(canonical(p)),{key:keys.privateKey,dsaEncoding:'ieee-p1363'}).toString('base64')});
  return {config,p,bytes,sign};
 }
+
+test('DMG protocol binds package type and filename to the signed publisher manifest',()=>{
+ const f=fixture(),p={...f.p,updaterProtocol:3,packageType:'dmg',downloadUrl:f.p.downloadUrl.replace('-Setup.pkg','.dmg')};
+ assert.equal(validateMacManifest(f.sign(p),f.config,'0.3.107','arm64').packageType,'dmg');
+ for(const patch of [{updaterProtocol:2},{packageType:'pkg'},{downloadUrl:p.downloadUrl+'?redirect=1'},{downloadUrl:f.p.downloadUrl}])assert.throws(()=>validateMacManifest(f.sign({...p,...patch}),f.config,'0.3.107','arm64'));
+ const envelope=f.sign(p);envelope.payload.packageType='pkg';assert.throws(()=>validateMacManifest(envelope,f.config,'0.3.107','arm64'),/签名/);
+});
+
+test('DMG staging rejects corrupted bytes before mounting an image',async()=>{
+ const {stageDmg}=require('../services/macos-dmg-updater.cjs'),f=fixture();
+ await assert.rejects(stageDmg(Buffer.from('tampered'),{...f.p,packageType:'dmg',updaterProtocol:3},'unused'),/SHA-256/);
+});
 test('Mac signed channel rejects Windows, wrong architecture, URLs, protocol, tampering and invalid sizes',()=>{
  const f=fixture(),validate=p=>validateMacManifest(f.sign(p),f.config,'0.3.107','arm64');assert.equal(validate(f.p).version,'0.3.108');
  for(const patch of [{platform:'win32'},{arch:'x64'},{updaterProtocol:1},{packageType:'zip'},{downloadUrl:f.p.downloadUrl+'?x=1'},{releaseTag:'v0.3.108'},{length:2**31},{policyRevision:0}])assert.throws(()=>validate({...f.p,...patch}));

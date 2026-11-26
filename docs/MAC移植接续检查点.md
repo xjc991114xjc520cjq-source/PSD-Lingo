@@ -89,3 +89,11 @@
 归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.108-arm64；公开收据 public-verified.json。详细证据及签名边界见 MAC更新通道测试-0.3.108.md。清单为可选测试更新；安装器缺少 Apple Developer ID Installer 签名/公证，自动安装仍会被客户端拒绝，未放宽正式验证器。
 
 Mac 深度签名、13 个 renderer 文件逐字节核对、4 项更新回归、真实完整包回环 HTTP 下载/重试/签名拒绝通过；Mac 直连 GitHub 的本轮公开检查超时，不能声称实机公开端到端通过。公开清单验签和 GitHub 5 项资产 digest 均已核对；公开下载另在 Windows 上运行同一更新服务验证，见 public-update108-client.json。
+
+## 0.3.109 DMG 自动更新（2026-11-26）
+
+用户要求改用 DMG，并解决 PKG 安装签名拦截。已实现签名清单协议 3、DMG 校验、完整应用暂存、定向隔离属性处理、独立助手退出后原子替换、窗口启动确认及失败恢复旧版。新通道 mac-dmg-updates，旧客户端需首次手动安装一次 0.3.109 DMG；旧 PKG 客户端无法仅靠服务器资产切换学习新执行协议。
+
+Mac 桌面交付：/Users/jingchun/Desktop/灵搭Sparkit-Mac-DMG-0.3.109。生产安装未覆盖，用户需保存项目、退出旧版后拖动替换。DMG SHA-256 fd9bc66490e4c95c676eef7da1a6f8fec97dc5e5a9392264a78f46204e83619c，288654486 字节。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.109-arm64。
+
+1053 项 Node 回归（1051 pass / 0 fail / 2 skip）；修复后 6 项 Mac 更新专项通过。Mac 实机实际 DMG 更新 0.3.108 至 0.3.109、新窗口完整加载、备份与数据保留通过；故意缺少启动回执时实际恢复 0.3.108 通过。记录 MAC-DMG自动更新-0.3.109.md，证据 dmg-update109-qa.json、dmg-update109-rollback.json。无 Apple 公证，不关闭全局 Gatekeeper；此为用户授权的发布者签名测试分发方式。公开状态见归档 public-verified.json。

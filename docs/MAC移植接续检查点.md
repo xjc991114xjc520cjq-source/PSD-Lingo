@@ -103,3 +103,9 @@ Mac 桌面交付：/Users/jingchun/Desktop/灵搭Sparkit-Mac-DMG-0.3.109。生�
 用户明确要求发布新版测试更新和自动安装。版本升至 0.3.110，没有新增功能修改；确认用户 Mac /Applications/Sparkit.app 当前为 0.3.109。6 项更新专项通过，Mac 0.3.109 隔离副本至 0.3.110 的真实 DMG 自动替换、窗口重新加载、备份及数据保留通过，不替用户执行生产安装。
 
 DMG 288654112 字节，SHA-256 1ae7a82c7d729697526c7b73da7c04984c6df0af5aa9c3e5a8171ed05d95d5a3。版本 tag mac-v0.3.110-arm64；通道 mac-dmg-updates。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.110-arm64，原生证据 dmg-update110-qa.json，公开状态以 public-verified.json 为准。记录 MAC更新测试-0.3.110.md。Windows latest 保持 v0.3.107。
+
+## 0.3.111 顶部品牌栏修正（2026-11-26）
+
+用户截图要求顶部 LOGO 与名称上下居中，并删除“文案与排版工作台”。顶部改用已有纯图标资源，移除副标题及分隔线，窗口初始标题同步简化。Mac 0.3.111 最终包隔离启动及截图查看通过；LOGO 与名称中心差 0px，顶部仅显示“灵搭 Sparkit”。10 项启动/布局检查通过，Impeccable 检测无新增发现。
+
+版本 tag mac-v0.3.111-arm64，通道 mac-dmg-updates；0.3.110 历史测试发布保留。归档 D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/mac-0.3.111-arm64，DMG 288604541 字节，SHA-256 9c23cbea3b94101d0222b4fd897a000cdb9ef22bdd64cd82543582fd019fd19f。视觉证据 titlebar111.png 和 titlebar111-report.json；公开以 public-verified.json 为准。

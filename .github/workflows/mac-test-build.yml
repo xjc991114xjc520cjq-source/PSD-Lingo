@@ -39,7 +39,7 @@ jobs:
         run: |
           node services/build-macos-helper.cjs
           if ($LASTEXITCODE) { throw 'Swift compilation failed' }
-          node --test tests/file-identity.test.cjs tests/macos-adobe.test.cjs tests/codex-discovery.test.cjs tests/codex-login.test.cjs tests/agent-project.test.cjs
+          node --test tests/file-identity.test.cjs tests/macos-adobe.test.cjs tests/codex-discovery.test.cjs tests/codex-login.test.cjs tests/agent-project.test.cjs tests/macos-updates.test.cjs
           if ($LASTEXITCODE) { throw 'Mac platform regression failed' }
           node build.cjs
           if ($LASTEXITCODE) { throw 'Renderer build failed' }
@@ -59,7 +59,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'mac-arm64-test-0.3.107-3'
+          $tag = 'mac-arm64-test-0.3.107-4'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target codex/mac-test-build --draft --title 'Sparkit Apple Silicon test 0.3.107' --notes 'Ad-hoc signed developer test build. Not notarized. Adobe and real-device acceptance pending.'

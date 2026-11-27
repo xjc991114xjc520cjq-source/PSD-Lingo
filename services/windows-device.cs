@@ -18,7 +18,7 @@ class DeviceService {
  static void PhotoshopScript(string file){
   string full=PhotoshopScriptPath(file);
   Type type;object ps=null;
-  try{ps=AdobeConnection.Connect("Photoshop",out type);using(var notice=new AdobeSaveNotice(full)){type.InvokeMember("DoJavaScriptFile",BindingFlags.InvokeMethod,null,ps,new object[]{full});}}
+  try{try{ps=AdobeConnection.ConnectReady("Photoshop",out type);}catch(Exception e){throw new Exception("Photoshop connection preflight failed; file script was not submitted: "+(e.InnerException??e).Message,e);}using(var notice=new AdobeSaveNotice(full)){type.InvokeMember("DoJavaScriptFile",BindingFlags.InvokeMethod,null,ps,new object[]{full});}}
   catch(TargetInvocationException e){throw new Exception("Photoshop script failed: "+(e.InnerException??e).Message,e.InnerException??e);}
   finally{if(ps!=null&&Marshal.IsComObject(ps))Marshal.FinalReleaseComObject(ps);}
  }

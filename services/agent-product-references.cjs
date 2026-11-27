@@ -1,0 +1,9 @@
+const {operationFailure}=require('./agent-operation-result.cjs');
+const tools=new Set(['match_product_boards','read_product_mapping','confirm_product_mapping','import_product_mapping','configure_product_template','inspect_product_template','configure_product_copy','inspect_product_copy']);
+// Only successful receipts establish an identity. An attempted or guessed ID is
+// not a usable record and must never become an export prerequisite on restore.
+function references(task){const found=new Map(),failed=new Set();let current;
+ for(const h of task.history||[]){if(h.type==='tool_start')current=h;else if(h.type==='tool_error'&&current?.args?.mappingId)failed.add(current.args.mappingId);else if(h.type==='tool_result'&&tools.has(h.tool)&&!operationFailure(h.result)&&!h.result?.interrupted){const id=h.result?.mappingId||current?.tool===h.tool&&current.args?.mappingId;if(id)found.set(id,{mappingId:id,...(current?.args?.sourceFileId?{sourceFileId:current.args.sourceFileId}:{}),...(current?.args?.workbookFileId?{workbookFileId:current.args.workbookFileId}:{})});}else if(h.type==='user_answer'&&h.mappingId&&h.approvalDigest)found.set(h.mappingId,{...found.get(h.mappingId),mappingId:h.mappingId});}
+ for(const id of task.productMappingIds||[])if(!failed.has(id)&&!found.has(id))found.set(id,{mappingId:id});return [...found.values()];}
+function usedIds(task){const refs=new Set(references(task).map(r=>r.mappingId)),used=new Set((task.productMappingIds||[]).filter(id=>refs.has(id)));let current;for(const h of task.history||[]){if(h.type==='tool_start')current=h;else if(h.type==='tool_result'&&['import_product_mapping','configure_product_template','inspect_product_template','configure_product_copy','inspect_product_copy'].includes(h.tool)&&current?.tool===h.tool&&!operationFailure(h.result)&&!h.result?.interrupted&&refs.has(current.args?.mappingId))used.add(current.args.mappingId);}return [...used];}
+module.exports={references,usedIds};

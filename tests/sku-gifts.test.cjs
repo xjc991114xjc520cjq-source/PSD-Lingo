@@ -114,3 +114,7 @@ test('multi-gift template replaces original independent text/image slots and ret
  assert.ok(a.templateSlots.every(s=>s.texts.every(t=>t.original!=='+')));
  assert.equal(giftAction({...f,approved:fixture().approved}).templateSlots,null);
 });
+
+test('mixed gift container declares replaceable children while preserving its background and badge',()=>{
+ const f=fixture();f.config.contentObjectIds=['0.0.0'];const r=giftAction(f);assert.deepEqual(r.contentPaths,[[0,0,0]]);assert.equal(f.objects.length,5);f.config.contentObjectIds=['0.0'];assert.throws(()=>giftAction(f),/赠品内容/);
+});

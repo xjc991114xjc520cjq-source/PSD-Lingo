@@ -10,7 +10,7 @@ function canSample(plan){return !!plan.productTemplate&&plan.operation==='edit'&
 function representativeBoardIds(plan){
  if(!canSample(plan))return [];
  const seen=new Set(),ids=[];
- for(const b of plan.boards){const r=plan.productTemplate?.requests.find(r=>r.boardId===b.templateId);if(!r)continue;const gifts=r.actions.filter(a=>a.mode==='gift-replace').flatMap(a=>a.gifts||[]),entry=requestTemplate(plan.productTemplate,r),key=JSON.stringify([r.templateFileId||entry.template.path,gifts.length,r.actions.filter(a=>a.mode==='remove').map(a=>a.objectId),r.priceStructure]);if(!seen.has(key)){seen.add(key);ids.push(b.templateId);}}
+ for(const b of plan.boards){const r=plan.productTemplate?.requests.find(r=>r.boardId===b.templateId);if(!r)continue;const gifts=r.actions.filter(a=>a.mode==='gift-replace').flatMap(a=>a.gifts||[]),entry=requestTemplate(plan.productTemplate,r),key=JSON.stringify([r.templateKey||r.templateFileId||entry.template.path,gifts.length,r.actions.filter(a=>a.mode==='remove').map(a=>a.objectId),r.priceStructure]);if(!seen.has(key)){seen.add(key);ids.push(b.templateId);}}
  return ids;
 }
 async function validBoardWork(source,plan,candidates,hash){

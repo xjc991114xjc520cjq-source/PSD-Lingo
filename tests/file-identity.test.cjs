@@ -8,6 +8,20 @@ test('native Mac template pool never reuses a case-distinct document',()=>{
  vm.runInContext(require('../sku-template-native.cjs').templatePoolNative,c);
  c.tplOpenTemplates([{templateFileId:'a',scanId:'s',template:{path:'/tmp/a.psd'}}],[]);assert.deepEqual(opened,['/tmp/a.psd']);
 });
+test('Mac template roots share one physical document and retain distinct template keys',()=>{
+ const docs=[],closed=[],opened=[];
+ function File(p){this.fsName=p;this.exists=true;}
+ const c=vm.createContext({$:{os:'Macintosh OS'},File,app:{documents:docs,open:f=>{opened.push(f.fsName);const d={saved:true,fullName:f,close:()=>closed.push(f.fsName)};docs.push(d);return d;}},SaveOptions:{DONOTSAVECHANGES:0}});
+ vm.runInContext(require('../sku-template-native.cjs').templatePoolNative,c);
+ const pool=[];c.tplOpenTemplates(['gift','plain'].map(templateKey=>({templateKey,templateFileId:'same',scanId:'scan',template:{path:'/Volumes/中文 资料/Template.psd'}})),pool);
+ assert.equal(opened.length,1);assert.equal(pool.length,2);for(const templateKey of ['gift','plain'])assert.equal(c.tplPoolDoc(pool,{templateKey,templateFileId:'same',scanId:'scan'}),docs[0]);
+ assert.throws(()=>c.tplPoolDoc(pool,{templateKey:'foreign',templateFileId:'same',scanId:'scan'}),/路由/);c.tplCloseTemplates(pool);assert.equal(closed.length,1);
+});
+test('Mac background template validation does not accept case-distinct paths',{skip:process.platform!=='darwin'},()=>{
+ const {validateBackgroundTemplates}=require('../services/sku-template-background-inputs.cjs');
+ const entries=['gift','plain'].map(templateKey=>({templateKey,templateFileId:'same',scanId:'scan',template:{path:'/Volumes/中文 资料/A.psd',fingerprint:'hash'}}));
+ validateBackgroundTemplates({templates:entries},entries);const foreign=structuredClone(entries);foreign[1].template.path='/Volumes/中文 资料/a.psd';assert.throws(()=>validateBackgroundTemplates({templates:entries},foreign),/完整模板清单/);
+});
 test('project binding preserves mixed case in its registered directory',async t=>{
  const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'Sparkit-MAC-Project-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));

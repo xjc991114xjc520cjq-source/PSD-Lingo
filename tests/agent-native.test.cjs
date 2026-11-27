@@ -186,3 +186,19 @@ test('embedded assistant keeps a directory-bound session without desktop sync',a
  f.a.start({request:'Embedded context',codexProject:{name:'Embedded',key:'embed'}});f.a.current.history.push({type:'fixture'});await f.a.runPromise;
  assert.equal(f.a.current.status,'completed',f.a.current.error);assert.equal(f.a.current.codexProject.binding,'embedded');assert.equal(synced,0);assert.ok(f.a.current.nativeSession.threadId);
 });
+
+test('a resumed native thread receives an updated template contract once without replaying prior scans',async t=>{
+ let turns=0;const f=await fixture(t,async({call,params})=>{if(turns++===0)await call('software_operations',ops('workspace'));else if(turns===2){assert.match(params.input[0].text,/软件工具契约已更新/);assert.match(params.input[0].text,/templateKey/);assert.match(params.input[0].text,/giftSource/);assert.ok(!params.input[0].text.includes('old giant scan'));}else assert.doesNotMatch(params.input[0].text,/软件工具契约已更新/);},async()=>({scan:'old giant scan'}));
+ f.a.start({request:'Retain source and approved SKU mappings'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;f.a.current.nativeSession.toolContractRevision='old-contract';closeNativeTask(f.a.current);f.a.followUp('Continue');await f.a.runPromise;assert.equal(f.resumes,1);assert.equal(f.tools,1);assert.equal(f.a.current.status,'completed');assert.equal(f.a.current.nativeSession.toolContractRevision,require('../services/agent-template-contract.cjs').revision);
+ f.a.followUp('Keep the updated contract');await f.a.runPromise;assert.equal(turns,3);assert.equal(f.a.current.status,'completed');assert.equal(f.tools,1);
+});
+
+test('native assistant receives missing template fields and corrects them in the same session without stale failure',async t=>{
+ const scope={sourceFileId:'source',workbookFileId:'book',mappingId:'approved',fileIndex:0};let attempts=0;
+ const f=await fixture(t,async({call})=>{
+  const bad=await call('software_operations',ops('configure_product_template',scope));assert.equal(bad.success,false);
+  const failure=JSON.parse(bad.contentItems[0].text).items[0].result;assert.equal(failure.code,'TOOL_ARGUMENTS');assert.ok(failure.missingFields.includes('templateFields'));assert.ok(failure.toolContract.configuration.multiple.includes('templateKey'));
+  const good=await call('software_operations',ops('configure_product_template',{...scope,templates:[{templateKey:'gift',templateFileId:'template'}],boards:[{boardId:1}]}));assert.equal(good.success,true);await call('software_operations',ops('export_files',{fileIndex:0}));
+ },async(tool)=>{if(tool==='read_batch')return {prepared:true};if(tool==='export_files')return {exported:true,qualityPassed:true,fileIndex:0};if(attempts++===0)throw Error('请明确模板价格字段与对象角色');return {changed:true,fileIndex:0};});
+ f.a.start({request:'Use approved products and attached template'});f.a.current.history.push({type:'fixture'});await f.a.runPromise;assert.equal(f.a.current.status,'completed',f.a.current.error);assert.equal(attempts,2);assert.equal(f.starts,1);assert.equal(f.a.current.history.filter(h=>h.type==='question').length,0);assert.equal(f.a.current.history.filter(h=>h.type==='tool_error').length,1);
+});

@@ -55,7 +55,7 @@ app.whenReady().then(async()=>{let exit=0;try{
  assert.equal(await js(`document.getElementById('agentDialog').classList.contains('is-takeover')`),true);
  assert.equal(await js(`document.querySelector('#agentProgress').hasAttribute('value')`),false);
  await js(`document.querySelector('.agent-question textarea').value='英文';document.getElementById('agentSubmitAnswers').click()`);await wait(`document.getElementById('agentError').textContent.includes('所有')`);
- await js(`document.querySelector('.agent-question textarea').value='保留草稿';document.getElementById('agentSupplement').value='中途补充：保持价格块视觉比例，不要忘记原始需求。';document.getElementById('agentSendSupplement').click()`);await wait(`document.querySelector('.agent-note-state').textContent.includes('进入原任务')`);
+ await js(`document.querySelector('.agent-question textarea').value='保留草稿';document.getElementById('agentSupplement').value='中途补充：保持价格块视觉比例，不要忘记原始需求。';document.getElementById('agentSendSupplement').click()`);await wait(`document.querySelector('#agentSendSupplement + .agent-note-state').textContent.includes('进入原任务')`);
  assert.equal(await js(`document.querySelector('.agent-question textarea').value`),'保留草稿');
  await js(`document.getElementById('agentPause').click()`);await wait(`document.getElementById('agentStatus').textContent==='任务已暂停'`);await js(`document.getElementById('agentPause').click()`);await wait(`document.getElementById('agentStatus').textContent==='需要你的回答'`);
  await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');await fs.writeFile(out+'/02-takeover.png',(await win.webContents.capturePage()).toPNG());

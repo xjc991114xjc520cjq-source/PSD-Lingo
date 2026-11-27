@@ -16,3 +16,7 @@ test('official background jobs bind every file, scan and hash rather than accept
  for(const invalid of [{...job,templatePath:nativeFixturePath('C:/A.psd')},{...job,action:'inspect'},{...job,templates:[]},{...job,templates:[{templateFileId:'A',templatePath:'relative.psd'}]}])await assert.rejects(backgroundTemplates(invalid,async p=>p));
  const legacy=await backgroundTemplates({action:'configure',templatePath:nativeFixturePath('C:/A.psd')},async()=> 'hash');validateBackgroundTemplates({template:{path:nativeFixturePath('C:/A.psd'),fingerprint:'hash'},scanId:'a'},legacy);
 });
+
+test('two logical roots share an authorized attachment without accepting an ambiguous route',async()=>{
+ const file=async id=>{if(id!=='A')throw Error('not attached');return {path:'C:/task/A.psd'};},args={templates:[{templateFileId:'A',templateKey:'gift'},{templateFileId:'A',templateKey:'plain'}]},r=await resolveTemplateInputs(args,file,{}, {hashInputs:false});assert.deepEqual(r.templateInputs.map(t=>t.templateKey),['gift','plain']);assert.equal(r.templateInputs[0].template,r.templateInputs[1].template);await assert.rejects(resolveTemplateInputs({templates:[{templateFileId:'A'},{templateFileId:'A'}]},file,{}, {hashInputs:false}),/templateKey/);
+});

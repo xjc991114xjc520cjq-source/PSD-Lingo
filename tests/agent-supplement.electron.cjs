@@ -1,6 +1,6 @@
 // Real renderer + preload + IPC + task controller, deterministic provider. No Adobe documents opened.
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),out=path.join(root,'work/agent-drop-ui-review');let win,integration,workRecords;
+const root=path.resolve(__dirname,'..'),out=process.env.SPARKIT_DROP_QA_ROOT||path.join(root,'work/agent-drop-ui-review');let win,integration,workRecords;
 app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let exit=0;try{
  await fs.mkdir(out,{recursive:true});await fs.rm(out+'/agent-project.json',{force:true});await fs.rm(out+'/verified.json',{force:true});const evidence=[],errors=[],requests=[];let round=0,updateChecks=0;
@@ -28,11 +28,20 @@ app.whenReady().then(async()=>{let exit=0;try{
  async function wait(expression){await js(`new Promise((resolve,reject)=>{const started=Date.now(),timer=setInterval(()=>{if(${expression}){clearInterval(timer);resolve()}else if(Date.now()-started>12000){clearInterval(timer);reject(Error('UI wait: '+${JSON.stringify(expression)}))}},25)})`)}
 
  await wait(`document.getElementById('openAgentSidebar')?.onclick`);await js(`window.sparkitStartup?.skip?.();document.getElementById('openAgentSidebar').click()`);await wait(`document.getElementById('agentDialog').open`);
+ await wait(`document.getElementById('agentProjectFolder').value&&document.querySelector('#agentModelList option')`);
  await js(`document.getElementById('agentChooseOutput').click()`);await wait(`document.querySelector('.agent-output').textContent.includes('folder')`);
  await js(`document.getElementById('agentRequest').value='Please analyze and ask language and scope';document.getElementById('agentStart').click()`);await wait(`document.querySelectorAll('.agent-question textarea').length===2`);
  win.webContents.debugger.attach('1.3');
  const dragInto=async(selector,file)=>{await js(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);const p=await js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);const data={items:[],files:[file],dragOperationsMask:1};for(const type of ['dragEnter','dragOver','drop'])await win.webContents.debugger.sendCommand('Input.dispatchDragEvent',{type,...p,data});};
  const waitingBefore=(await js('window.desktop.agentState()')).value;
+ if(process.env.SPARKIT_DROP_QA_ROOT){
+  await fs.writeFile(out+'/A.txt','upper');await fs.writeFile(out+'/a.txt','lower');
+  await dragInto('.agent-question textarea',out+'/A.txt');await wait(`document.querySelector('.agent-question textarea').value.includes('A.txt')`);
+  await dragInto('.agent-question textarea',out+'/a.txt');await wait(`document.querySelector('.agent-question textarea').value.includes('a.txt')`);
+  const caseFiles=(await js('window.desktop.agentState()')).value.files.filter(f=>/[Aa]\.txt$/.test(f.path));assert.equal(caseFiles.length,2);
+  assert.equal(await js(`[...document.querySelectorAll('.agent-file')].filter(f=>/^[Aa]\\.txt/.test(f.textContent)).length`),2);
+  evidence.push('real case-sensitive volume keeps A.txt and a.txt in IPC state and renderer attachment list');
+ }
  await dragInto('.agent-question textarea',out+'/folder');await wait(`document.querySelector('.agent-question textarea').value.includes('folder')`);
  let dropped=(await js('window.desktop.agentState()')).value;assert.equal(dropped.question.id,waitingBefore.question.id);assert.equal(dropped.revision,waitingBefore.revision);assert.ok(dropped.files.some(f=>f.type==='folder'));assert.equal(dropped.history.filter(h=>h.type==='user_supplement').length,0);assert.ok(await js(`document.querySelector('.agent-question [role=status]').textContent.includes('已添加')`));
  await dragInto('#agentSupplement',out+'/需求.txt');await wait(`document.getElementById('agentSupplement').value.includes('需求.txt')`);win.webContents.debugger.detach();
@@ -47,4 +56,4 @@ app.whenReady().then(async()=>{let exit=0;try{
  evidence.push('failed task accepts dropped recovery folder and supplement continues the same task with earlier answers');
  evidence.push('native Chromium folder drag into question: attachment plus readable answer, pending question preserved','native file drag into supplement: attachment plus text','paused supplement persists without resuming','same-task resume, user answers and complete','paths and prior requirement reach actual IPC/provider context');
  await fs.writeFile(out+'/verified.json',JSON.stringify({passed:true,evidence,requests:requests.length},null,2));console.log('PASS assistant drop/supplement integrated Electron',evidence.length);
- }catch(e){console.error(e);exit=1;}finally{await integration?.close();await workRecords?.flush();win?.destroy();app.exit(exit)}});
+ }catch(e){console.error(e);if(win)console.error('fixture state',JSON.stringify(await win.webContents.executeJavaScript('({error:document.getElementById("agentError")?.textContent,disabled:document.getElementById("agentStart")?.disabled,dialog:document.getElementById("agentDialog")?.textContent})').catch(String)));exit=1;}finally{await integration?.close();await workRecords?.flush();win?.destroy();app.exit(exit)}});

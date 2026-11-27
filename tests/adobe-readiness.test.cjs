@@ -24,7 +24,7 @@ test('Adobe readiness reconnects transient stale/busy COM objects without replay
 test('Photoshop readiness timeout remains recoverable and records that no file script was submitted',async()=>{
  const fsp=require('node:fs/promises'),vm=require('node:vm'),{createRequire}=require('node:module'),dir=await fsp.mkdtemp(path.join(os.tmpdir(),'ps-preflight-')),local=createRequire(path.resolve(__dirname,'../photoshop-preview.cjs')),mod={exports:{}};
  const fakeFs=Object.create(fsp);fakeFs.access=async()=>{};
- vm.runInNewContext(await fsp.readFile(path.resolve(__dirname,'../photoshop-preview.cjs'),'utf8'),{module:mod,exports:mod.exports,__dirname:path.resolve(__dirname,'..'),require:name=>name==='node:fs/promises'?fakeFs:name==='./services/authorization.cjs'?{helper:async()=>{throw Error('Photoshop connection preflight timed out; file script was not submitted.');}}:local(name)});
+ vm.runInNewContext(await fsp.readFile(path.resolve(__dirname,'../photoshop-preview.cjs'),'utf8'),{module:mod,exports:mod.exports,process:{platform:'win32'},__dirname:path.resolve(__dirname,'..'),require:name=>name==='node:fs/promises'?fakeFs:name==='./services/authorization.cjs'?{helper:async()=>{throw Error('Photoshop connection preflight timed out; file script was not submitted.');}}:local(name)});
  try{await assert.rejects(mod.exports.executeScript(dir,'// never submitted'),e=>e.code==='adobe_preflight_timeout'&&e.nativePhase==='preflight'&&e.uncertain!==true);const receipt=JSON.parse(await fsp.readFile(path.join(dir,'bridge-status.json'),'utf8'));assert.equal(receipt.uncertain,false);assert.equal(receipt.state,'failed');}finally{await fsp.rm(dir,{recursive:true,force:true});}
 });
 test('Adobe connection phase and recoverable codes survive the IPC error contract',()=>{

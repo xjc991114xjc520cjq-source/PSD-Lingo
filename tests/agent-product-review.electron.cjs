@@ -1,5 +1,5 @@
 const {app,BrowserWindow,ipcMain}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),esbuild=require('esbuild'),JSZip=require('jszip');
-const root=path.resolve(__dirname,'..'),out='D:/PSD-Lingo/work/agent-product-review/run-'+Date.now();let win,service,last,toolFinished=false;
+const root=path.resolve(__dirname,'..'),out=path.join(root,'work','agent-product-review','run-'+Date.now());let win,service,last,toolFinished=false;
 require('../services/process-logging.cjs').installProcessLogging({directory:out+'/diagnostics'});
 app.setPath('userData',out+'/profile');
 app.whenReady().then(async()=>{let failed=false;try{

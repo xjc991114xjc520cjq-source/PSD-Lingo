@@ -19,7 +19,7 @@ async function executeScript(directory, source) {
     const record=value=>fs.writeFile(diagnostic,JSON.stringify({transport:'apple-events',at:new Date().toISOString(),...value}));
     await record({state:'starting'});
     try{await require('./services/macos-adobe.cjs').runMacAdobeScript('photoshop',jsx);}
-    catch(error){await record({state:'failed',error:error.message,uncertain:!!error.uncertain}).catch(()=>{});throw error;}
+    catch(error){await record({state:'failed',error:error.message,uncertain:!!error.uncertain,nativePhase:error.nativePhase,errorCode:error.code}).catch(()=>{});throw error;}
     try{await record({state:'completed'});}catch(error){throw require('./services/native-receipt.cjs').missingReceipt(error);}
     return;
   }

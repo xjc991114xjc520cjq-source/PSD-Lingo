@@ -4,7 +4,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('n
 function boardPreviewScript(input,board,output){return `#target photoshop
 (function(){var source=null,copy=null,opened=false,previous=null,dialogs=app.displayDialogs,units=app.preferences.rulerUnits,failure=null;try{previous=app.activeDocument;}catch(_){}app.displayDialogs=DialogModes.NO;app.preferences.rulerUnits=Units.PIXELS;
 try{var f=new File(${JSON.stringify(input)}),id=${JSON.stringify(board.id)},box=${JSON.stringify(board.box)};
-for(var i=0;i<app.documents.length;i++){try{if(app.documents[i].fullName.fsName.toLowerCase()===f.fsName.toLowerCase())source=app.documents[i];}catch(_){}}
+for(var i=0;i<app.documents.length;i++){try{if((/^windows/i.test($.os)?app.documents[i].fullName.fsName.toLowerCase()===f.fsName.toLowerCase():app.documents[i].fullName.fsName===f.fsName))source=app.documents[i];}catch(_){}}
 if(source&&!source.saved)throw Error('原稿有未保存的改动，请先保存后再查看画板');if(!source){source=app.open(f);opened=true;}
 function find(d,id){for(var i=0;i<d.layers.length;i++){var l=d.layers[i];if(l.id===id)return l;if(l.typename==='LayerSet'){var x=find(l,id);if(x)return x;}}return null;}
 if(!find(source,id))throw Error('画板已变化，请重新核对');

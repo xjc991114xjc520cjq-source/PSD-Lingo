@@ -7,7 +7,7 @@ import {completionFor} from '../services/agent-completion.cjs';
 import {installSkuProductMapping} from './sku-product-mapping.js';
 import {showProductBoardPreview} from './product-board-preview.js';
 import {bindFileDrop} from './file-drop.js';
-const attachmentKey=f=>(f.path||f.id).replace(/[\\/]+/g,'/').toLowerCase();
+const attachmentKey=f=>{const value=f.path||f.id;return window.desktop?.platform==='win32'?value.replace(/[\\/]+/g,'/').toLowerCase():value;};
 const active=s=>s&&!['completed','failed','stopped'].includes(s.status);
 const toolLabels={inspect_product_copy:'读取底部文案与智能对象',match_product_boards:'产品身份对应',read_product_mapping:'读取确认清单',import_product_mapping:'导入逐产品文案',configure_product_copy:'原位文案块改字',inspect_artboards:'读取原生画板与样式',arrange_artboards:'画板网格排布',rename_artboards:'画板命名',configure_artboards:'多画板合成计划',read_batch:'批量只读检查',artwork_objects:'对象候选',inspect_artwork:'对象对照',set_artwork_visibility:'隐藏／恢复重复对象',workspace:'项目读取',attachments:'附件列表',read_document:'文档读取',import_source:'原稿导入',import_document:'文案导入',bind_copy:'文案绑定',edit_mixed_text:'混合字符原生改字',edit_text:'文案合并与改字',auto_bind:'智能对应',design_layout:'视觉排版',preview:'画面预览',audit_images:'高级图片审验',export_files:'原生导出'};
 const label={running:'Codex 已接管',pausing:'正在准备暂停',paused:'任务已暂停',waiting:'需要你的回答',stopping:'正在终止工作',stopped:'任务已终止',failed:'任务未完成',completed:'任务已完成'};

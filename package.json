@@ -1,6 +1,6 @@
 {
   "name": "psd-lingo",
-  "version": "0.3.113",
+  "version": "0.3.114",
   "description": "灵搭 Sparkit · 文案与排版工作台",
   "main": "main.cjs",
   "scripts": {

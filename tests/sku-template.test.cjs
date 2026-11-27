@@ -218,3 +218,12 @@ test('a genuinely absent template field is permitted only when all assigned valu
 test('cross-artboard template copy restores a translated origin while rejecting size changes',()=>{
  let moves=0,b=[0,1172,1440,290];const c=vm.createContext({bounds:()=>b,UnitValue:n=>n,enc:JSON.stringify});vm.runInContext(require('../sku-template-native.cjs').placementNative,c);c.tplLock=()=>({});c.tplUnlock=()=>{};c.tplRelock=()=>{};const layer={name:'Footer',translate(dx,dy){moves++;b=[b[0]+dx,b[1]+dy,b[2],b[3]];}};c.tplRestoreCopiedPosition(layer,[1540,1172,1440,290]);assert.deepEqual(b,[1540,1172,1440,290]);assert.equal(moves,1);c.tplRestoreCopiedPosition(layer,b);assert.equal(moves,1);assert.throws(()=>c.tplRestoreCopiedPosition(layer,[1540,1172,1441,290]),/尺寸变化/);assert.equal(moves,1);
 });
+
+test('template upright intent requires an explicit boolean and is preserved in independent style actions',()=>{
+ const f=fixture();f.args.textAppearance={syntheticItalic:false};const p=plan(f),a=p.productTemplate.requests[0].actions.filter(a=>a.mode==='appearance');assert.ok(a.length);assert.ok(a.every(a=>a.appearance.syntheticItalic===false));assert.equal(p.productTemplate.decisions.textAppearance.syntheticItalic,false);
+ for(const value of [null,{font:'Other'},{syntheticItalic:'false'},false]){f.args.textAppearance=value;assert.throws(()=>plan(f),/文字外观/);}
+});
+
+test('prepared roots remap retained gift visual references without changing nested document paths',()=>{
+ const c=vm.createContext({});vm.runInContext(require('../sku-template-native.cjs').placementNative,c);c.input=JSON.stringify([{steps:[{path:[3,1]}],alignmentReferencePath:[3,1,0],readingPaths:[[3,1,1],[3,1,2]]},{steps:[{path:[3,1]},{path:[0]}],alignmentReferencePath:[0,1],readingPaths:[[0,2]]}]);const a=JSON.parse(JSON.stringify(vm.runInContext('tplRemapActions(JSON.parse(input),[3])',c)));assert.deepEqual(a[0].alignmentReferencePath,[0,1,0]);assert.deepEqual(a[0].readingPaths,[[0,1,1],[0,1,2]]);assert.deepEqual(a[1].readingPaths,[[0,2]]);
+});

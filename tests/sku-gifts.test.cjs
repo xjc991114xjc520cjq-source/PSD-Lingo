@@ -118,3 +118,28 @@ test('multi-gift template replaces original independent text/image slots and ret
 test('mixed gift container declares replaceable children while preserving its background and badge',()=>{
  const f=fixture();f.config.contentObjectIds=['0.0.0'];const r=giftAction(f);assert.deepEqual(r.contentPaths,[[0,0,0]]);assert.equal(f.objects.length,5);f.config.contentObjectIds=['0.0'];assert.throws(()=>giftAction(f),/赠品内容/);
 });
+
+test('removing gift base includes only its clipped stack, including multiple adjustments, and deduplicates',()=>{
+ const c=vm.createContext({});vm.runInContext(require('../sku-template-native.cjs').templateNative,c);
+ const parent={layers:[]};const layer=(id,grouped=false)=>({id,grouped,parent});
+ const [label,curve,levels,gift,otherCurve,background]=[layer(1),layer(2,true),layer(3,true),layer(4),layer(5,true),layer(6)];parent.layers=[label,curve,levels,gift,otherCurve,background];
+ assert.deepEqual(Array.from(c.tplRemovalClosure([gift]),x=>x.id),[3,2,4]);
+ assert.deepEqual(Array.from(c.tplRemovalClosure([curve,gift]),x=>x.id).sort(),[2,3,4]);
+ assert.deepEqual(Array.from(c.tplRemovalClosure([label]),x=>x.id),[1]);
+});
+
+test('explicit template upright appearance does not replace real fonts or bold roles',()=>{
+ class D{constructor(v={}){this.v=v;}hasKey(k){return k in this.v;}getObjectValue(k){return this.v[k];}getList(k){return this.v[k];}putBoolean(k,v){this.v[k]=v;}putObject(k,t,v){this.v[k]=v;}putList(k,v){this.v[k]=v;}}
+ class L{constructor(a=[]){this.a=a;}get count(){return this.a.length;}getObjectValue(i){return this.a[i];}getObjectType(){return 'range';}putObject(t,v){this.a.push(v);}}
+ const c=vm.createContext({stringIDToTypeID:x=>x,ActionList:L});vm.runInContext(require('../sku-template-native.cjs').templateNative,c);
+ const name=new D({fontPostScriptName:'Medium',syntheticBold:false,syntheticItalic:true,baseParentStyle:new D({syntheticItalic:true})}),value=new D({fontPostScriptName:'Bold',syntheticBold:false,syntheticItalic:true});
+ const td=new D({textStyleRange:new L([new D({textStyle:name}),new D({textStyle:value})])});c.tplAppearance(td,{syntheticItalic:false});assert.equal(name.v.syntheticItalic,false);assert.equal(name.v.baseParentStyle.v.syntheticItalic,false);assert.equal(value.v.syntheticItalic,false);assert.equal(name.v.fontPostScriptName,'Medium');assert.equal(value.v.fontPostScriptName,'Bold');assert.equal(value.v.syntheticBold,false);
+});
+
+test('gift alignment reference is a retained own-group object, not deleted gift content or price',()=>{
+ const f=fixture();const ref={id:'0.0.1',kind:'pixel',nativePath:[0,0,1],steps:[{path:[0,0,1]}]};f.objects.push(ref);f.config.contentObjectIds=['0.0.0'];f.config.alignmentReferenceId=ref.id;assert.deepEqual(giftAction(f).alignmentReferencePath,[0,0,1]);f.config.alignmentReferenceId='0.0.0';assert.throws(()=>giftAction(f),/对齐参照/);f.config.alignmentReferenceId='0.2';assert.throws(()=>giftAction(f),/对齐参照/);
+});
+
+test('whole gift reading group displacement requires retained objects, preserving backgrounds and prototype identity',()=>{
+ const f=fixture();f.objects.push({id:'0.0.1',kind:'pixel',nativePath:[0,0,1],steps:[{path:[0,0,1]}]});f.config.contentObjectIds=['0.0.0'];f.config.readingObjectIds=['0.0.1'];f.config.readingOffset=[0,6];const a=giftAction(f);assert.deepEqual(a.readingPaths,[[0,0,1]]);assert.deepEqual(a.readingOffset,[0,6]);assert.equal(a.prototypePath.join('.'),'0.0.0');f.config.readingObjectIds=['0.0.0'];assert.throws(()=>giftAction(f),/阅读组/);f.config.readingObjectIds=[];assert.throws(()=>giftAction(f),/整组视觉位移/);
+});

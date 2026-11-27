@@ -11,7 +11,7 @@ function createArtboardOperations({run,directory,requireOutput,visual=artboardVi
  const operate=async function operate(input,task,progress=()=>{}){
   if(!input?.source||!input.plan||!['preview','export','visual','verify'].includes(input.action))throw Error('画板调用参数无效');
   const scope=task.executionScope||task.id;
-  const key=crypto.createHash('sha256').update(JSON.stringify([scope,input.source.path,input.source.fingerprint,input.plan])).digest('hex');
+  const key=crypto.createHash('sha256').update(JSON.stringify([input.plan.productTemplate?2:0,scope,input.source.path,input.source.fingerprint,input.plan])).digest('hex');
   let entry=cache.get(key),previewBoardIds;
   const sampling=input.action==='preview'&&boardWorkPolicy.canSample(input.plan);
   const representatives=sampling?boardWorkPolicy.representativeBoardIds(input.plan):[];

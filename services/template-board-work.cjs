@@ -4,7 +4,7 @@ function boardWorkKey(source,plan,b){
  if(!canSample(plan)||!b||b.changes?.length)return null;
  const request=plan.productTemplate.requests.find(r=>r.boardId===b.templateId);
  const entry=request&&requestTemplate(plan.productTemplate,request);
- return crypto.createHash('sha256').update(JSON.stringify([source,b,request||null,entry?.template,entry?.giftCatalog?.digest])).digest('hex');
+ return crypto.createHash('sha256').update(JSON.stringify([2,source,b,request||null,entry?.template,entry?.giftCatalog?.digest])).digest('hex');
 }
 function canSample(plan){return !!plan.productTemplate&&plan.operation==='edit'&&plan.boards.every(b=>b.mode==='duplicate'&&b.templateId!==null&&!b.changes?.length);}
 function representativeBoardIds(plan){

@@ -4,7 +4,7 @@ async function fixture(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'agen
 test('folder registration passes only a path, then discovers nested originals on demand',async t=>{
  const {dir,store}=await fixture(t);await fs.mkdir(path.join(dir,'nested'));const source=path.join(dir,'nested','source.ai');await fs.writeFile(source,'PRIVATE ARTWORK CONTENT');
  const root=await store.register(dir),task={files:[root]};assert.equal(root.type,'folder');assert.equal(root.bytes,0);assert.equal(JSON.stringify(root).includes('PRIVATE'),false);assert.equal(root.items,undefined);
- const first=await store.list({fileId:root.id},task);const nested=first.items[0];assert.equal(nested.type,'folder');const second=await store.list({fileId:nested.id},task);assert.equal(second.items[0].path,source);assert.equal(second.items[0].rootId,root.id);assert.equal((await store.get(second.items[0].id,task)).path,source);
+ assert.equal(root.fileId,root.id);const first=await store.list({fileId:root.fileId},task);assert.equal(first.fileId,root.fileId);const nested=first.items[0];assert.equal(nested.type,'folder');const second=await store.list({fileId:nested.fileId},task);assert.equal(second.items[0].fileId,second.items[0].id);assert.equal(second.items[0].path,source);assert.equal(second.items[0].rootId,root.id);assert.equal((await store.get(second.items[0].fileId,task)).path,source);
  await assert.rejects(store.get(second.items[0].id,{files:[]}),/不属于本任务/);
 });
 test('directory contents stay fresh, changed files require fresh references, pagination is bounded',async t=>{
@@ -22,4 +22,13 @@ test('restart continuation restores original attachment and nested IDs without w
  const {dir,store}=await fixture(t);await fs.writeFile(path.join(dir,'copy.txt'),'Approved');const root=await store.register(dir),listing=await store.list({fileId:root.id},{files:[root]}),child=listing.items[0];const restarted=createAttachments();await restarted.restore([root],[{type:'tool_result',result:listing}]);assert.equal((await restarted.get(child.id,{files:[root]})).path,child.path);await assert.rejects(restarted.get(child.id,{files:[]}),/不属于/);
  await fs.writeFile(child.path,'Changed copy');await assert.rejects(createAttachments().restore([root],[{result:listing}]),/已变化/);
  const outside=path.join(path.dirname(dir),path.basename(dir)+'-outside.txt');await fs.writeFile(outside,'Outside');t.after(()=>fs.rm(outside,{force:true}));const stat=await fs.stat(outside);await assert.rejects(createAttachments().restore([root],[{id:'escape',path:outside,rootId:root.id,type:'file',bytes:stat.size,mtimeMs:stat.mtimeMs}]),/移出授权/);
+});
+
+test('discovered template and gift directory remain usable after restoring the folder-only task',async t=>{
+ const {dir,store}=await fixture(t);await fs.mkdir(path.join(dir,'gifts'));await fs.writeFile(path.join(dir,'template.psb'),'template');await fs.writeFile(path.join(dir,'gifts','gift.png'),'gift');
+ const root=await store.register(dir),task={files:[root]},listing=await store.list({fileId:root.fileId},task),template=listing.items.find(x=>x.name==='template.psb'),gifts=listing.items.find(x=>x.name==='gifts');
+ const restored=createAttachments();await restored.restore(task.files,[{result:listing}]);const file=(id,current)=>restored.get(id,current),{resolveTemplateInputs,validateTemplateAttachments}=require('../services/agent-template-inputs.cjs');
+ const input=await resolveTemplateInputs({templateFileId:template.fileId,gifts:{directoryFileId:gifts.fileId}},file,task,{hashInputs:false});assert.equal(input.templateInput.path,template.path);assert.equal(input.args.gifts.directory,gifts.path);
+ await validateTemplateAttachments({template:input.templateInput,decisions:{templateFileId:template.fileId,gifts:input.args.gifts}},file,task);
+ const giftListing=await restored.list({fileId:gifts.fileId},task);assert.equal((await file(giftListing.items[0].fileId,task)).name,'gift.png');await assert.rejects(resolveTemplateInputs({templateFileId:template.fileId},file,{files:[]},{hashInputs:false}),/不属于本任务/);
 });

@@ -26,6 +26,9 @@ test('assistant can forward mixed folder and file paths without reading director
  const f=setup({multiple:true,allowDirectories:true});await f.zone.send('drop',event(['C:\\Project.folder','C:\\copy.txt'],{items:[{kind:'file',webkitGetAsEntry:()=>({isDirectory:true})}]}));
  assert.deepEqual(f.errors,[]);assert.deepEqual(f.calls,[['C:\\Project.folder','C:\\copy.txt']]);
 });
+test('drop consumer receives the original input target for question and supplement attachment handling',async()=>{
+ const target={id:'agentAnswer-folder'};let received;const f=setup({onPaths:(paths,context)=>{received={paths:Array.from(paths),target:context.target};}});const e=event();e.target=target;await f.zone.send('drop',e);assert.equal(received.target,target);assert.deepEqual(received.paths,['C:\\test.psd']);
+});
 test('nested file drags keep highlight until last leave and accept case-insensitive paths',async()=>{
  const {zone,calls,errors}=setup();
  await zone.send('dragenter',event());await zone.send('dragenter',event());

@@ -91,3 +91,5 @@
 - 2026-11-23：准备0.3.106，字体目录自然打开/搜索/重试、真实系列归并与自动控制联动、独立结构化字体卡片和历史恢复修改已接通，需求/补充框不再注入内部字体指令。1015项Node、字体与助手设置Electron、助手22项与工作记录Electron通过。未新增Adobe或外部模型调用，原生字体写入沿用105验证；详见practice-records/2026-11-23-typography-settings/实施与验收.md。公开状态以work/releases/0.3.106/public-verified.json为准。
 
 - 2026-11-24：准备0.3.107，Setup同/旧版重复运行改为打开已安装版本；预嵌LOGO的runtime不再退出后重复改写EXE，避免重开锁冲突。完整包同路径同profile关闭立即重开、窗口显示和单实例通过；原生隔离安装程序启动与不降级测试通过，详见practice-records/2026-11-24-reopen/实施与验收.md。实际公开以work/releases/0.3.107/public-verified.json为准。
+
+- 2026-11-27：准备0.3.109，修复文件夹fileId引用、中途问题/补充框上下文拖入、补充后旧问题门禁及失败续做附件保留，同路径附件按路径更新。1038项Node回归、真实Chromium文件/文件夹拖入经preload/IPC/同任务接续及正式包启动关闭重开通过；未调用Adobe或外部模型。见practice-records/2026-11-27-folder-supplement/实施与验收.md。归档D:/PSD-Lingo/outputs/PSD-Lingo-GitHub/0.3.109；正式状态以work/releases/0.3.109/public-verified.json及公开签名latest为准。

@@ -49,7 +49,7 @@ export function bindFileDrop(element,{extensions,multiple=false,allowDirectories
    const paths=desktop.getDroppedPaths(files);
    if(!Array.isArray(paths)||paths.length!==files.length||paths.some(path=>typeof path!=='string'||!path.trim()))throw new Error('无法读取文件路径，请拖入本地文件，或使用选择文件按钮导入。');
    if(!allowDirectories&&paths.some(path=>!allowed.includes(path.split(/[\\/]/).pop().split('.').slice(1).pop()?.toLowerCase())))throw new Error(`此区域仅支持 ${allowed.map(extension=>'.'+extension).join('、')} 文件，请检查后重新拖入。`);
-   await onPaths(paths);
+   await onPaths(paths,{target:event.target});
   }catch(error){report(error);}finally{inFlight=false;}
  };
  const listeners={dragenter:enter,dragover:over,dragleave:leave,drop};

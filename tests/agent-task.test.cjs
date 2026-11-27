@@ -68,6 +68,17 @@ test('mid-planning supplements discard a late response even if provider ignores 
  a.start({request:'原始需求'});await until(()=>a.current.controller);a.supplement('新的限制');pending.resolve(step('tool','export_files'));await until(()=>n===2);
  second.resolve(step('complete'));await a.runPromise;assert.deepEqual(calls,[]);assert.equal(a.current.step,1);assert.ok(promptFor(a.current).includes('原始需求'));
 });
+test('supplement replans a native question without deadlocking its next software tool or approving it',async()=>{
+ let pass=0,writes=0;const a=new AgentTask({think:async(t,deps)=>{if(++pass===1){await deps.askUser({questions:[{id:'folder',question:'Which folder?'}]},deps.signal);return step('complete');}await deps.runTool('workspace',{},'Use the supplied folder');return step('complete');},execute:async()=>{writes++;return {files:[]};}});
+ a.start({request:'Use supplied assets'});await until(()=>a.current.question);const question=a.current.question.id;
+ a.supplement('The folder is D:/assets');await until(()=>writes===1&&a.current.status==='waiting');
+ assert.equal(a.current.question.id,question);assert.equal(pass,2);assert.equal(a.current.question.reviewRequested,false);assert.equal(a.current.history.some(h=>h.type==='user_answer'),false);
+ a.answer({questionId:question,answers:{folder:'Use D:/assets'}});await a.runPromise;assert.equal(a.current.status,'completed');
+});
+test('supplement while paused keeps the safe boundary and records completed work only once',async()=>{
+ const write=defer();let calls=0,writes=0;const a=new AgentTask({think:async()=>++calls===1?step('tool','export_files'):step('complete'),execute:async()=>{writes++;return write.promise;}});
+ a.start({request:'Save copy'});await until(()=>a.current.inTool);a.pause();a.supplement('Keep the saved copy and use the extra reference');write.resolve({saved:1});await until(()=>a.current.status==='paused');assert.equal(calls,1);assert.equal(writes,1);a.resume();await a.runPromise;assert.equal(a.current.status,'completed');assert.equal(writes,1);assert.match(promptFor(a.current),/extra reference/);
+});
 test('pause during a native write records completion and resumes without repeating it',async()=>{
  const write=defer();let n=0,writes=0;
  const a=new AgentTask({think:async()=>++n===1?step('tool','export_files'):step('complete'),execute:async()=>{writes++;return write.promise;}});

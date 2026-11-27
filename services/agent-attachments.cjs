@@ -11,7 +11,7 @@ function createAttachments(){
   const actual=await fs.realpath(p),type=s.isDirectory()?'folder':'file';
   const previous=[...entries.values()].find(f=>f.path===p&&f.rootId===rootId&&f.type===type&&(type==='folder'||f.bytes===s.size&&f.mtimeMs===s.mtimeMs));
   if(previous&&realPaths.get(previous.id)===actual)return previous;
-  const f={id:crypto.randomUUID(),path:p,name:path.basename(p),type,bytes:type==='folder'?0:s.size,mtimeMs:s.mtimeMs,...(rootId?{rootId}:{})};entries.set(f.id,f);realPaths.set(f.id,actual);return f;
+  const id=crypto.randomUUID(),f={id,fileId:id,path:p,name:path.basename(p),type,bytes:type==='folder'?0:s.size,mtimeMs:s.mtimeMs,...(rootId?{rootId}:{})};entries.set(f.id,f);realPaths.set(f.id,actual);return f;
  }
  async function get(id,task){
   const f=entries.get(id);if(!f)throw Error('只能读取用户已附加的文件或文件夹');
@@ -30,7 +30,7 @@ function createAttachments(){
    if(!entry.isDirectory()&&!entry.isFile()||entry.isFile()&&!supported(entry.name)){items.push({name:entry.name,type:entry.isFile()?'file':'other',readable:false});continue;}
    const f=await register(path.join(folder.path,entry.name),folder.rootId||folder.id);await get(f.id,task);items.push({...f,readable:true});
   }
-  return {path:folder.path,items,total:names.length,offset,nextOffset:offset+limit<names.length?offset+limit:null};
+  return {fileId:folder.id,path:folder.path,items,total:names.length,offset,nextOffset:offset+limit<names.length?offset+limit:null};
  }
  async function restore(files,history=[]){
   const roots=new Map(files.map(f=>[f.id,f])),candidates=new Map(roots);
@@ -41,7 +41,7 @@ function createAttachments(){
    if(f.rootId){const root=roots.get(f.rootId),relative=path.relative(await fs.realpath(root.path),actual);if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('历史附件已移出授权文件夹');}
    const old=entries.get(f.id);if(old&&(old.path!==f.path||realPaths.get(f.id)!==actual))throw Error('历史附件身份冲突');checked.push({f,actual});
   }
-  for(const {f,actual}of checked){entries.set(f.id,structuredClone(f));realPaths.set(f.id,actual);}return structuredClone(files);
+  for(const {f,actual}of checked){entries.set(f.id,{...structuredClone(f),fileId:f.id});realPaths.set(f.id,actual);}return files.map(f=>({...structuredClone(f),fileId:f.id}));
  }
  return {register,get,list,restore};
 }
